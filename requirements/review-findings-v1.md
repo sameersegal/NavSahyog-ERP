@@ -33,14 +33,23 @@ follow-up addendum PR — don't edit the spec during the meeting.
 
 ## 0. Fixed during this review
 
-- **§9 Compliance body was silently dropped** when Part 2 was written
-  on top of Part 1. The TOC listed it as ✅ but the body was missing,
-  leaving **26+ cross-references dangling** (every reference to
-  §9.1 "no child Aadhaar", §9.3 retention, §9.4 audit, §9.5 security,
-  §9.6 open items). Restored from the Part 1 commit
-  (`3a7040f`) as part of the split into this folder. Verify nothing
-  has drifted since — the restored text is the original Part 1
-  content only.
+- **§9 Compliance was mislocated, not deleted.** When Part 2 was
+  written on top of Part 1, the insert intended to place §3
+  between §2 and §9 moved §9 to the bottom of the file — orphaned
+  under what later became the Appendix, without a proper `## 9.`
+  header. The TOC continued to claim it was in place. The split
+  into this folder initially created a duplicate (restoring from
+  the Part 1 commit into `09-compliance.md` while the mislocated
+  copy still sat inside `appendix-status-and-next-steps.md`). The
+  duplicate in the appendix file has been removed; `09-compliance.md`
+  is now the sole home for §9.
+- **Vendor name scrubbed.** Direct references to the vendor's
+  product name and backend URLs have been replaced with generic
+  "vendor" language throughout. Schema identifiers that previously
+  borrowed from the vendor's naming (e.g. `vmr_settings`) are now
+  `legacy_settings` as a neutral placeholder. `HANDOFF.md` notes
+  that the actual URLs are obtainable from the decompiled APK for
+  migration work.
 
 ---
 

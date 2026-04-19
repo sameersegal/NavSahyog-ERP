@@ -27,7 +27,7 @@ requirement disagrees with it, flag that as a finding — don't
 ## Project in one paragraph
 
 Bespoke replacement for the NavSahyog vendor app (package
-`io.ionic.ngo`, backed by `portal.viewmyrecords.com/vmr/`). Target
+`io.ionic.ngo`, backed by the vendor's REST backend). Target
 stack: React PWA on Cloudflare Pages + Workers + D1 + R2 + Queues
 + KV. **Single-tenant, India-only, Android + PWA first.** The
 vendor app is a generic multi-tenant platform; our job is to cut

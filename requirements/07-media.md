@@ -161,7 +161,6 @@ ceiling. Cache purge on delete is best-effort.
 - [ ] Confirm video max length — 5 min is a guess; longer films
       may need chunked uploads per scene.
 - [ ] Decide retention default: 180 days matches the vendor's
-      default `vmr_settings.MaxDays`; NavSahyog may want longer
-      for legal/showcase archives (consider the `retained_until`
-      pin in §7.7 as the escape hatch).
+      default; NavSahyog may want longer for legal/showcase archives
+      (consider the `retained_until` pin in §7.7 as the escape hatch).
 

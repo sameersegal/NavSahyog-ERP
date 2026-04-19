@@ -11,8 +11,8 @@ Area Facilitators) record attendance, achievements, and photo/video
 evidence daily. Managers view drill-down dashboards by geography.
 
 The current mobile app (`Navshayog-4.5.2.apk`, package `io.ionic.ngo`,
-backed by `vmrdev.com/vmr/` and `portal.viewmyrecords.com/vmr/`) is a
-white-label product from an external vendor ("ViewMyRecords"). It is
+backed by the vendor's dev and production REST backends) is a
+white-label product from an external vendor. It is
 built as a **generic multi-tenant NGO platform**: 35 master tables with
 full CRUD, 286 backend operations, a user-selectable dev/prod
 environment, per-tenant feature flags (`ngo_features`), a generic
@@ -25,7 +25,7 @@ role/permission matrix, and six preloaded Indian languages.
    Cloudflare stack (Pages, Workers, D1, R2, Queues, KV).
 3. Preserve every field-user workflow at parity: login, children,
    attendance, capture, achievements, dashboards, offline sync.
-4. Migrate existing VMR data without loss.
+4. Migrate existing data without loss.
 5. Work reliably on low-end Android phones over intermittent rural
    connectivity.
 
