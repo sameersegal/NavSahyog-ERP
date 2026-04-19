@@ -1,6 +1,8 @@
 # Level 1 — Multi-role skeleton, one cluster
 
-**Status:** not started.
+**Status:** scaffold landed. Typechecks pass, dev smoke tests
+green (see end-to-end verification below). Open questions below
+remain unresolved.
 
 ## Goal
 

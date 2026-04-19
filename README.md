@@ -4,8 +4,9 @@ A bespoke enterprise application for [NavSahyog
 Foundation](https://www.navsahyog.org/), an Indian NGO running
 child-development programs across villages in multiple states.
 
-**Status:** requirements v1 complete · awaiting stakeholder review ·
-no code has landed yet.
+**Status:** requirements v1 complete · MVP L1 scaffolding landed
+(lab build, dummy data). See [`mvp/`](./mvp/README.md) for the
+five-level MVP ladder we're working through.
 
 ## Why this project exists
 
@@ -53,6 +54,19 @@ Start with the specification index:
 
 The vendor app under replacement (`Navshayog-4.5.2.apk`, package
 `io.ionic.ngo`) is in the repo for reference only.
+
+## Local development (MVP L1)
+
+```
+pnpm install
+pnpm --filter @navsahyog/api db:apply   # create D1 schema in .wrangler local store
+pnpm --filter @navsahyog/api db:seed    # load dummy cluster + users
+pnpm dev                                 # starts Worker on :8787 and Vite on :5173
+```
+
+Seeded logins (all password `password`):
+`vc-anandpur`, `vc-belur`, `vc-chandragiri`, `af-bid01`,
+`cluster-bid01`, `super`.
 
 ## Contributing
 
