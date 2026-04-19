@@ -47,9 +47,6 @@ Start with the specification index:
   first-pass critical review. Lists blockers, gaps, over- and
   under-specification, and factual issues to resolve in the team
   review meeting before implementation begins.
-- **[`HANDOFF.md`](./HANDOFF.md)** — historical: how the vendor APK was
-  reverse-engineered and how the spec was drafted in five parts.
-  Useful for migration work (§10); not a spec.
 - **[`NSF-App-Process-Document-English.txt`](./NSF-App-Process-Document-English.txt)** —
   the NGO's own user-training doc. Authoritative source for
   field workflows; requirements must agree with it.

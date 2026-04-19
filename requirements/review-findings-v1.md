@@ -8,8 +8,8 @@ spec — it's a working list of issues to resolve, with proposed fixes
 and decision prompts.
 
 **Scope.** Covers sections 1–11 of the requirements. Based on a
-structured read against the HANDOFF design principles (bespoke vs.
-vendor-generic, single-tenant, India-only, PWA on Cloudflare) and
+structured read against the project's core design principles (bespoke
+vs. vendor-generic, single-tenant, India-only, PWA on Cloudflare) and
 the NGO onboarding doc `NSF-App-Process-Document-English.txt`.
 
 **How to use in the meeting.** Walk the four lists below in order
@@ -47,9 +47,8 @@ follow-up addendum PR — don't edit the spec during the meeting.
   product name and backend URLs have been replaced with generic
   "vendor" language throughout. Schema identifiers that previously
   borrowed from the vendor's naming (e.g. `vmr_settings`) are now
-  `legacy_settings` as a neutral placeholder. `HANDOFF.md` notes
-  that the actual URLs are obtainable from the decompiled APK for
-  migration work.
+  `legacy_settings` as a neutral placeholder. The actual vendor URLs
+  remain recoverable from the decompiled APK for migration work.
 
 ---
 

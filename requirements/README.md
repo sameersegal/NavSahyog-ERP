@@ -50,5 +50,3 @@ Use that as the stakeholder-meeting checklist.
   when adding content; use sub-numbering (§4.3.7.1) instead.
 - Cross-references stay as plain "§X.Y" text. Readers navigate via
   this index.
-- HANDOFF.md at the repo root documents how the draft was produced
-  (5 parts, stacked PRs). It is historical context, not a spec.
