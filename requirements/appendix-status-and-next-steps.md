@@ -1,0 +1,74 @@
+[← §11 Cloudflare mapping](./11-cloudflare-mapping.md) · [Index](./README.md)
+
+---
+
+## Appendix — status and next steps
+
+This document is a **complete v1 draft** covering every section
+listed in the HANDOFF plan. Sign-off requires closing the §11.12
+open items; several of them (especially languages, vendor dump
+access, OTP provider) unblock immediate implementation work.
+
+Recommended next steps:
+
+1. Stakeholder review of §11.12 open items — target one working
+   session.
+2. Freeze answers as an addendum to this doc.
+3. Generate `/workers/api/schema.sql` from §4 and land the first
+   migration on `staging` D1.
+4. Scaffold Pages + Workers projects per §11.2–§11.8 and wire
+   `/auth/login` + `/api/children` end-to-end as the first
+   vertical slice (proves §5, §6 outbox, §7 presign + commit,
+   §8 budgets all at once).
+5. Begin §10 P0 prep in parallel (vendor access request).
+
+### 9.1 NSNOP — child data
+- **Do not collect child Aadhaar.** The vendor schema has
+  `student.aadhaarNo`; the bespoke schema **removes it from both UI
+  and D1**. Migration drops any data present in that column.
+- Child PII stored: first name, last name, gender, DOB, school,
+  village, photo, program join date, optional graduation date/reason.
+- No medical, caste, religion, or income fields.
+
+### 9.2 Parent data
+- Parent Aadhaar is collected but **masked in the UI** (last 4 digits
+  only) and access-logged. Not included in routine exports.
+- Phone numbers validated as Indian (`+91` optional prefix, 10 digits).
+  Smartphone flag is informational only.
+- Alternate contact requires a relationship label.
+
+### 9.3 Data retention
+- Media retention is configurable per type (`vmr_settings.MaxDays`).
+  A Worker cron deletes R2 objects past the threshold and marks the
+  DB row `deleted_at`.
+- Student records are retained for the duration of the program plus
+  a configurable grace period (default: 2 years after graduation).
+- Audit-log retention: 7 years (confirm with stakeholder).
+
+### 9.4 Audit trail
+- Every write stamps `created_by/at`, `updated_by/at`,
+  `deleted_by/at` (soft delete).
+- Append-only `audit_log` table records: login, password change,
+  OTP issue/verify, failed login, user create / role change,
+  retention-setting change, data export.
+- Readable only by Super Admin.
+
+### 9.5 Security baseline
+- HTTPS only (Cloudflare-enforced).
+- Passwords hashed with Argon2id in the Worker.
+- R2 presigned URLs are scoped to a single object and expire in
+  ≤ 15 minutes.
+- **Rotate the Google Maps API key** (currently baked into
+  `index.html` in the vendor APK) before any public release.
+- No third-party analytics; use Cloudflare Web Analytics.
+
+### 9.6 Open items for stakeholder confirmation
+- [ ] Which languages are actually in field use?
+- [ ] Are `Territory` and `Taluk` geo levels populated in production
+      data?
+- [ ] Audit-log retention period.
+- [ ] iOS required at launch, or Android + PWA only?
+- [ ] Play Store APK distribution required, or is PWA install enough
+      for field staff?
+- [ ] Exact AF → Cluster relationship (is an AF always 1:1 with a
+      cluster, or can one AF cover parts of multiple clusters?).
