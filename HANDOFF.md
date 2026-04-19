@@ -63,23 +63,72 @@ Key workflows (from onboarding doc):
 ## What's Left
 1. ✅ Onboarding doc read.
 2. ✅ APK decompiled; data model, API surface, plugins, permissions, routes extracted.
-3. ❌ **Write consolidated `REQUIREMENTS.md`** — not yet committed to repo. Draft it from sections 1-6 above.
-4. ❌ Commit & push to branch `claude/collect-erp-requirements-V9tSa`.
+3. 🚧 **Write consolidated `REQUIREMENTS.md`** — split into 5 sub-tasks (below). Append each to the same file so prior sections are available as context.
+4. ❌ Commit & push to branch `claude/create-requirements-file-veKWY`.
 
-## Recommended REQUIREMENTS.md structure
-```
-1. Overview & goals (Cloudflare stack, cost/lock-in drivers)
-2. Users & roles (Teacher/VC, AF, cluster/state/region/zone admins)
-3. Functional requirements (per workflow from §6)
-4. Data model (§4 — D1 schema)
-5. API surface (§5 — map each .do/operation to a Worker route)
-6. Offline & sync requirements (IndexedDB/SQLite-WASM on client; outbox pattern)
-7. Media handling (R2 for images/videos with EXIF GPS; presigned uploads)
-8. Non-functional: i18n (6 langs), low-bandwidth/rural, auth/OTP, audit trail, soft delete, retention (`vmr_settings.MaxDays`)
-9. Compliance: NSNOP — no child Aadhaar
-10. Migration: import existing VMR data; dual-run plan
-11. Cloudflare mapping: Pages (Angular or new SPA), Workers (API + auth + R2 signing), D1 (schema in §4), R2 (media), Queues (offline upload fan-out), KV (sessions), optional Durable Objects for per-cluster counters
-```
+## Cross-cutting simplification principle
+The existing vendor app is a **generic multi-tenant NGO platform**. Our build is **single-tenant (NavSahyog only), India-only, with known roles and known workflows**. Every sub-task below MUST call out what the bespoke nature lets us drop. Baseline simplifications to assume:
+- Drop `CorpId` / multi-tenancy everywhere.
+- Drop user-facing dev/prod env selector (use deploy envs).
+- Drop the generic 286-operation Struts surface; redesign as ~30 REST endpoints.
+- Drop `ngo_features` config table and generic `role_permission` matrix — hardcode role→capability in Workers.
+- Drop `MembershipType`, `eventsNew` (dup of `events`), and other vendor artefacts unless NavSahyog actually uses them.
+- Collapse the 9-level geo hierarchy to the levels actually populated (per onboarding doc: Zone → State → Region → District → Cluster → Village; Country is fixed = India; Territory/Taluk look unused).
+- Trim i18n to languages NavSahyog actively uses (confirm with stakeholder; default en + kn + ta).
+- PWA-first on Cloudflare Pages; wrap with Capacitor only if Play Store APK distribution is required for field users.
+- Use IndexedDB + outbox for offline (drop SQLite-WASM unless a specific query needs it).
+
+## Sub-tasks for REQUIREMENTS.md
+
+### Part 1 — Overview, Users & Roles, Compliance
+Sections: Overview & goals · Users & roles · Compliance (NSNOP).
+Deliverables:
+- Problem statement + Cloudflare stack rationale (cost, lock-in).
+- Role catalogue: Village Coordinator (Teacher), Area Facilitator, Cluster/District/Region/State/Zone admin, Super Admin. Per-role capability matrix (read/write scope by geo level).
+- Compliance callouts: **no child Aadhaar**, parent Aadhaar handling, PII minimisation, data retention (`vmr_settings.MaxDays`).
+
+### Part 2 — Functional Requirements (workflows)
+Source: §6 of this handoff + onboarding doc.
+Deliverables, one sub-section per workflow with acceptance criteria:
+- Auth: login (online/offline), forced default-password change, OTP reset, 3-strike lockout.
+- Children: add / edit / graduate; parent + alt-phone + smartphone flag; photo.
+- Attendance: date (today ± 2), village, start/end, event, voice note, checklist, green-chip feedback.
+- Capture Image/Video: EXIF GPS, Tag Event (AC/Special) vs Tag Activity, cloud upload, AF village pick.
+- Achievements: SoM vs Gold/Silver with medal counts.
+- Dashboard (drill-down) + Consolidated Dashboard (single-day / range, cluster, bar chart, View More, Excel export).
+- Offline: mark attendance / achievements / capture media; "Upload Offline Data" on reconnect.
+- Profile, Notice Board, About Us, Reference Links, Quick Phone/Video Links.
+
+### Part 3 — Data Model & API
+Sections: Data model · API surface.
+Deliverables:
+- D1 schema (DDL) derived from §4, simplified per cross-cutting principle. Drop/merge tables that are vendor-generic. Flag every FK and every soft-delete / audit column kept.
+- REST API: ~30 resource routes on Workers (e.g. `POST /api/children`, `GET /api/attendance?village=…`). Map each retained `operation:` code from §5 to a route, or mark "dropped — internal/generic".
+- Auth endpoints separate: `/auth/login`, `/auth/change-password`, `/auth/otp/*`, `/auth/logout`.
+
+### Part 4 — Offline, Media, Non-functional
+Sections: Offline & sync · Media · Non-functional.
+Deliverables:
+- Offline: IndexedDB schema for outbox (mutations + queued media); conflict/idempotency strategy; background sync via Service Worker + Workers Queues retry; client-side encryption at rest for cached PII.
+- Media: R2 multipart presigned uploads; EXIF GPS preservation; thumbnail generation (Images binding or on-demand Worker); retention per `vmr_settings.MaxDays`.
+- Non-functional: i18n (trimmed language set), low-bandwidth/rural (payload budgets, image compression), auth (password policy, session TTL in KV, OTP rate-limits), audit trail (created/updated/deleted by/at), soft delete scope, observability (Workers Analytics Engine, Logpush).
+
+### Part 5 — Migration & Cloudflare mapping
+Sections: Migration · Cloudflare mapping.
+Deliverables:
+- Migration: one-shot import from current VMR backend (`portal.viewmyrecords.com/vmr/`) — method (export endpoints vs DB dump), field mapping vs simplified schema, media backfill to R2, validation queries, dual-run cut-over plan (read-only legacy window).
+- Cloudflare mapping: concrete bindings —
+  - Pages project (SPA: React/Next or keep Angular shell).
+  - Workers: API, auth, R2 signer, cron (retention sweeps).
+  - D1 database (schema from Part 3).
+  - R2 buckets: `media-prod`, `media-staging`.
+  - Queues: `offline-upload`, `retention-sweep`.
+  - KV: `sessions`, `otp`.
+  - Durable Objects (optional): per-cluster live counters for Consolidated Dashboard.
+  - Secrets: Google Maps key (rotated), OTP provider, SMTP.
+
+## Execution order
+Do Parts 1 → 5 in order, committing after each part so progress is durable. Each commit message: `docs(requirements): part N — <section names>`.
 
 ## Useful scratch paths
 - Extracted APK: `/tmp/apk_extracted/` (lost on reboot — re-run `unzip -q -o Navshayog-4.5.2.apk -d /tmp/apk_extracted`).
