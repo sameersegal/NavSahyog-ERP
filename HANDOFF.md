@@ -1,7 +1,7 @@
 # NavSahyog ERP — Requirements Collection Handoff
 
 ## Goal
-Replace the existing NavSahyog vendor app (Navshayog-4.5.2.apk, package `io.ionic.ngo`, backed by `vmrdev.com/vmr/` and `portal.viewmyrecords.com/vmr/`) with a custom ERP on the Cloudflare stack (R2 + D1 + Workers + Pages) to reduce cost and vendor lock-in.
+Replace the existing NavSahyog vendor app (Navshayog-4.5.2.apk, package `io.ionic.ngo`, backed by the vendor's dev and production REST backends) with a custom ERP on the Cloudflare stack (R2 + D1 + Workers + Pages) to reduce cost and vendor lock-in.
 
 ## Sources Analyzed
 - `NSF-App-Process-Document-English.txt` — NGO user onboarding / training doc.
@@ -12,7 +12,7 @@ All key info is gathered in this thread's tool output (or can be re-run from the
 
 ### 1. Architecture of existing app
 - **Framework**: Ionic / Angular + Cordova hybrid. `assets/www/index.html` loads Angular bundles.
-- **Backend**: Java/Struts-style `.do` endpoints at `https://vmrdev.com/vmr/` (dev) and `https://portal.viewmyrecords.com/vmr/` (prod).
+- **Backend**: Java/Struts-style `.do` endpoints at the vendor's dev and production domains (URLs intentionally redacted from this public doc; obtainable from the decompiled APK).
 - **Auth**: operation-based POSTs. Flow: `mlogin.do` → `accountSetup.do` → `changeuserpassword.do` → session token. OTP flow via `otpverify.do` / `resetPasswordOTP.do`. Lock after 3 wrong attempts. Default pwd `TEST*1234` forces change on first login.
 - **Offline**: SQLite (cordova-sqlite-storage). Offline actions supported: Attendance, Achievements, Photo/Video capture. "Upload Offline Data" syncs when online.
 - **Multi-lang**: en, hi, ka (Kannada), ma (Malayalam), tel (Telugu), tn (Tamil).
@@ -31,7 +31,7 @@ All tables carry `CreatedBy/ModifiedBy/CreatedOn/ModifiedOn/CorpId` audit fields
 - **Geo hierarchy (9 levels)**: `country` → `zone` → `region` → `state` → `territory` → `district` → `taluk` → `area_cluster` → `VillageName` (with lat/long/altitude/radius and pincode). `village_pgm_status` tracks village active window.
 - **People**: `student` (incl. parent fields, Aadhaar — per NSNOP policy child Aadhaar must NOT be collected), `student_pgm_status`, `teacher`, `teacher_pgm_status`, `qualification`, `MembershipType`, `school`.
 - **Operations**: `events`, `eventsNew`, `attendance` (+ `attendanceOffline`), `achievement` (types: SoM, Gold, Silver), `event_image`/`event_image_offline`, `event_video`/`event_video_offline` (with GPS EXIF).
-- **Content**: `aboutus`, `notification`, `referencelink`, `quickPhoneLinks`, `quickVideoLinks`, `vmr_settings` (storage/retention days).
+- **Content**: `aboutus`, `notification`, `referencelink`, `quickPhoneLinks`, `quickVideoLinks`, `legacy_settings` (storage/retention days).
 
 Full DDL with FK constraints is in `/tmp/schemas.txt` (35 tables). Regenerate via:
 ```
@@ -47,7 +47,7 @@ Endpoint files (Struts `.do`):
 Regenerate: `grep -hoE 'operation[A-Za-z]*:"[A-Za-z0-9_]+"' /tmp/apk_extracted/assets/www/*.js | sort -u`.
 
 ### 6. App routes / features
-Home, Dashboard, Consolidated Dashboard, Set Location coordinates, Achievements, Attendance, Upload Offline Data, Server Images & Videos, Offline Images & Videos, Master Creations, Children, Download Server Data, Reset Offline Data, Notice Board, Profile, About Us, Log Out, `change-pwd`, `vmr-login`, `data-upload`, `queue-media`, `status-report`, `village-status-report`, `teacher-status-report`, plus `add-*` / `view-*` / `edit-*` CRUD pages for every master table.
+Home, Dashboard, Consolidated Dashboard, Set Location coordinates, Achievements, Attendance, Upload Offline Data, Server Images & Videos, Offline Images & Videos, Master Creations, Children, Download Server Data, Reset Offline Data, Notice Board, Profile, About Us, Log Out, `change-pwd`, `legacy-login`, `data-upload`, `queue-media`, `status-report`, `village-status-report`, `teacher-status-report`, plus `add-*` / `view-*` / `edit-*` CRUD pages for every master table.
 
 Key workflows (from onboarding doc):
 - **Login**: Online/Offline mode → user/pwd → forced change on default → eye toggle.
@@ -85,7 +85,7 @@ Sections: Overview & goals · Users & roles · Compliance (NSNOP).
 Deliverables:
 - Problem statement + Cloudflare stack rationale (cost, lock-in).
 - Role catalogue: Village Coordinator (Teacher), Area Facilitator, Cluster/District/Region/State/Zone admin, Super Admin. Per-role capability matrix (read/write scope by geo level).
-- Compliance callouts: **no child Aadhaar**, parent Aadhaar handling, PII minimisation, data retention (`vmr_settings.MaxDays`).
+- Compliance callouts: **no child Aadhaar**, parent Aadhaar handling, PII minimisation, data retention (`legacy_settings.MaxDays`).
 
 ### Part 2 — Functional Requirements (workflows)
 Source: §6 of this handoff + onboarding doc.
@@ -110,13 +110,13 @@ Deliverables:
 Sections: Offline & sync · Media · Non-functional.
 Deliverables:
 - Offline: IndexedDB schema for outbox (mutations + queued media); conflict/idempotency strategy; background sync via Service Worker + Workers Queues retry; client-side encryption at rest for cached PII.
-- Media: R2 multipart presigned uploads; EXIF GPS preservation; thumbnail generation (Images binding or on-demand Worker); retention per `vmr_settings.MaxDays`.
+- Media: R2 multipart presigned uploads; EXIF GPS preservation; thumbnail generation (Images binding or on-demand Worker); retention per `legacy_settings.MaxDays`.
 - Non-functional: i18n (trimmed language set), low-bandwidth/rural (payload budgets, image compression), auth (password policy, session TTL in KV, OTP rate-limits), audit trail (created/updated/deleted by/at), soft delete scope, observability (Workers Analytics Engine, Logpush).
 
 ### Part 5 — Migration & Cloudflare mapping
 Sections: Migration · Cloudflare mapping.
 Deliverables:
-- Migration: one-shot import from current VMR backend (`portal.viewmyrecords.com/vmr/`) — method (export endpoints vs DB dump), field mapping vs simplified schema, media backfill to R2, validation queries, dual-run cut-over plan (read-only legacy window).
+- Migration: one-shot import from the vendor's production backend — method (export endpoints vs DB dump), field mapping vs simplified schema, media backfill to R2, validation queries, dual-run cut-over plan (read-only legacy window).
 - Cloudflare mapping: concrete bindings —
   - Pages project (SPA: React/Next or keep Angular shell).
   - Workers: API, auth, R2 signer, cron (retention sweeps).

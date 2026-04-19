@@ -10,7 +10,7 @@ no code has landed yet.
 ## Why this project exists
 
 NavSahyog currently uses a generic white-label NGO platform from an
-external vendor ("ViewMyRecords"). The vendor app is built for
+external vendor. The vendor app is built for
 multi-tenant flexibility: 35 master tables, 286 backend operations,
 a runtime role matrix, six preloaded languages, and tenant-level
 feature flags. NavSahyog pays for all of that and uses only a small

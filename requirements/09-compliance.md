@@ -20,9 +20,9 @@
 - Alternate contact requires a relationship label.
 
 ### 9.3 Data retention
-- Media retention is configurable per type (`vmr_settings.MaxDays`).
-  A Worker cron deletes R2 objects past the threshold and marks the
-  DB row `deleted_at`.
+- Media retention is configurable via `app_settings.media_retention_days`
+  (§4.3.8). A Worker cron deletes R2 objects past the threshold and
+  marks the DB row `deleted_at`.
 - Student records are retained for the duration of the program plus
   a configurable grace period (default: 2 years after graduation).
 - Audit-log retention: 7 years (confirm with stakeholder).

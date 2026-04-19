@@ -61,7 +61,7 @@ is the canonical reference.
 | `notification` | **Keep**, renamed `notice`. |
 | `referencelink` | **Keep**, renamed `reference_link`. |
 | `quickPhoneLinks`, `quickVideoLinks` | **Merge** into `quick_link` (kind = `phone` / `video`). |
-| `vmr_settings` | **Keep**, renamed `app_settings` (single row). |
+| `legacy_settings` | **Keep**, renamed `app_settings` (single row). |
 | *(new)* | `audit_log` — append-only (§9.4). |
 
 ### 4.3 Table catalogue
@@ -240,7 +240,8 @@ Indexes: `(village_id, captured_at)`, `tag_event_id`,
 - `id`, `body TEXT NOT NULL`, *audit*. Super Admin writes a new
   row; clients fetch the latest non-deleted row.
 
-**`app_settings`** — single-row config (renamed from `vmr_settings`).
+**`app_settings`** — single-row config (renamed from the vendor's
+`legacy_settings`).
 - `id INTEGER PRIMARY KEY CHECK (id = 1)`
 - `media_retention_days INTEGER NOT NULL DEFAULT 180`
 - `session_ttl_minutes INTEGER NOT NULL DEFAULT 720`

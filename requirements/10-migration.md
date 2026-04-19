@@ -4,9 +4,9 @@
 
 ## 10. Migration
 
-One-shot import from the vendor's production VMR backend
-(`portal.viewmyrecords.com/vmr/`) into the bespoke D1 + R2 stack,
-followed by a controlled dual-run cut-over. Zero data loss.
+One-shot import from the vendor's production backend into the
+bespoke D1 + R2 stack, followed by a controlled dual-run cut-over.
+Zero data loss.
 
 ### 10.1 Source access
 
@@ -152,12 +152,12 @@ straightforward copies (`name → name`) are omitted.
   sweep.
 
 **Content** — `aboutus`, `notification`, `referencelink`,
-`quickPhoneLinks`, `quickVideoLinks`, `vmr_settings`:
+`quickPhoneLinks`, `quickVideoLinks`, `legacy_settings`:
 
 - Drop `CorpId`; filter to NavSahyog.
 - `quickPhoneLinks` + `quickVideoLinks` → `quick_link` with
   `kind`.
-- `vmr_settings` → `app_settings` (single row); missing fields
+- `legacy_settings` → `app_settings` (single row); missing fields
   default per §4.3.8.
 
 **Not migrated** (vendor artefacts without a target table):
@@ -234,7 +234,7 @@ During the planned 15-minute window:
 
 - **Dual-run window**: 30 days. Vendor remains reachable as a
   read-only archive at a new URL
-  (`archive.vmr.navsahyog.org`). New writes go only to the
+  (`archive.legacy.navsahyog.org`). New writes go only to the
   bespoke app.
 - **Dual-read fallback**: if the new app 5xx rate exceeds the
   §8.8 alert threshold, a runtime flag (`feature.vendor_fallback
