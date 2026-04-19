@@ -15,10 +15,6 @@ Read these three files, in order:
    list. Anything you're about to edit may already be flagged as
    a blocker or open decision. Check before changing it.
 
-Skim `HANDOFF.md` only if the task involves the vendor app, the
-APK, or the migration plan (§10). It is historical context, not a
-spec.
-
 The NGO onboarding doc (`NSF-App-Process-Document-English.txt`)
 is the **authoritative source for user-facing workflows**. If a
 requirement disagrees with it, flag that as a finding — don't
@@ -50,13 +46,11 @@ this.
 /
 ├── README.md                                 ← project landing page (for humans on GitHub)
 ├── CLAUDE.md                                 ← you are here
-├── HANDOFF.md                                ← historical: how the spec was drafted
 ├── NSF-App-Process-Document-English.txt      ← onboarding doc (authoritative for workflows)
 ├── Navshayog-4.5.2.apk                       ← the vendor app being replaced
 └── requirements/
     ├── README.md                             ← index
     ├── 01-overview.md  …  11-cloudflare-mapping.md
-    ├── 09-compliance.md                      ← restored; see review-findings §0
     ├── appendix-status-and-next-steps.md
     └── review-findings-v1.md                 ← active issue list
 ```

@@ -4,10 +4,10 @@
 
 ## Appendix — status and next steps
 
-This document is a **complete v1 draft** covering every section
-listed in the HANDOFF plan. Sign-off requires closing the §11.12
-open items; several of them (especially languages, vendor dump
-access, OTP provider) unblock immediate implementation work.
+This document is a **complete v1 draft** covering all 11 sections.
+Sign-off requires closing the §11.12 open items; several of them
+(especially languages, vendor dump access, OTP provider) unblock
+immediate implementation work.
 
 Recommended next steps:
 
