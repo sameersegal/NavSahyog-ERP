@@ -8,9 +8,9 @@ with a bespoke ERP on the Cloudflare stack.
 
 ## How the doc is split
 
-The original `REQUIREMENTS.md` at the repo root has been broken up
-into one file per major section for easier review and editing. The
-root file is now a stub pointer. Section numbers (§1 – §11) are
+One file per major section. The spec was originally drafted as a
+single 2 000-line `REQUIREMENTS.md` and has since been split for
+easier review and editing. Section numbers (§1 – §11) are
 preserved in prose so inline cross-references still make sense.
 
 ## Contents

@@ -48,9 +48,9 @@ this.
 
 ```
 /
+├── README.md                                 ← project landing page (for humans on GitHub)
 ├── CLAUDE.md                                 ← you are here
 ├── HANDOFF.md                                ← historical: how the spec was drafted
-├── REQUIREMENTS.md                           ← stub pointing at requirements/
 ├── NSF-App-Process-Document-English.txt      ← onboarding doc (authoritative for workflows)
 ├── Navshayog-4.5.2.apk                       ← the vendor app being replaced
 └── requirements/
