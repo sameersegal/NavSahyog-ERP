@@ -15,10 +15,18 @@
 //     without touching client code. See routes/media.ts for the
 //     proxy endpoint.
 //
-// Token design: HMAC-SHA256 over a minimal JSON payload, signed with
-// MEDIA_PRESIGN_SECRET. Short-lived (15 min, matches §5.8). Not JWT
-// because we don't need the surface: no nested claims, no third-party
-// verifiers, no rotation story yet (§11.9 covers that when we deploy).
+// Token design: HMAC-SHA256 over a pipe-delimited, fixed-order
+// serialisation of the payload, signed with MEDIA_PRESIGN_SECRET.
+// Short-lived (15 min, matches §5.8). Not JWT because we don't need
+// the surface: no nested claims, no third-party verifiers, no
+// rotation story yet (§11.9 covers that when we deploy).
+//
+// Why not JSON: signer / verifier must agree on the exact byte
+// sequence. V8 preserves insertion order in practice, but the
+// language spec does not guarantee it, and a future refactor that
+// builds the payload object incrementally would silently break
+// verification. The fixed-order string serialiser is immune —
+// both sides assemble the same bytes from named fields.
 
 import type { MediaKind } from '@navsahyog/shared';
 
@@ -66,6 +74,16 @@ export function isMimeAllowed(kind: MediaKind, mime: string): boolean {
 
 export function extFor(mime: string): string {
   return MIME_EXT[mime] ?? 'bin';
+}
+
+// MediaRecorder emits types like `audio/webm;codecs=opus`; the
+// allow-list matches on the bare MIME. Strip the codec suffix
+// before comparison. Mirrors the client-side helper in
+// `apps/web/src/lib/media.ts` — both sides canonicalise before
+// signing / verifying so a client that sends `audio/webm` on
+// presign and `audio/webm;codecs=opus` on PUT still compares equal.
+export function canonicalMime(type: string): string {
+  return type.split(';')[0]?.trim() ?? '';
 }
 
 export function isUuid(raw: unknown): raw is string {
@@ -132,11 +150,29 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
   );
 }
 
+// Fixed field order; bump the version marker `v1` if the schema
+// ever changes so verifiers can refuse stale tokens explicitly.
+const TOKEN_VERSION = 'v1';
+
+function serialisePayload(p: UploadTokenPayload): string {
+  return [
+    TOKEN_VERSION,
+    p.uuid,
+    p.r2_key,
+    p.kind,
+    p.mime,
+    p.max_bytes,
+    p.village_id,
+    p.user_id,
+    p.exp,
+  ].join('|');
+}
+
 export async function signUploadToken(
   secret: string,
   payload: UploadTokenPayload,
 ): Promise<string> {
-  const body = toB64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const body = toB64Url(new TextEncoder().encode(serialisePayload(payload)));
   const key = await hmacKey(secret);
   const sig = new Uint8Array(
     await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)),
@@ -145,8 +181,8 @@ export async function signUploadToken(
 }
 
 // Returns payload on success, null on any failure (malformed, bad
-// signature, expired). Callers always return 401 / 403 on null —
-// don't leak which of the three it was.
+// signature, expired, version mismatch). Callers always return
+// 401 / 403 on null — don't leak which of the four it was.
 export async function verifyUploadToken(
   secret: string,
   token: string,
@@ -169,12 +205,26 @@ export async function verifyUploadToken(
     new TextEncoder().encode(body),
   );
   if (!ok) return null;
-  let payload: UploadTokenPayload;
+  let raw: string;
   try {
-    payload = JSON.parse(new TextDecoder().decode(fromB64Url(body)));
+    raw = new TextDecoder().decode(fromB64Url(body));
   } catch {
     return null;
   }
-  if (payload.exp < nowEpoch) return null;
-  return payload;
+  const fields = raw.split('|');
+  if (fields.length !== 9) return null;
+  const [version, uuid, r2_key, kind, mime, maxBytesStr, villageStr, userStr, expStr] =
+    fields as [string, string, string, string, string, string, string, string, string];
+  if (version !== TOKEN_VERSION) return null;
+  if (kind !== 'image' && kind !== 'video' && kind !== 'audio') return null;
+  const max_bytes = Number(maxBytesStr);
+  const village_id = Number(villageStr);
+  const user_id = Number(userStr);
+  const exp = Number(expStr);
+  if (!Number.isFinite(max_bytes) || !Number.isFinite(village_id) ||
+      !Number.isFinite(user_id) || !Number.isFinite(exp)) {
+    return null;
+  }
+  if (exp < nowEpoch) return null;
+  return { uuid, r2_key, kind, mime, max_bytes, village_id, user_id, exp };
 }

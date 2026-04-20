@@ -244,6 +244,13 @@ files link to it.
   Pick one convention and footnote.
 - **L5.** §11.11 cost envelope labels Cloudflare Images as "if
   used" and then §11.3 binds it. Decide and align.
+- **L6.** §7.4 derived renditions (thumbnails / video posters)
+  deferred via decisions.md D11. Until the `media-derive` Queues
+  consumer + Cloudflare Images / wasm-vips call ships, list and get
+  endpoints return the original R2 key as both `url` and `thumb_url`.
+  Pick between the two backends (§7.9 open item) and land the
+  consumer in L2.5 or L3 — tracked here so the follow-up doesn't
+  orphan when L2 closes.
 
 ---
 

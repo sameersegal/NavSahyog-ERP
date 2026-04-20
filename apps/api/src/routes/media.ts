@@ -32,6 +32,7 @@ import {
   MAX_UPLOAD_BYTES,
   PRESIGN_TTL_SECONDS,
   buildR2Key,
+  canonicalMime,
   isMimeAllowed,
   isUuid,
   parseKind,
@@ -49,6 +50,7 @@ const media = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // "presigned" URL; the session cookie doesn't travel with the
 // upload).
 media.put('/upload/:uuid', async (c) => {
+  if (!c.env.MEDIA) return err(c, 'internal_error', 500, 'media bucket not bound');
   const secret = c.env.MEDIA_PRESIGN_SECRET;
   if (!secret) return err(c, 'internal_error', 500, 'presign secret not configured');
 
@@ -61,6 +63,31 @@ media.put('/upload/:uuid', async (c) => {
   const uuidFromPath = c.req.param('uuid');
   if (uuidFromPath !== payload.uuid) {
     return err(c, 'bad_request', 400, 'uuid mismatch');
+  }
+
+  // Content-Type must agree with the signed mime. Client sets this
+  // automatically from Blob.type; `canonicalMime` strips codec
+  // suffixes (`audio/webm;codecs=opus`) so a MediaRecorder blob
+  // that presign'd as `audio/webm` still matches. Without this check
+  // a client holding a valid image-token could PUT audio bytes and
+  // the committed row's mime would diverge from the R2 object.
+  const rawContentType = c.req.header('content-type');
+  if (!rawContentType || canonicalMime(rawContentType) !== payload.mime) {
+    return err(c, 'bad_request', 400, 'content-type does not match token mime');
+  }
+
+  // Replay / duplicate commit guard. If a media row with this uuid
+  // already exists, a PUT would silently overwrite the R2 object the
+  // committed row points at. Reject with 409 so the client knows to
+  // use a fresh uuid. Replay-before-commit (no row yet) is still
+  // allowed — harmless, writes the same key with the same token-
+  // bound mime.
+  const existing = await c.env.DB
+    .prepare('SELECT id FROM media WHERE uuid = ?')
+    .bind(payload.uuid)
+    .first<{ id: number }>();
+  if (existing) {
+    return err(c, 'conflict', 409, 'media with this uuid is already committed');
   }
 
   // Size is enforced in two places: the token's max_bytes (baked in

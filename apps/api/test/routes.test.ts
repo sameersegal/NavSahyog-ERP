@@ -1272,6 +1272,7 @@ describe('media pipeline (L2.4)', () => {
     const uploadUrl = p.data.upload_url as string;
     const putRes = await SELF.fetch(`http://api.test${uploadUrl}`, {
       method: 'PUT',
+      headers: { 'content-type': opts.mime },
       body: opts.bytes,
     });
     expect(putRes.status).toBe(200);
@@ -1360,7 +1361,9 @@ describe('media pipeline (L2.4)', () => {
     // payload has the original uuid.
     const tampered = uploadUrl.replace(/upload\/[0-9a-f-]+/, `upload/${newUuid()}`);
     const res = await SELF.fetch(`http://api.test${tampered}`, {
-      method: 'PUT', body: PNG_BYTES,
+      method: 'PUT',
+      headers: { 'content-type': 'image/png' },
+      body: PNG_BYTES,
     });
     expect(res.status).toBe(400);
   });
@@ -1409,7 +1412,9 @@ describe('media pipeline (L2.4)', () => {
     });
     const data = p.data as { upload_url: string; r2_key: string };
     await SELF.fetch(`http://api.test${data.upload_url}`, {
-      method: 'PUT', body: PNG_BYTES,
+      method: 'PUT',
+      headers: { 'content-type': 'image/png' },
+      body: PNG_BYTES,
     });
     const res = await cookieFetch('/api/media', token, {
       method: 'POST',
@@ -1576,5 +1581,88 @@ describe('media pipeline (L2.4)', () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: { message?: string } };
     expect(body.error.message).toMatch(/audio/i);
+  });
+
+  // ---- token lifecycle negative cases (review PR #25 #5) ---------
+
+  it('PUT with a Content-Type that disagrees with the token is rejected', async () => {
+    const token = await loginAs('vc-anandpur');
+    const { data } = await presign(token, {
+      uuid: newUuid(), kind: 'image', mime: 'image/png',
+      bytes: PNG_BYTES.length, village_id: 1, captured_at: 1_700_000_000,
+    });
+    const res = await SELF.fetch(`http://api.test${(data as { upload_url: string }).upload_url}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'audio/webm' },
+      body: PNG_BYTES,
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message?: string } };
+    expect(body.error.message).toMatch(/content-type/i);
+  });
+
+  it('PUT with a body larger than the presigned max_bytes returns 413', async () => {
+    const token = await loginAs('vc-anandpur');
+    const { data } = await presign(token, {
+      // Presign claims 5 bytes; PNG_BYTES is 10, so the PUT exceeds
+      // the token's max_bytes and should be rejected.
+      uuid: newUuid(), kind: 'image', mime: 'image/png',
+      bytes: 5, village_id: 1, captured_at: 1_700_000_000,
+    });
+    const res = await SELF.fetch(`http://api.test${(data as { upload_url: string }).upload_url}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'image/png' },
+      body: PNG_BYTES,
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it('PUT with an expired token is rejected as unauthenticated', async () => {
+    // Can't easily time-travel, so mint a token with exp in the past
+    // using the same signer the Worker uses. Matches the secret set
+    // in vitest.config.ts.
+    const { signUploadToken } = await import('../src/lib/media');
+    const uuid = newUuid();
+    const r2_key = `image/2026/04/20/1/${uuid}.png`;
+    const expired = await signUploadToken('test-secret', {
+      uuid, r2_key, kind: 'image', mime: 'image/png',
+      max_bytes: 100, village_id: 1, user_id: 1,
+      exp: Math.floor(Date.now() / 1000) - 60, // a minute in the past
+    });
+    const res = await SELF.fetch(
+      `http://api.test/api/media/upload/${uuid}?token=${encodeURIComponent(expired)}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'image/png' },
+        body: PNG_BYTES,
+      },
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('PUT on an already-committed uuid is rejected with 409', async () => {
+    const token = await loginAs('vc-anandpur');
+    const media = await uploadAndCommit(token, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    // Presign a fresh token for the SAME uuid — normally a client
+    // would never do this, but a misbehaving or malicious caller
+    // might. The DB row already exists, so the PUT must refuse.
+    const { signUploadToken } = await import('../src/lib/media');
+    const replay = await signUploadToken('test-secret', {
+      uuid: media.uuid, r2_key: media.r2_key,
+      kind: 'image', mime: 'image/png',
+      max_bytes: 1024, village_id: 1, user_id: 1,
+      exp: Math.floor(Date.now() / 1000) + 900,
+    });
+    const res = await SELF.fetch(
+      `http://api.test/api/media/upload/${media.uuid}?token=${encodeURIComponent(replay)}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'image/png' },
+        body: PNG_BYTES,
+      },
+    );
+    expect(res.status).toBe(409);
   });
 });
