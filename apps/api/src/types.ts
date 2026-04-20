@@ -6,12 +6,18 @@ export type { Role, ScopeLevel };
 
 export type Bindings = {
   DB: D1Database;
+  MEDIA: R2Bucket;
   // Comma-separated allowlist of origins that may make credentialed
   // requests. Set in wrangler.toml [vars]. Empty / unset means
   // same-origin only (the Vite dev proxy + the deployed Pages site).
   ALLOWED_ORIGINS?: string;
-  // 'development' | 'production'. Drives the `Secure` cookie flag.
+  // 'development' | 'production'. Drives the `Secure` cookie flag
+  // and, for L2.4, the upload-token signing default.
   ENVIRONMENT?: string;
+  // HMAC secret for media upload tokens. Dev default lives in
+  // wrangler.toml [vars]; production must be set via
+  // `wrangler secret put MEDIA_PRESIGN_SECRET`.
+  MEDIA_PRESIGN_SECRET?: string;
 };
 
 // The session-bound user — DB row shape, no computed capabilities.

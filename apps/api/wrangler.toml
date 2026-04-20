@@ -9,6 +9,9 @@ ENVIRONMENT = "development"
 # Comma-separated. Vite dev origin so the dev proxy isn't needed for
 # direct browser → Worker calls during testing.
 ALLOWED_ORIGINS = "http://localhost:5173"
+# HMAC secret for media upload tokens (L2.4). Dev-only default;
+# production must set via `wrangler secret put MEDIA_PRESIGN_SECRET`.
+MEDIA_PRESIGN_SECRET = "dev-only-change-me"
 
 [dev]
 port = 8787
@@ -27,6 +30,15 @@ database_name = "navsahyog_db"
 database_id = "REPLACE_BEFORE_DEPLOY"
 migrations_dir = "../../db/migrations"
 
+# R2 media bucket (spec §7.1, decisions.md D3). `wrangler dev
+# --local` materialises this as a filesystem-backed bucket under
+# `.wrangler/`; production needs `media-prod` created via
+# `wrangler r2 bucket create` before deploy.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "media-staging"
+preview_bucket_name = "media-staging"
+
 # Production overrides. Bind real ID + real origin list before
 # running `wrangler deploy --env production`.
 [env.production]
@@ -40,3 +52,7 @@ binding = "DB"
 database_name = "navsahyog_db"
 database_id = "REPLACE_BEFORE_DEPLOY"
 migrations_dir = "../../db/migrations"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "media-prod"

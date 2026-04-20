@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   api,
@@ -11,13 +11,20 @@ import {
   type ChildProfile,
   type Event,
   type GraduationReason,
+  type MediaWithUrls,
   type School,
   type Village as VillageT,
 } from '../api';
+import {
+  captureGps,
+  canonicalMime,
+  MAX_UPLOAD_BYTES,
+  uploadMedia,
+} from '../lib/media';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
-type Tab = 'children' | 'attendance';
+type Tab = 'children' | 'attendance' | 'media';
 
 // Today as an IST 'YYYY-MM-DD' string. Must match the server's
 // `todayIstDate` in apps/api/src/lib/time.ts.
@@ -62,11 +69,16 @@ export function Village() {
         <TabButton active={tab === 'attendance'} onClick={() => setTab('attendance')}>
           {t('village.tab.attendance')}
         </TabButton>
+        <TabButton active={tab === 'media'} onClick={() => setTab('media')}>
+          {t('village.tab.media')}
+        </TabButton>
       </div>
       {tab === 'children' ? (
         <ChildrenTab villageId={villageId} />
-      ) : (
+      ) : tab === 'attendance' ? (
         <AttendanceTab villageId={villageId} />
+      ) : (
+        <MediaTab villageId={villageId} />
       )}
     </div>
   );
@@ -282,6 +294,120 @@ type ChildFormProps =
       onCancel: () => void;
     };
 
+// Child-photo picker. Wraps a hidden `<input type=file>` with
+// `accept=image/*` + `capture=environment` — on Android this opens
+// the camera; on desktop it falls through to the file chooser. The
+// selected file is uploaded immediately so the form only needs to
+// send the resulting media id (photo_media_id) on save. Deferring
+// upload to submit would complicate retry: a failed PUT mid-submit
+// would wipe the whole form.
+function PhotoPicker({
+  villageId,
+  value,
+  onChange,
+}: {
+  villageId: number;
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const { t } = useI18n();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Load existing thumbnail on edit. Fire only when value changes,
+  // not on every re-render, so the URL doesn't flicker.
+  useEffect(() => {
+    let cancelled = false;
+    if (value === null) {
+      setPreview(null);
+      return;
+    }
+    api.getMedia(value).then((r) => {
+      if (!cancelled) setPreview(r.media.thumb_url);
+    }).catch(() => { if (!cancelled) setPreview(null); });
+    return () => { cancelled = true; };
+  }, [value]);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      if (file.size > MAX_UPLOAD_BYTES) {
+        throw new Error(t('media.error.too_big'));
+      }
+      const gps = await captureGps();
+      const result = await uploadMedia({
+        file,
+        kind: 'image',
+        mime: canonicalMime(file.type) || 'image/jpeg',
+        villageId,
+        gps,
+      });
+      onChange(result.id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t('media.error.failed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-semibold">{t('children.form.photo')}</legend>
+      <div className="flex items-start gap-3">
+        <div className="w-20 h-20 rounded border border-border bg-card overflow-hidden flex items-center justify-center text-xs text-muted-fg shrink-0">
+          {preview ? (
+            <img src={preview} alt="" className="w-full h-full object-cover" />
+          ) : (
+            t('children.form.photo.none')
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={onFile}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
+              className="bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5 text-sm disabled:opacity-60"
+            >
+              {busy
+                ? t('media.uploading')
+                : value !== null
+                  ? t('children.form.photo.replace')
+                  : t('children.form.photo.pick')}
+            </button>
+            {value !== null && (
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                disabled={busy}
+                className="text-sm text-muted-fg hover:text-danger"
+              >
+                {t('children.form.photo.remove')}
+              </button>
+            )}
+          </div>
+          {err && <p className="text-xs text-danger">{err}</p>}
+          <p className="text-xs text-muted-fg">{t('children.form.photo.hint')}</p>
+        </div>
+      </div>
+    </fieldset>
+  );
+}
+
 function ChildForm(props: ChildFormProps) {
   const { mode, villageId, schools, child, onSaved, onCancel } = props;
   const { t } = useI18n();
@@ -290,6 +416,9 @@ function ChildForm(props: ChildFormProps) {
   const [gender, setGender] = useState<'m' | 'f' | 'o'>(child?.gender ?? 'm');
   const [dob, setDob] = useState(child?.dob ?? '');
   const [joinedAt, setJoinedAt] = useState(child?.joined_at ?? '');
+  const [photoMediaId, setPhotoMediaId] = useState<number | null>(
+    child?.photo_media_id ?? null,
+  );
   const [schoolId, setSchoolId] = useState<number>(
     child?.school_id ?? schools[0]?.id ?? 0,
   );
@@ -370,10 +499,18 @@ function ChildForm(props: ChildFormProps) {
           gender,
           dob,
           ...(joinedAt ? { joined_at: joinedAt } : {}),
+          ...(photoMediaId !== null ? { photo_media_id: photoMediaId } : {}),
           ...profileBody(),
         };
         await api.addChild(body);
       } else {
+        // Include photo only if it changed; undefined preserves the
+        // server-side value on PATCH per the key-present-vs-absent
+        // contract.
+        const photoKey: { photo_media_id?: number | null } =
+          photoMediaId !== (child?.photo_media_id ?? null)
+            ? { photo_media_id: photoMediaId }
+            : {};
         const body: ChildCorePatch & ChildProfile = {
           school_id: schoolId,
           first_name: firstName,
@@ -381,6 +518,7 @@ function ChildForm(props: ChildFormProps) {
           gender,
           dob,
           ...(joinedAt ? { joined_at: joinedAt } : {}),
+          ...photoKey,
           ...profileBody(),
         };
         await api.updateChild(child!.id, body);
@@ -444,6 +582,12 @@ function ChildForm(props: ChildFormProps) {
           </select>
         </label>
       </div>
+
+      <PhotoPicker
+        villageId={villageId}
+        value={photoMediaId}
+        onChange={setPhotoMediaId}
+      />
 
       <fieldset className="space-y-3">
         <legend className="text-sm font-semibold">{t('children.form.parents')}</legend>
@@ -797,6 +941,168 @@ function SessionList({
   );
 }
 
+// Voice-note recorder — wraps MediaRecorder. On stop, the Blob is
+// uploaded immediately (same reasoning as PhotoPicker: defer-to-
+// submit would complicate retry). Preview uses a native <audio> tag
+// that picks up the same blob URL, so the user can hear it before
+// saving the session.
+//
+// MIME: MediaRecorder on Chrome emits `audio/webm`, on Safari
+// `audio/mp4`. Both are in the server allow-list (apps/api/src/lib/
+// media.ts). Codec suffix is stripped via canonicalMime.
+function VoiceNoteRecorder({
+  villageId,
+  value,
+  onChange,
+}: {
+  villageId: number;
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const { t } = useI18n();
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Existing voice note: fetch its raw URL once so the playback
+  // preview shows on edit. We rely on the /api/media/raw endpoint
+  // which authenticates via session cookie.
+  useEffect(() => {
+    let cancelled = false;
+    if (value === null) {
+      setBlobUrl(null);
+      return;
+    }
+    // Only hit the endpoint if we don't already have a local blob
+    // (covers the case where the user just recorded a new clip).
+    setBlobUrl((existing) => existing ?? `/api/media/raw/${value}`);
+    return () => { cancelled = true; };
+  }, [value]);
+
+  useEffect(() => {
+    if (!recording) return;
+    const started = Date.now();
+    const t = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 250);
+    return () => clearInterval(t);
+  }, [recording]);
+
+  // Stop + release the mic when the component unmounts (e.g. user
+  // cancels the form mid-recording). Without this the browser shows
+  // a "mic in use" indicator until the tab closes.
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach((tr) => tr.stop());
+  }, []);
+
+  async function start() {
+    setErr(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        const mime = canonicalMime(rec.mimeType) || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: mime });
+        streamRef.current?.getTracks().forEach((tr) => tr.stop());
+        streamRef.current = null;
+        chunksRef.current = [];
+        setBlobUrl(URL.createObjectURL(blob));
+        await upload(blob, mime);
+      };
+      rec.start();
+      recorderRef.current = rec;
+      setRecording(true);
+      setElapsed(0);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t('media.error.mic_denied'));
+    }
+  }
+
+  function stop() {
+    recorderRef.current?.stop();
+    recorderRef.current = null;
+    setRecording(false);
+  }
+
+  async function upload(blob: Blob, mime: string) {
+    setBusy(true);
+    try {
+      const gps = await captureGps();
+      const result = await uploadMedia({
+        file: blob,
+        kind: 'audio',
+        mime,
+        villageId,
+        gps,
+      });
+      onChange(result.id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t('media.error.failed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function clear() {
+    onChange(null);
+    setBlobUrl(null);
+  }
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-semibold">{t('attendance.form.voice_note')}</legend>
+      <div className="flex flex-wrap items-center gap-3">
+        {!recording ? (
+          <button
+            type="button"
+            onClick={start}
+            disabled={busy}
+            className="bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5 text-sm disabled:opacity-60"
+          >
+            {value !== null
+              ? t('attendance.form.voice_note.rerecord')
+              : t('attendance.form.voice_note.record')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={stop}
+            className="bg-danger hover:bg-danger text-primary-fg rounded px-3 py-1.5 text-sm"
+          >
+            {t('attendance.form.voice_note.stop', { s: elapsed })}
+          </button>
+        )}
+        {blobUrl && !recording && (
+          <audio src={blobUrl} controls className="h-8" />
+        )}
+        {value !== null && !recording && (
+          <button
+            type="button"
+            onClick={clear}
+            disabled={busy}
+            className="text-sm text-muted-fg hover:text-danger"
+          >
+            {t('attendance.form.voice_note.remove')}
+          </button>
+        )}
+        {busy && <span className="text-xs text-muted-fg">{t('media.uploading')}</span>}
+      </div>
+      {err && <p className="text-xs text-danger">{err}</p>}
+      <p className="text-xs text-muted-fg">{t('attendance.form.voice_note.hint')}</p>
+    </fieldset>
+  );
+}
+
 function SessionForm({
   villageId,
   date,
@@ -820,6 +1126,9 @@ function SessionForm({
   );
   const [startTime, setStartTime] = useState(existing?.start_time ?? '10:00');
   const [endTime, setEndTime] = useState(existing?.end_time ?? '11:00');
+  const [voiceNoteMediaId, setVoiceNoteMediaId] = useState<number | null>(
+    existing?.voice_note_media_id ?? null,
+  );
   const initialMarks = useMemo(() => {
     const byStudent: Record<number, boolean> = {};
     for (const c of children) byStudent[c.id] = true;
@@ -864,6 +1173,7 @@ function SessionForm({
         date,
         start_time: startTime,
         end_time: endTime,
+        voice_note_media_id: voiceNoteMediaId,
         marks: children.map((c) => ({
           student_id: c.id,
           present: marks[c.id] ?? false,
@@ -929,6 +1239,12 @@ function SessionForm({
           />
         </label>
       </div>
+
+      <VoiceNoteRecorder
+        villageId={villageId}
+        value={voiceNoteMediaId}
+        onChange={setVoiceNoteMediaId}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-fg">
@@ -1000,5 +1316,86 @@ function SessionForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// Village media gallery. Lists every committed media row attributed
+// to this village (image + video + audio). Clicking a tile opens
+// the raw bytes in a new tab — L2.4 has no thumbnail derivation yet
+// (decisions.md D11), so thumb_url points at the original object.
+function MediaTab({ villageId }: { villageId: number }) {
+  const { t } = useI18n();
+  const { user } = useAuth();
+  const canWrite = can(user, 'media.write');
+  const [items, setItems] = useState<MediaWithUrls[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setErr(null);
+    api.media({ village_id: villageId })
+      .then((r) => setItems(r.media))
+      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
+  }, [villageId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function onDelete(id: number) {
+    if (!confirm(t('media.delete.confirm'))) return;
+    try {
+      const res = await fetch(`/api/media/${id}`, {
+        method: 'DELETE', credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+    }
+  }
+
+  if (items === null) return <p className="text-muted-fg">{t('common.loading')}</p>;
+  if (err) return <p className="text-danger">{err}</p>;
+  if (items.length === 0) {
+    return <p className="text-muted-fg">{t('media.empty')}</p>;
+  }
+
+  return (
+    <ul className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {items.map((m) => (
+        <li
+          key={m.id}
+          className="bg-card border border-border rounded overflow-hidden"
+        >
+          <a
+            href={m.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block aspect-square bg-bg flex items-center justify-center text-xs text-muted-fg"
+          >
+            {m.kind === 'image' ? (
+              <img src={m.thumb_url} alt="" className="w-full h-full object-cover" />
+            ) : m.kind === 'video' ? (
+              <span>{t('media.kind.video')}</span>
+            ) : (
+              <span>{t('media.kind.audio')}</span>
+            )}
+          </a>
+          <div className="p-2 flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-fg truncate">
+              {new Date(m.captured_at * 1000).toLocaleString()}
+            </span>
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => onDelete(m.id)}
+                className="text-xs text-muted-fg hover:text-danger"
+                aria-label={t('media.delete')}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

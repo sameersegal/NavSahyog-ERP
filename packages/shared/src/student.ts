@@ -1,6 +1,6 @@
 // Student (child) wire shape — the JSON body returned by
 // /api/children[/:id]. Mirrors requirements §4.3.3 minus the
-// Aadhaar-masked fields (L5) and photo_media_id (L2.4).
+// Aadhaar-masked fields (L5).
 //
 // Both server and client import this so a column addition in a
 // future migration fans out to both via a single compile error.
@@ -31,4 +31,5 @@ export type Student = {
   alt_contact_name: string | null;
   alt_contact_phone: string | null;
   alt_contact_relationship: string | null;
+  photo_media_id: number | null;
 };

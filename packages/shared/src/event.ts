@@ -25,6 +25,7 @@ export type AttendanceSession = {
   date: string;           // IST 'YYYY-MM-DD'
   start_time: string;     // IST 'HH:MM'
   end_time: string;       // IST 'HH:MM'
+  voice_note_media_id: number | null;
 };
 
 // The GET /api/attendance payload: all sessions for a given
