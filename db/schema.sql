@@ -5,6 +5,16 @@
 --   * No soft-delete on most tables; only student.graduated_at exists.
 --   * attendance_session has no event_id (L2 adds it).
 --   * Sessions stored in D1, not KV (L5 moves to KV).
+--
+-- Time conventions:
+--   * Calendar dates use TEXT 'YYYY-MM-DD' in IST. Examples:
+--     student.dob, student.joined_at, student.graduated_at,
+--     attendance_session.date.
+--   * Instants (TTLs, audit timestamps) use INTEGER UTC epoch
+--     seconds. Examples: created_at, expires_at, app_settings.updated_at.
+--   * The split exists so a "date" column never carries a hidden
+--     timezone offset. See apps/api/src/lib/time.ts for the single
+--     "now → today's IST date" boundary.
 
 PRAGMA foreign_keys = ON;
 
@@ -92,10 +102,10 @@ CREATE TABLE student (
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   gender TEXT NOT NULL CHECK (gender IN ('m','f','o')),
-  dob INTEGER NOT NULL,
-  joined_at INTEGER NOT NULL,
-  graduated_at INTEGER,
-  created_at INTEGER NOT NULL,
+  dob TEXT NOT NULL,                  -- IST 'YYYY-MM-DD'
+  joined_at TEXT NOT NULL,            -- IST 'YYYY-MM-DD'
+  graduated_at TEXT,                  -- IST 'YYYY-MM-DD', NULL = active
+  created_at INTEGER NOT NULL,        -- UTC epoch seconds
   created_by INTEGER NOT NULL REFERENCES user(id)
 );
 
@@ -105,8 +115,8 @@ CREATE INDEX idx_student_school ON student(school_id);
 CREATE TABLE attendance_session (
   id INTEGER PRIMARY KEY,
   village_id INTEGER NOT NULL REFERENCES village(id),
-  date INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
+  date TEXT NOT NULL,                 -- IST 'YYYY-MM-DD'
+  created_at INTEGER NOT NULL,        -- UTC epoch seconds
   created_by INTEGER NOT NULL REFERENCES user(id),
   UNIQUE(village_id, date)
 );

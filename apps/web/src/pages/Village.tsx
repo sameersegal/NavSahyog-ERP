@@ -5,16 +5,11 @@ import { useI18n } from '../i18n';
 
 type Tab = 'children' | 'attendance';
 
-function fmtDob(epoch: number) {
-  return new Date(epoch * 1000).toISOString().slice(0, 10);
-}
-
-// Start of the current IST day, in epoch seconds. Must match the
-// server's `istDayStart` in apps/api/src/lib/time.ts.
-function todayIst() {
-  const now = Math.floor(Date.now() / 1000);
-  const ist = now + 5.5 * 3600;
-  return Math.floor(ist / 86400) * 86400 - 5.5 * 3600;
+// Today as an IST 'YYYY-MM-DD' string. Must match the server's
+// `todayIstDate` in apps/api/src/lib/time.ts.
+function todayIstDate(): string {
+  const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
+  return new Date(istMs).toISOString().slice(0, 10);
 }
 
 export function Village() {
@@ -138,7 +133,7 @@ function ChildrenTab({ villageId }: { villageId: number }) {
           >
             <span className="font-medium">{c.first_name} {c.last_name}</span>
             <span className="text-xs text-muted-fg">
-              {t(`children.form.gender.${c.gender}`)} · {t('children.form.dob')} {fmtDob(c.dob)}
+              {t(`children.form.gender.${c.gender}`)} · {t('children.form.dob')} {c.dob}
             </span>
           </li>
         ))}
@@ -173,14 +168,14 @@ function AddChildForm({
     setErr(null);
     setBusy(true);
     try {
-      const dobEpoch = Math.floor(new Date(dob).getTime() / 1000);
+      // The native <input type="date"> already gives us YYYY-MM-DD.
       await api.addChild({
         village_id: villageId,
         school_id: schoolId,
         first_name: firstName,
         last_name: lastName,
         gender,
-        dob: dobEpoch,
+        dob,
       });
       onAdded();
     } catch (e) {
@@ -256,7 +251,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const date = todayIst();
+  const date = todayIstDate();
 
   useEffect(() => {
     setSaved(false);
@@ -316,9 +311,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold">
-            {new Date(date * 1000).toISOString().slice(0, 10)}
-          </h2>
+          <h2 className="text-lg font-semibold">{date}</h2>
           <p className="text-sm text-muted-fg">
             {t('attendance.counts', {
               present: counts.present,

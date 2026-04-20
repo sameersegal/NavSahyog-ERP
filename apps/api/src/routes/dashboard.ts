@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../auth';
 import { villageIdsInScope } from '../scope';
-import { istDayStart, nowEpochSeconds } from '../lib/time';
+import { isIsoDate, todayIstDate } from '../lib/time';
+import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
 
 type VillageRow = {
@@ -53,7 +54,11 @@ dashboard.get('/children', async (c) => {
 
 dashboard.get('/attendance', async (c) => {
   const user = c.get('user');
-  const date = istDayStart(Number(c.req.query('date') ?? nowEpochSeconds()));
+  const dateParam = c.req.query('date');
+  if (dateParam !== undefined && !isIsoDate(dateParam)) {
+    return err(c, 'bad_request', 400, 'date must be YYYY-MM-DD');
+  }
+  const date = dateParam ?? todayIstDate();
   const ids = await villageIdsInScope(c.env.DB, user);
   const villages = await scopeVillages(c.env.DB, ids);
   if (ids.length === 0) return c.json({ villages: [], date });

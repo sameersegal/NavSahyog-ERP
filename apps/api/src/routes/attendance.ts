@@ -2,11 +2,11 @@ import { Hono } from 'hono';
 import { requireAuth, requireRole } from '../auth';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
-import { istDayStart, todayIst } from '../lib/time';
+import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
 type Mark = { student_id: number; present: boolean };
-type PostBody = { village_id?: number; date?: number; marks?: Mark[] };
+type PostBody = { village_id?: number; date?: string; marks?: Mark[] };
 
 const attendance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -15,8 +15,12 @@ attendance.use('*', requireAuth);
 attendance.get('/', async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
-  const date = Number(c.req.query('date') ?? todayIst());
+  const dateParam = c.req.query('date');
+  const date = dateParam ?? todayIstDate();
   if (!villageId) return err(c, 'bad_request', 400, 'village_id required');
+  if (dateParam !== undefined && !isIsoDate(dateParam)) {
+    return err(c, 'bad_request', 400, 'date must be YYYY-MM-DD');
+  }
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
     return err(c, 'forbidden', 403);
   }
@@ -46,14 +50,16 @@ attendance.post('/', async (c) => {
   const user = c.get('user');
   const body = await c.req.json<PostBody>().catch(() => ({}) as PostBody);
   const villageId = body.village_id;
-  const submittedDate = body.date ?? todayIst();
+  const date = body.date ?? todayIstDate();
   const marks = body.marks ?? [];
   if (!villageId || marks.length === 0) {
     return err(c, 'bad_request', 400, 'village_id and marks required');
   }
+  if (!isIsoDate(date)) {
+    return err(c, 'bad_request', 400, 'date must be YYYY-MM-DD');
+  }
   // L1: today only.
-  const date = istDayStart(submittedDate);
-  if (date !== todayIst()) {
+  if (date !== todayIstDate()) {
     return err(c, 'bad_request', 400, 'L1 allows attendance for today only');
   }
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
@@ -71,10 +77,7 @@ attendance.post('/', async (c) => {
   if (validIds.size !== studentIds.length) {
     return err(c, 'bad_request', 400, 'some students not in village or graduated');
   }
-  const now = Math.floor(Date.now() / 1000);
-  // INSERT-or-UPDATE the session and capture its id in one round-trip.
-  // ON CONFLICT bumps created_at/created_by so the UNIQUE row is
-  // returned either way.
+  const now = nowEpochSeconds();
   const session = await c.env.DB.prepare(
     `INSERT INTO attendance_session (village_id, date, created_at, created_by)
      VALUES (?, ?, ?, ?)

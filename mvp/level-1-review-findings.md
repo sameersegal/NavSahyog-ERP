@@ -13,10 +13,10 @@ This doc is **not** part of the spec — it's a working list. As each
 item lands, mark it `fixed in <commit/PR>`.
 
 **Status:** B1, B2, B3, B4, H3, H4 (partial — CI workflow only),
-H5, H6, H7, M2, M3, M4, M5 are fixed on
+H5, H6, H7, M1, M2, M3, M4, M5 are fixed on
 `claude/review-mvp-foundation-OGA8L`. H1 (PWA), H2 (migrations),
-M1 (`dob` storage), M6 (scope_id FK), and the LOW items remain
-open and are tagged inline.
+M6 (scope_id FK), and the LOW items remain open and are tagged
+inline.
 
 ---
 
@@ -123,11 +123,15 @@ open and are tagged inline.
 
 ## MEDIUM
 
-### M1 — `dob` stored as epoch seconds
+### M1 — `dob` stored as epoch seconds *(fixed on review-mvp-foundation)*
 - `db/schema.sql:95`. Birthdates have no time-of-day. Same
   UTC/IST trap as B4.
-- **Fix.** Store as `INTEGER` `YYYYMMDD` or `TEXT` `YYYY-MM-DD`.
-  Belongs in the next schema-touching PR; not critical for L1.
+- **Fix.** Switched `student.dob`, `student.joined_at`,
+  `student.graduated_at`, and `attendance_session.date` to
+  `TEXT 'YYYY-MM-DD'` in IST. `created_at` / `expires_at` stay
+  UTC epoch (instants, not dates). The IST helper now collapses
+  to a single `todayIstDate()` boundary at request entry, which
+  also tightens B4 from three failure modes to one.
 
 ### M2 — `auth.login.hint` leaks a credential pair in all builds *(fixed on review-mvp-foundation)*
 - `apps/web/src/pages/Login.tsx:42` + `locales/*.json`.

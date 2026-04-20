@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth, requireRole } from '../auth';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
+import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
 type Student = {
@@ -11,9 +12,9 @@ type Student = {
   first_name: string;
   last_name: string;
   gender: 'm' | 'f' | 'o';
-  dob: number;
-  joined_at: number;
-  graduated_at: number | null;
+  dob: string;
+  joined_at: string;
+  graduated_at: string | null;
 };
 
 type AddBody = {
@@ -22,7 +23,7 @@ type AddBody = {
   first_name?: string;
   last_name?: string;
   gender?: 'm' | 'f' | 'o';
-  dob?: number;
+  dob?: string;
 };
 
 const children = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -59,6 +60,9 @@ children.post('/', async (c) => {
   if (!['m', 'f', 'o'].includes(gender)) {
     return err(c, 'bad_request', 400, 'invalid gender');
   }
+  if (!isIsoDate(dob)) {
+    return err(c, 'bad_request', 400, 'dob must be YYYY-MM-DD');
+  }
   if (!(await assertVillageInScope(c.env.DB, user, village_id))) {
     return err(c, 'forbidden', 403);
   }
@@ -68,7 +72,6 @@ children.post('/', async (c) => {
     .bind(school_id, village_id)
     .first<{ id: number }>();
   if (!school) return err(c, 'bad_request', 400, 'school not in village');
-  const now = Math.floor(Date.now() / 1000);
   const rs = await c.env.DB.prepare(
     `INSERT INTO student
        (village_id, school_id, first_name, last_name, gender, dob,
@@ -83,8 +86,8 @@ children.post('/', async (c) => {
       last_name,
       gender,
       dob,
-      now,
-      now,
+      todayIstDate(),
+      nowEpochSeconds(),
       user.id,
     )
     .first<{ id: number }>();

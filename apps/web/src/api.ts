@@ -27,9 +27,9 @@ export type Child = {
   first_name: string;
   last_name: string;
   gender: 'm' | 'f' | 'o';
-  dob: number;
-  joined_at: number;
-  graduated_at: number | null;
+  dob: string;            // IST 'YYYY-MM-DD'
+  joined_at: string;      // IST 'YYYY-MM-DD'
+  graduated_at: string | null;
 };
 
 export type AttendanceMark = { student_id: number; present: boolean };
@@ -66,22 +66,22 @@ export const api = {
     first_name: string;
     last_name: string;
     gender: 'm' | 'f' | 'o';
-    dob: number;
+    dob: string;          // IST 'YYYY-MM-DD'
   }) =>
     req<{ id: number }>('/api/children', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  attendance: (villageId: number, date?: number) =>
+  attendance: (villageId: number, date?: string) =>
     req<{
-      session: { id: number; village_id: number; date: number } | null;
+      session: { id: number; village_id: number; date: string } | null;
       marks: AttendanceMark[];
     }>(
       `/api/attendance?village_id=${villageId}${date ? `&date=${date}` : ''}`,
     ),
   submitAttendance: (body: {
     village_id: number;
-    date?: number;
+    date?: string;        // IST 'YYYY-MM-DD'
     marks: AttendanceMark[];
   }) =>
     req<{ session_id: number; count: number }>('/api/attendance', {
@@ -98,9 +98,9 @@ export const api = {
         count: number;
       }>;
     }>('/api/dashboard/children'),
-  dashboardAttendance: (date?: number) =>
+  dashboardAttendance: (date?: string) =>
     req<{
-      date: number;
+      date: string;
       villages: Array<{
         village_id: number;
         village_name: string;
