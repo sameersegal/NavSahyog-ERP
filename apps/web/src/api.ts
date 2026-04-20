@@ -95,8 +95,15 @@ export type ChildCorePatch = {
   photo_media_id?: number | null;
 };
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+function apiUrl(path: string): string {
+  if (!API_BASE) return path;
+  return `${API_BASE}${path}`;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
@@ -236,7 +243,7 @@ export const api = {
   // CSV URL builder (browsers download via <a href=…> so we never
   // need the response body on the client).
   dashboardDrilldownCsvUrl: (opts: DrilldownQuery) =>
-    `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
+    apiUrl(`/api/dashboard/drilldown.csv?${drilldownQs(opts)}`),
 };
 
 export type DrilldownQuery = {

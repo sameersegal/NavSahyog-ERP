@@ -10,7 +10,7 @@ ENVIRONMENT = "development"
 # direct browser → Worker calls during testing.
 ALLOWED_ORIGINS = "http://localhost:5173"
 # HMAC secret for media upload tokens (L2.4). Dev-only default;
-# production must set via `wrangler secret put MEDIA_PRESIGN_SECRET`.
+# non-dev must set via `wrangler secret put MEDIA_PRESIGN_SECRET`.
 MEDIA_PRESIGN_SECRET = "dev-only-change-me"
 
 [dev]
@@ -39,20 +39,40 @@ binding = "MEDIA"
 bucket_name = "media-staging"
 preview_bucket_name = "media-staging"
 
-# Production overrides. Bind real ID + real origin list before
+[env.staging]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+ALLOWED_ORIGINS = "https://navsahyog-app.pages.dev,https://staging.navsahyog.org"
+MEDIA_PRESIGN_SECRET = "set-via-secret"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "navsahyog-staging"
+database_id = "7ceed522-7379-47ff-a9e6-0b6d638c4865"
+migrations_dir = "../../db/migrations"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "media-staging"
+preview_bucket_name = "media-staging"
+
+# Production overrides. Bind real resource IDs + domains before
 # running `wrangler deploy --env production`.
 [env.production]
 
 [env.production.vars]
 ENVIRONMENT = "production"
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "https://app.navsahyog.org,https://navsahyog.org"
+MEDIA_PRESIGN_SECRET = "set-via-secret"
 
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "navsahyog_db"
-database_id = "REPLACE_BEFORE_DEPLOY"
+database_name = "navsahyog-prod"
+database_id = "REPLACE_WITH_PROD_D1_DATABASE_ID"
 migrations_dir = "../../db/migrations"
 
 [[env.production.r2_buckets]]
 binding = "MEDIA"
 bucket_name = "media-prod"
+preview_bucket_name = "media-prod"
