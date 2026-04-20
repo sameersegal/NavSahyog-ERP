@@ -8,9 +8,10 @@
     "build": "wrangler deploy --dry-run --outdir=dist",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "db:apply": "wrangler d1 execute navsahyog_db --local --file=../../db/schema.sql",
+    "db:migrate": "wrangler d1 migrations apply navsahyog_db --local",
+    "db:migrate:new": "wrangler d1 migrations create navsahyog_db",
     "db:seed": "wrangler d1 execute navsahyog_db --local --file=../../db/seed.sql",
-    "db:reset": "pnpm db:drop && pnpm db:apply && pnpm db:seed",
+    "db:reset": "pnpm db:drop && pnpm db:migrate && pnpm db:seed",
     "db:drop": "rm -rf .wrangler/state/v3/d1"
   },
   "dependencies": {

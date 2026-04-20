@@ -1,5 +1,12 @@
--- L1 schema. Subset of requirements §4.
--- Simplifications vs §4:
+-- 0001_init — baseline schema.
+--
+-- Applied via `wrangler d1 migrations apply` (see apps/api/package.json
+-- `db:migrate`). This file is the source of truth for the initial
+-- schema; subsequent structural changes land as 0002_*.sql, 0003_*.sql,
+-- etc. Never edit this file after it has been applied to any database
+-- you care about — write a new migration instead.
+--
+-- Simplifications vs requirements §4:
 --   * No uuid columns yet (L2+).
 --   * Plain-text passwords (L5 replaces with Argon2id).
 --   * No soft-delete on most tables; only student.graduated_at exists.
