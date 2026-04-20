@@ -1,14 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
+  DASHBOARD_METRICS,
   type DashboardMetric,
   type DrilldownQuery,
   type DrilldownResponse,
   type GeoLevel,
 } from '../api';
+import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
-const METRICS: DashboardMetric[] = ['vc', 'af', 'children', 'attendance', 'achievements'];
+// Where the user lands when they first open the dashboard (or when
+// they switch metrics). Super admins and anyone without a scope
+// start at India; everyone else starts at their scope floor, which
+// is the only meaningful root for them. Matches the trimmed
+// breadcrumb the server returns for non-global users.
+type Position = { level: GeoLevel; id: number | null };
+function defaultPosition(user: {
+  scope_level: string;
+  scope_id: number | null;
+}): Position {
+  if (user.scope_level === 'global') return { level: 'india', id: null };
+  return { level: user.scope_level as GeoLevel, id: user.scope_id };
+}
 
 function todayIstDate(): string {
   const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
@@ -18,12 +32,12 @@ function firstOfMonthIst(): string {
   return todayIstDate().slice(0, 7) + '-01';
 }
 
-type Position = { level: GeoLevel; id: number | null };
-
 export function Dashboard() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const startingPos = user ? defaultPosition(user) : { level: 'india' as GeoLevel, id: null };
   const [metric, setMetric] = useState<DashboardMetric>('children');
-  const [pos, setPos] = useState<Position>({ level: 'india', id: null });
+  const [pos, setPos] = useState<Position>(startingPos);
   // Period state; only sent to the server for attendance / achievements.
   const [from, setFrom] = useState(firstOfMonthIst());
   const [to, setTo] = useState(todayIstDate());
@@ -62,9 +76,11 @@ export function Dashboard() {
 
   function onMetricChange(m: DashboardMetric) {
     setMetric(m);
-    // Reset position to india so the user lands at the top of the
-    // new metric's tree rather than wherever they were for the old.
-    setPos({ level: 'india', id: null });
+    // Reset position to the user's scope floor so they land at the
+    // top of the new metric's tree rather than wherever they were
+    // for the old one. For super admin that's India; for everyone
+    // else, their scope level.
+    setPos(startingPos);
   }
 
   function onRowClick(rowIndex: number) {
@@ -86,7 +102,7 @@ export function Dashboard() {
       <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
 
       <div className="flex flex-wrap gap-2">
-        {METRICS.map((m) => (
+        {DASHBOARD_METRICS.map((m) => (
           <TileButton
             key={m}
             active={metric === m}

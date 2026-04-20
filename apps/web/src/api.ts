@@ -19,8 +19,17 @@ export type {
   Achievement,
   AchievementWithStudent,
   AchievementType,
+  DashboardMetric,
+  GeoLevel,
 } from '@navsahyog/shared';
-export { can, isIndianPhone, isIsoDate, isClockTime } from '@navsahyog/shared';
+export {
+  can,
+  isIndianPhone,
+  isIsoDate,
+  isClockTime,
+  DASHBOARD_METRICS,
+  GEO_LEVELS,
+} from '@navsahyog/shared';
 
 import type {
   AchievementType,
@@ -28,7 +37,9 @@ import type {
   AttendanceMark,
   AttendanceSessionWithMarks,
   AuthUser,
+  DashboardMetric,
   Event,
+  GeoLevel,
   GraduationReason,
   Student,
 } from '@navsahyog/shared';
@@ -202,10 +213,6 @@ export const api = {
     `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
 };
 
-export type GeoLevel =
-  | 'india' | 'zone' | 'state' | 'region' | 'district' | 'cluster' | 'village';
-export type DashboardMetric =
-  | 'vc' | 'af' | 'children' | 'attendance' | 'achievements';
 export type DrilldownQuery = {
   metric: DashboardMetric;
   level: GeoLevel;

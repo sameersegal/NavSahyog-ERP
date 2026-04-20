@@ -129,7 +129,7 @@ achievements.get('/', requireCap('achievement.read'), async (c) => {
   const villageIdParam = c.req.query('village_id');
   const villageIdFilter = villageIdParam ? Number(villageIdParam) : null;
   if (villageIdParam !== undefined && !villageIdFilter) {
-    return err(c, 'bad_request', 400, 'village_id must be numeric');
+    return err(c, 'bad_request', 400, 'village_id must be a positive integer');
   }
   const from = c.req.query('from');
   const to = c.req.query('to');
@@ -221,6 +221,11 @@ achievements.post('/', requireCap('achievement.write'), async (c) => {
     // `substr(date, 1, 7)` extracts 'YYYY-MM' to match the index
     // expression; the WHERE predicate narrows the conflict target
     // to the partial index. D1 / SQLite supports this form.
+    //
+    // `was_update` is the RETURNING expression that distinguishes
+    // an insert from a replace: the UPDATE branch always writes a
+    // non-null `updated_at`, the INSERT branch leaves it NULL. Used
+    // to pick 201 vs 200 — a replace isn't a creation.
     const row = await c.env.DB.prepare(
       `INSERT INTO achievement
          (student_id, description, date, type, created_at, created_by)
@@ -231,13 +236,13 @@ achievements.post('/', requireCap('achievement.write'), async (c) => {
          date = excluded.date,
          updated_at = ?,
          updated_by = ?
-       RETURNING id`,
+       RETURNING id, (updated_at IS NOT NULL) AS was_update`,
     )
       .bind(studentId, description, date, now, user.id, now, user.id)
-      .first<{ id: number }>();
+      .first<{ id: number; was_update: number }>();
     if (!row) return err(c, 'internal_error', 500, 'upsert failed');
     const fresh = await loadAchievement(c.env.DB, row.id);
-    return c.json({ achievement: fresh }, 201);
+    return c.json({ achievement: fresh }, row.was_update ? 200 : 201);
   }
 
   const rs = await c.env.DB.prepare(
@@ -298,6 +303,28 @@ achievements.patch('/:id', requireCap('achievement.write'), async (c) => {
   const silverInput = 'silver_count' in body ? body.silver_count : existing.silver_count;
   const medal = parseMedalCounts(type, goldInput, silverInput);
   if ('error' in medal) return err(c, 'bad_request', 400, medal.error);
+
+  // If this is a SoM row and the date is moving to a different month,
+  // check uq_som_per_month before UPDATE. Without this guard SQLite
+  // raises a raw constraint error that surfaces as a 500; caller
+  // needs a structured 409 to distinguish it from a bug.
+  if (type === 'som' && date.slice(0, 7) !== existing.date.slice(0, 7)) {
+    const conflict = await c.env.DB
+      .prepare(
+        `SELECT id FROM achievement
+         WHERE student_id = ? AND type = 'som'
+           AND substr(date, 1, 7) = ? AND id != ?
+         LIMIT 1`,
+      )
+      .bind(existing.student_id, date.slice(0, 7), id)
+      .first<{ id: number }>();
+    if (conflict) {
+      return err(
+        c, 'conflict', 409,
+        'another Star of the Month exists for this student in the target month',
+      );
+    }
+  }
 
   const now = nowEpochSeconds();
   await c.env.DB.prepare(

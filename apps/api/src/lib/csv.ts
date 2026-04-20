@@ -7,12 +7,26 @@
 // are emitted as the empty string. Line endings are `\r\n` because
 // Excel on Windows is strict about that; readers on other platforms
 // accept it too.
+//
+// Formula-injection guard (CWE-1236): Excel / Sheets / LibreOffice
+// evaluate a cell as a formula when it starts with `=`, `+`, `-`,
+// `@`, or `\t`. Achievement descriptions come from VC input and are
+// exported into CSVs that non-technical users open, so an unescaped
+// `=HYPERLINK(...)` would silently run on their machine. We prefix
+// any such cell with a single quote — the quote is treated as a
+// leading text marker by spreadsheet apps (not rendered in most)
+// but is also RFC-4180-safe as literal data for CSV parsers like
+// pandas. Done before the quote-wrap so the guard itself gets
+// escaped into `""` if the cell also contains a double quote.
 
 export type CsvCell = string | number | null | undefined;
 
+const FORMULA_INJECTION_PREFIX = /^[=+\-@\t\r]/;
+
 function esc(cell: CsvCell): string {
   if (cell === null || cell === undefined) return '';
-  const s = String(cell);
+  let s = String(cell);
+  if (FORMULA_INJECTION_PREFIX.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

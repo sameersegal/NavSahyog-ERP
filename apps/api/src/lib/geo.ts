@@ -4,22 +4,13 @@
 // region -> district -> cluster -> village. `village` is the leaf;
 // at that level the dashboard shows per-detail rows (per student,
 // per session, per award) rather than a further aggregate.
+//
+// `GEO_LEVELS` / `GeoLevel` are re-exported from @navsahyog/shared
+// so both apps see the same list. This file adds the server-only
+// pieces (join chain, alias mapping, child-level helper).
 
-export const GEO_LEVELS = [
-  'india',
-  'zone',
-  'state',
-  'region',
-  'district',
-  'cluster',
-  'village',
-] as const;
-
-export type GeoLevel = (typeof GEO_LEVELS)[number];
-
-export function isGeoLevel(value: unknown): value is GeoLevel {
-  return typeof value === 'string' && (GEO_LEVELS as readonly string[]).includes(value);
-}
+import { GEO_LEVELS, type GeoLevel } from '@navsahyog/shared';
+export { GEO_LEVELS, isGeoLevel, type GeoLevel } from '@navsahyog/shared';
 
 // Every non-root level has a parent, so the child of anything is
 // always a non-india level. The TS narrowing matters: downstream

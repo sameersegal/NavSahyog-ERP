@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { requireAuth } from '../auth';
 import { requireCap } from '../policy';
 import { villageIdsInScope } from '../scope';
@@ -14,15 +14,12 @@ import {
   type GeoLevel,
   type NonRootLevel,
 } from '../lib/geo';
-import type { Bindings, Variables } from '../types';
-
-// Five tiles per spec §3.6.1.
-const METRICS = ['vc', 'af', 'children', 'attendance', 'achievements'] as const;
-type Metric = (typeof METRICS)[number];
-
-function isMetric(value: unknown): value is Metric {
-  return typeof value === 'string' && (METRICS as readonly string[]).includes(value);
-}
+import {
+  DASHBOARD_METRICS,
+  isDashboardMetric as isMetric,
+  type DashboardMetric as Metric,
+} from '@navsahyog/shared';
+import type { Bindings, SessionUser, Variables } from '../types';
 
 type Crumb = { level: GeoLevel; id: number | null; name: string };
 
@@ -429,6 +426,20 @@ function parseLevelAndId(
   return { level, id };
 }
 
+// Drops crumbs at levels *above* the user's scope floor. Cosmetic;
+// the scope check has already happened by the time this runs. The
+// point is that a cluster_admin's drill-down shouldn't render
+// "India" as the root — they've never navigated "through" India.
+// Requests themselves aren't clamped: the client picks a sensible
+// default (user scope floor) and a user typing the query manually
+// at a level above their scope still gets scope-filtered data,
+// it's just labelled with the crumbs that actually apply.
+function trimCrumbsToScope(user: SessionUser, crumbs: Crumb[]): Crumb[] {
+  if (user.scope_level === 'global') return crumbs;
+  const scopeIdx = GEO_LEVELS.indexOf(user.scope_level as GeoLevel);
+  return crumbs.filter((c) => GEO_LEVELS.indexOf(c.level) >= scopeIdx);
+}
+
 function parsePeriod(
   from: string | undefined,
   to: string | undefined,
@@ -560,6 +571,13 @@ async function buildDrillDown(
         period: reportedPeriod,
       };
     }
+    default: {
+      // Exhaustiveness check — if a new Metric is added to the union
+      // above, the compiler flags the missing case here instead of
+      // the function silently returning `undefined` at runtime.
+      const _never: never = metric;
+      throw new Error(`unhandled metric: ${_never as string}`);
+    }
   }
 }
 
@@ -569,11 +587,15 @@ function capLabel(level: GeoLevel): string {
 
 // ---- routes -------------------------------------------------------
 
-dashboard.get('/drilldown', requireCap('dashboard.read'), async (c) => {
+type DashboardContext = Context<{ Bindings: Bindings; Variables: Variables }>;
+
+async function handleDrillDownRequest(
+  c: DashboardContext,
+): Promise<DrillResult | Response> {
   const user = c.get('user');
   const metricParam = c.req.query('metric');
   if (!isMetric(metricParam)) {
-    return err(c, 'bad_request', 400, `metric must be one of ${METRICS.join('|')}`);
+    return err(c, 'bad_request', 400, `metric must be one of ${DASHBOARD_METRICS.join('|')}`);
   }
   const levelParsed = parseLevelAndId(c.req.query('level'), c.req.query('id'));
   if ('error' in levelParsed) return err(c, 'bad_request', 400, levelParsed.error);
@@ -591,42 +613,39 @@ dashboard.get('/drilldown', requireCap('dashboard.read'), async (c) => {
       result.message,
     );
   }
+  result.crumbs = trimCrumbsToScope(user, result.crumbs);
+  return result;
+}
+
+dashboard.get('/drilldown', requireCap('dashboard.read'), async (c) => {
+  const result = await handleDrillDownRequest(c);
+  if (result instanceof Response) return result;
   return c.json(result);
 });
 
 dashboard.get('/drilldown.csv', requireCap('dashboard.read'), async (c) => {
-  const user = c.get('user');
-  const metricParam = c.req.query('metric');
-  if (!isMetric(metricParam)) {
-    return err(c, 'bad_request', 400, `metric must be one of ${METRICS.join('|')}`);
-  }
-  const levelParsed = parseLevelAndId(c.req.query('level'), c.req.query('id'));
-  if ('error' in levelParsed) return err(c, 'bad_request', 400, levelParsed.error);
-  const periodParsed = parsePeriod(c.req.query('from'), c.req.query('to'));
-  if ('error' in periodParsed) return err(c, 'bad_request', 400, periodParsed.error);
+  const result = await handleDrillDownRequest(c);
+  if (result instanceof Response) return result;
+  const metricParam = c.req.query('metric') as Metric;
 
-  const scope = await villageIdsInScope(c.env.DB, user);
-  const result = await buildDrillDown(
-    c.env.DB, scope, metricParam, levelParsed.level, levelParsed.id, periodParsed,
-  );
-  if ('status' in result) {
-    return err(c,
-      result.status === 403 ? 'forbidden' : 'not_found',
-      result.status,
-      result.message,
-    );
-  }
-
-  const trailName = result.crumbs.map((c) => c.name).join(' > ');
-  const filenameBase = `${metricParam}_${result.level}_${result.crumbs.at(-1)?.name ?? 'root'}`;
+  // §3.6.3: "CSV mirrors the on-screen table exactly". We don't
+  // prepend a context line — Excel / pandas don't treat `#` as a
+  // comment, so a leading `# India > …` surfaces as a rogue 1-cell
+  // row. Context lives in the filename instead: for india the trail
+  // is already implied by the metric, so skip the crumb suffix; for
+  // any other level, the deepest crumb (zone / cluster / village
+  // name) labels the slice, and the period, when present, fixes the
+  // time window so a second export doesn't overwrite the first in
+  // the user's downloads folder. decisions.md D5.
+  const periodSuffix = result.period
+    ? `_${result.period.from}_to_${result.period.to}`
+    : '';
+  const scopeSuffix = result.level === 'india'
+    ? ''
+    : `_${result.crumbs.at(-1)?.name ?? result.level}`;
+  const filenameBase = `${metricParam}_${result.level}${scopeSuffix}${periodSuffix}`;
   const csv = toCsv(result.headers, result.rows);
-  // Prepend a tiny context header so an exported CSV is self-describing
-  // (spec §3.6.3: "CSV mirrors the on-screen table"; the trail is
-  // the only on-screen context not otherwise captured).
-  const contextLine = `# ${trailName}`
-    + (result.period ? ` | ${result.period.from} to ${result.period.to}` : '')
-    + '\r\n';
-  return new Response(contextLine + csv, {
+  return new Response(csv, {
     status: 200,
     headers: {
       'content-type': 'text/csv; charset=utf-8',

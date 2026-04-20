@@ -881,10 +881,13 @@ describe('achievements (L2.3)', () => {
 
   it('second SoM in the same month replaces the first', async () => {
     const token = await loginAs('vc-anandpur');
+    // Student 2 has no seeded SoM this month (seed gives student 2 a
+    // gold). First POST goes through the INSERT branch — 201. Second
+    // POST, same student, same month, hits the DO UPDATE branch — 200.
     const first = await cookieFetch('/api/achievements', token, {
       method: 'POST',
       body: JSON.stringify({
-        student_id: 1,
+        student_id: 2,
         description: 'Initial description',
         date: thisMonthDay(5),
         type: 'som',
@@ -896,13 +899,15 @@ describe('achievements (L2.3)', () => {
     const second = await cookieFetch('/api/achievements', token, {
       method: 'POST',
       body: JSON.stringify({
-        student_id: 1,
+        student_id: 2,
         description: 'Updated description',
         date: thisMonthDay(12),
         type: 'som',
       }),
     });
-    expect(second.status).toBe(201);
+    // A replace isn't a creation: the route returns 200 (not 201)
+    // whenever the UPSERT took the DO UPDATE path.
+    expect(second.status).toBe(200);
     const secondId = ((await second.json()) as { achievement: { id: number } }).achievement.id;
     // Same underlying row — the partial unique index collided and we
     // performed an UPDATE via UPSERT rather than an INSERT.
@@ -1020,6 +1025,60 @@ describe('achievements (L2.3)', () => {
     });
     expect(res.status).toBe(403);
   });
+
+  // Review #24 blocker: previously surfaced as a raw 500 from the
+  // partial unique index. Now pre-checked in the route so callers
+  // see a structured 409.
+  it('PATCH of a SoM date into a month that already has one returns 409', async () => {
+    const token = await loginAs('vc-anandpur');
+    // Seed has student 1 SoM this month. Create a second SoM for
+    // student 1 in the _previous_ month via super_admin direct insert
+    // — simpler path: create one next month's SoM on student 2 (no
+    // collision), then PATCH its date into this month where student 2
+    // already has no SoM. Actually: cleaner to stage two SoM rows for
+    // the same student in different months, then move one onto the
+    // other's month.
+    const nextMonth = thisMonthDay(15);
+    // Month 1 SoM for student 2.
+    const a = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 2,
+        description: 'Month 1 SoM',
+        date: thisMonthDay(5),
+        type: 'som',
+      }),
+    });
+    expect(a.status).toBe(201);
+    const firstId = ((await a.json()) as { achievement: { id: number } }).achievement.id;
+
+    // Different YYYY-MM for the second SoM row: pick a January date
+    // in the same year as `nextMonth` to guarantee it's a distinct
+    // month regardless of when the test runs.
+    const otherMonth = nextMonth.slice(0, 4) + '-01-15';
+    const b = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 2,
+        description: 'Other month SoM',
+        date: otherMonth,
+        type: 'som',
+      }),
+    });
+    expect(b.status).toBe(201);
+    const secondId = ((await b.json()) as { achievement: { id: number } }).achievement.id;
+    expect(secondId).not.toBe(firstId);
+
+    // Now PATCH the January row's date into the current month — same
+    // student, same target YYYY-MM as `firstId`. Should 409, not 500.
+    const patch = await cookieFetch(`/api/achievements/${secondId}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({ date: thisMonthDay(20) }),
+    });
+    expect(patch.status).toBe(409);
+    const body = (await patch.json()) as { error: { code: string; message?: string } };
+    expect(body.error.code).toBe('conflict');
+  });
 });
 
 describe('dashboard drill-down (L2.3)', () => {
@@ -1120,6 +1179,29 @@ describe('dashboard drill-down (L2.3)', () => {
     expect(res.status).toBe(400);
   });
 
+  it('crumbs drop India for non-global users (cosmetic, review #24)', async () => {
+    const clusterAdmin = await loginAs('cluster-bid01');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=cluster&id=1',
+      clusterAdmin,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { crumbs: Array<{ level: string; name: string }> };
+    expect(body.crumbs.map((c) => c.level)).toEqual(['cluster']);
+    expect(body.crumbs[0]!.name).toBe('Bidar Cluster 1');
+
+    // Super admin still sees India at the root of the same drill.
+    const admin = await loginAs('super');
+    const res2 = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=cluster&id=1',
+      admin,
+    );
+    const body2 = (await res2.json()) as { crumbs: Array<{ level: string }> };
+    expect(body2.crumbs.map((c) => c.level)).toEqual([
+      'india', 'zone', 'state', 'region', 'district', 'cluster',
+    ]);
+  });
+
   it('CSV export returns text/csv with attachment disposition', async () => {
     const token = await loginAs('super');
     const res = await cookieFetch(
@@ -1130,10 +1212,11 @@ describe('dashboard drill-down (L2.3)', () => {
     expect(res.headers.get('content-type')).toMatch(/text\/csv/);
     const disposition = res.headers.get('content-disposition') ?? '';
     expect(disposition).toMatch(/attachment; filename=/);
+    expect(disposition).toMatch(/children_cluster_Bidar_Cluster_1/);
     const body = await res.text();
-    // Context line + header row + three village rows.
-    expect(body).toMatch(/^# India > South Zone/);
-    expect(body).toMatch(/Village,Children/);
+    // Headers + rows only. Per decisions.md D5 the CSV mirrors the
+    // on-screen table; context lives in the filename, not inline.
+    expect(body.split(/\r\n/)[0]).toBe('Village,Children');
     expect(body).toMatch(/Anandpur,\d+/);
   });
 });
