@@ -11,11 +11,13 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "screenshots": "node scripts/capture-screenshots.mjs",
     "db:apply": "pnpm --filter @navsahyog/api db:apply",
     "db:seed": "pnpm --filter @navsahyog/api db:seed",
     "db:reset": "pnpm --filter @navsahyog/api db:reset"
   },
   "devDependencies": {
+    "playwright": "1.56.1",
     "typescript": "^5.6.3"
   },
   "engines": {
