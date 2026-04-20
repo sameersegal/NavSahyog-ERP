@@ -4,6 +4,7 @@ import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Village } from './pages/Village';
 import { Dashboard } from './pages/Dashboard';
+import { Achievements } from './pages/Achievements';
 import { Shell } from './pages/Shell';
 
 export function App() {
@@ -28,6 +29,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/village/:id" element={<Village />} />
+        <Route path="/achievements" element={<Achievements />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,40 +1,158 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  api,
+  type DashboardMetric,
+  type DrilldownQuery,
+  type DrilldownResponse,
+  type GeoLevel,
+} from '../api';
 import { useI18n } from '../i18n';
 
-type Tile = 'children' | 'attendance';
-type ClusterGroup<T> = { cluster_id: number; cluster_name: string; villages: T[] };
+const METRICS: DashboardMetric[] = ['vc', 'af', 'children', 'attendance', 'achievements'];
 
-function groupByCluster<T extends { cluster_id: number; cluster_name: string }>(
-  rows: T[],
-): ClusterGroup<T>[] {
-  const map = new Map<number, ClusterGroup<T>>();
-  for (const r of rows) {
-    let g = map.get(r.cluster_id);
-    if (!g) {
-      g = { cluster_id: r.cluster_id, cluster_name: r.cluster_name, villages: [] };
-      map.set(r.cluster_id, g);
-    }
-    g.villages.push(r);
-  }
-  return Array.from(map.values());
+function todayIstDate(): string {
+  const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
+  return new Date(istMs).toISOString().slice(0, 10);
 }
+function firstOfMonthIst(): string {
+  return todayIstDate().slice(0, 7) + '-01';
+}
+
+type Position = { level: GeoLevel; id: number | null };
 
 export function Dashboard() {
   const { t } = useI18n();
-  const [tile, setTile] = useState<Tile>('children');
+  const [metric, setMetric] = useState<DashboardMetric>('children');
+  const [pos, setPos] = useState<Position>({ level: 'india', id: null });
+  // Period state; only sent to the server for attendance / achievements.
+  const [from, setFrom] = useState(firstOfMonthIst());
+  const [to, setTo] = useState(todayIstDate());
+  const [data, setData] = useState<DrilldownResponse | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const needsPeriod = metric === 'attendance' || metric === 'achievements';
+
+  const query = useMemo<DrilldownQuery>(
+    () => ({
+      metric,
+      level: pos.level,
+      id: pos.id,
+      ...(needsPeriod ? { from, to } : {}),
+    }),
+    [metric, pos.level, pos.id, from, to, needsPeriod],
+  );
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setErr(null);
+    api
+      .dashboardDrilldown(query)
+      .then((r) => setData(r))
+      .catch((e) => {
+        setErr(e instanceof Error ? e.message : 'failed');
+        setData(null);
+      })
+      .finally(() => setLoading(false));
+  }, [query]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  function onMetricChange(m: DashboardMetric) {
+    setMetric(m);
+    // Reset position to india so the user lands at the top of the
+    // new metric's tree rather than wherever they were for the old.
+    setPos({ level: 'india', id: null });
+  }
+
+  function onRowClick(rowIndex: number) {
+    if (!data || data.child_level === 'detail' || data.child_level === null) return;
+    const id = data.drill_ids[rowIndex];
+    if (id === null || id === undefined) return;
+    setPos({ level: data.child_level, id });
+  }
+
+  function onCrumbClick(index: number) {
+    if (!data) return;
+    const c = data.crumbs[index];
+    if (!c) return;
+    setPos({ level: c.level, id: c.id });
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
-      <div className="flex gap-2">
-        <TileButton active={tile === 'children'} onClick={() => setTile('children')}>
-          {t('dashboard.tile.children')}
-        </TileButton>
-        <TileButton active={tile === 'attendance'} onClick={() => setTile('attendance')}>
-          {t('dashboard.tile.attendance')}
-        </TileButton>
+
+      <div className="flex flex-wrap gap-2">
+        {METRICS.map((m) => (
+          <TileButton
+            key={m}
+            active={metric === m}
+            onClick={() => onMetricChange(m)}
+          >
+            {t(`dashboard.metric.${m}`)}
+          </TileButton>
+        ))}
       </div>
-      {tile === 'children' ? <ChildrenTable /> : <AttendanceTable />}
+
+      {needsPeriod && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-2">
+            <span className="text-muted-fg">{t('dashboard.period.from')}</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="bg-card text-fg border border-border rounded px-2 py-1.5"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-muted-fg">{t('dashboard.period.to')}</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="bg-card text-fg border border-border rounded px-2 py-1.5"
+            />
+          </label>
+        </div>
+      )}
+
+      {data && (
+        <nav className="flex flex-wrap items-center gap-1 text-sm">
+          {data.crumbs.map((c, i) => {
+            const isLast = i === data.crumbs.length - 1;
+            return (
+              <span key={`${c.level}-${c.id ?? 'root'}`} className="flex items-center gap-1">
+                {i > 0 && <span className="text-muted-fg">/</span>}
+                {isLast ? (
+                  <span className="font-medium">{c.name}</span>
+                ) : (
+                  <button
+                    onClick={() => onCrumbClick(i)}
+                    className="text-primary hover:underline"
+                  >
+                    {c.name}
+                  </button>
+                )}
+              </span>
+            );
+          })}
+        </nav>
+      )}
+
+      {err && <p className="text-sm text-danger">{err}</p>}
+      {loading && !data && <p className="text-muted-fg">{t('common.loading')}</p>}
+
+      {data && (
+        <DrillDownTable
+          data={data}
+          onRowClick={onRowClick}
+          csvHref={api.dashboardDrilldownCsvUrl(query)}
+        />
+      )}
     </div>
   );
 }
@@ -63,117 +181,90 @@ function TileButton({
   );
 }
 
-function ChildrenTable() {
+function DrillDownTable({
+  data,
+  onRowClick,
+  csvHref,
+}: {
+  data: DrilldownResponse;
+  onRowClick: (rowIndex: number) => void;
+  csvHref: string;
+}) {
   const { t } = useI18n();
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof api.dashboardChildren>>['villages'] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .dashboardChildren()
-      .then((r) => setRows(r.villages))
-      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
-  }, []);
-
-  if (err) return <p className="text-danger">{err}</p>;
-  if (!rows) return <p className="text-muted-fg">{t('common.loading')}</p>;
-  const groups = groupByCluster(rows);
-  const total = rows.reduce((s, r) => s + r.count, 0);
-
+  const drillable = data.child_level !== 'detail' && data.child_level !== null;
   return (
-    <div className="space-y-4">
-      <div className="bg-card border border-border rounded p-4 text-sm">
-        <span className="text-muted-fg">{t('dashboard.total_children')} </span>
-        <span className="font-semibold">{total}</span>
-      </div>
-      {groups.map((g) => (
-        <div key={g.cluster_id} className="bg-card border border-border rounded overflow-hidden">
-          <div className="px-4 py-2 border-b border-border text-sm font-medium">
-            {g.cluster_name}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-muted-fg">
-                  <th className="px-4 py-2 font-normal">{t('dashboard.col.village')}</th>
-                  <th className="px-4 py-2 font-normal text-right">{t('dashboard.col.children')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {g.villages.map((v) => (
-                  <tr key={v.village_id} className="border-t border-border">
-                    <td className="px-4 py-2">{v.village_name}</td>
-                    <td className="px-4 py-2 text-right">{v.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AttendanceTable() {
-  const { t } = useI18n();
-  const [data, setData] = useState<Awaited<ReturnType<typeof api.dashboardAttendance>> | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .dashboardAttendance()
-      .then(setData)
-      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
-  }, []);
-
-  if (err) return <p className="text-danger">{err}</p>;
-  if (!data) return <p className="text-muted-fg">{t('common.loading')}</p>;
-  const groups = groupByCluster(data.villages);
-  const totalPresent = data.villages.reduce((s, r) => s + r.present, 0);
-  const totalMarked = data.villages.reduce((s, r) => s + r.total, 0);
-  const dateStr = data.date;
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-card border border-border rounded p-4 text-sm">
+    <div className="bg-card border border-border rounded overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-border text-sm">
         <span className="text-muted-fg">
-          {t('dashboard.summary_present', { date: dateStr })}{' '}
+          {data.period
+            ? t('dashboard.period.range', { from: data.period.from, to: data.period.to })
+            : t('dashboard.current_snapshot')}
         </span>
-        <span className="font-semibold">{totalPresent}</span>{' '}
-        <span className="text-muted-fg">
-          {t('dashboard.summary_marked', { count: totalMarked })}
-        </span>
+        <a
+          href={csvHref}
+          download
+          className="bg-card hover:bg-card-hover border border-border rounded px-3 py-1 text-xs"
+        >
+          {t('dashboard.csv_download')}
+        </a>
       </div>
-      {groups.map((g) => (
-        <div key={g.cluster_id} className="bg-card border border-border rounded overflow-hidden">
-          <div className="px-4 py-2 border-b border-border text-sm font-medium">
-            {g.cluster_name}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-muted-fg">
-                  <th className="px-4 py-2 font-normal">{t('dashboard.col.village')}</th>
-                  <th className="px-4 py-2 font-normal text-right">{t('dashboard.col.present')}</th>
-                  <th className="px-4 py-2 font-normal text-right">{t('dashboard.col.marked')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {g.villages.map((v) => (
-                  <tr key={v.village_id} className="border-t border-border">
-                    <td className="px-4 py-2">{v.village_name}</td>
-                    <td className="px-4 py-2 text-right">{v.present}</td>
-                    <td className="px-4 py-2 text-right">
-                      {v.marked ? v.total : <span className="text-muted-fg">—</span>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-muted-fg">
+              {data.headers.map((h, i) => (
+                <th
+                  key={i}
+                  className={
+                    'px-4 py-2 font-normal ' + (i === 0 ? '' : 'text-right')
+                  }
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={data.headers.length}
+                  className="px-4 py-4 text-center text-muted-fg"
+                >
+                  {t('dashboard.empty')}
+                </td>
+              </tr>
+            )}
+            {data.rows.map((row, rowIndex) => {
+              const canDrill = drillable && data.drill_ids[rowIndex] !== null;
+              return (
+                <tr
+                  key={rowIndex}
+                  onClick={canDrill ? () => onRowClick(rowIndex) : undefined}
+                  className={
+                    'border-t border-border ' +
+                    (canDrill ? 'cursor-pointer hover:bg-card-hover' : '')
+                  }
+                >
+                  {row.map((cell, i) => (
+                    <td
+                      key={i}
+                      className={
+                        'px-4 py-2 ' +
+                        (i === 0
+                          ? (canDrill ? 'text-primary' : '')
+                          : 'text-right')
+                      }
+                    >
+                      {cell ?? ''}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
