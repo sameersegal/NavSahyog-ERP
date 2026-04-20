@@ -17,6 +17,8 @@ export type Capability =
   | 'event.read'
   | 'attendance.read'
   | 'attendance.write'
+  | 'achievement.read'
+  | 'achievement.write'
   | 'dashboard.read';
 
 // Read-only caps shared by every viewer tier. Write tiers extend
@@ -27,6 +29,7 @@ const READ_ONLY: readonly Capability[] = [
   'child.read',
   'event.read',
   'attendance.read',
+  'achievement.read',
   'dashboard.read',
 ];
 
@@ -34,6 +37,7 @@ const WRITE: readonly Capability[] = [
   ...READ_ONLY,
   'child.write',
   'attendance.write',
+  'achievement.write',
 ];
 
 // Mirrors §2.3. District / Region / State / Zone admins only carry

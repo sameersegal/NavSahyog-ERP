@@ -11,4 +11,5 @@ export type {
   AttendanceSession,
   AttendanceSessionWithMarks,
 } from './event';
+export type { AchievementType, Achievement, AchievementWithStudent } from './achievement';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';

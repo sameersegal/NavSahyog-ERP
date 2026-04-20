@@ -3,6 +3,7 @@
 --
 -- Date columns use IST 'YYYY-MM-DD' (see schema.sql header).
 
+DELETE FROM achievement;
 DELETE FROM attendance_mark;
 DELETE FROM attendance_session;
 DELETE FROM event;
@@ -94,3 +95,23 @@ INSERT INTO event (id, name, kind, description, created_at, created_by) VALUES
   (9, 'Jal Vriddhi',                 'activity', NULL,                                           unixepoch(), 6),
   (10,'No Activity — Raining',       'activity', 'Session cancelled due to rain',                unixepoch(), 6),
   (11,'No Activity — Training',      'activity', 'VC away at training',                          unixepoch(), 6);
+
+-- Sample achievements for the dashboard tile (§3.5). One SoM in the
+-- current month per village (uniqueness is per student-month, not
+-- village-month, so multiple villages may each have their own SoM).
+-- Gold/Silver medal rows show the medal-count fields. Dates land in
+-- the current month so the drill-down's default "this month" window
+-- (§3.5 acceptance) always has data to show.
+-- Dates anchor on the start of the current month (IST is close
+-- enough to UTC for seed data; `now` in SQLite is UTC, but a one-
+-- day drift on a lab seed is fine). `substr(strftime('%Y-%m','now'))
+-- || '-DD'` yields 'YYYY-MM-DD' text matching the TEXT date
+-- convention from 0001_init.sql.
+INSERT INTO achievement (student_id, description, date, type, gold_count, silver_count, created_at, created_by) VALUES
+  (1,  'Perfect attendance & peer mentoring',     strftime('%Y-%m', 'now') || '-05', 'som',    NULL, NULL, unixepoch(), 6),
+  (8,  'Led the story-circle every Thursday',     strftime('%Y-%m', 'now') || '-06', 'som',    NULL, NULL, unixepoch(), 6),
+  (14, 'Helped set up the reading corner',        strftime('%Y-%m', 'now') || '-07', 'som',    NULL, NULL, unixepoch(), 6),
+  (2,  'Annual Competition — chess',              strftime('%Y-%m', 'now') || '-10', 'gold',   1,    NULL, unixepoch(), 6),
+  (3,  'Running race — under-10',                 strftime('%Y-%m', 'now') || '-12', 'silver', NULL, 1,    unixepoch(), 6),
+  (9,  'Kho-Kho inter-village championship',      strftime('%Y-%m', 'now') || '-15', 'gold',   2,    NULL, unixepoch(), 6),
+  (15, 'Board games — puzzle solving',            strftime('%Y-%m', 'now') || '-08', 'silver', NULL, 1,    unixepoch(), 6);
