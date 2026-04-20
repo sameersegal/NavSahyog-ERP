@@ -13,14 +13,15 @@ This doc is **not** part of the spec — it's a working list. As each
 item lands, mark it `fixed in <commit/PR>`.
 
 **Status:** B1, B2, B3, B4, H3, H4 (CI + tests — linter still open),
-H5, H6, H7, M1, M2, M3, M4, M5 fixed on
+H5 *(since superseded by decisions.md D1 — table dropped in L2.0)*,
+H6, H7, M1, M2, M3, M4, M5 fixed on
 `claude/review-mvp-foundation-OGA8L`. Blocker B3 from
 `requirements/review-findings-v1.md` was closed *structurally* by
 the policy layer on `claude/policy-layer-OGA8L` — every route now
 gates on a capability that lists the allowed roles, so adding a
-read-only tier is a one-line edit. H1 (PWA), H2 (migrations),
-M6 (scope_id FK), and the LOW items remain open and are tagged
-inline.
+read-only tier is a one-line edit. H1 (PWA), H2 (migrations — in
+flight on L2.0), M6 (scope_id FK), and the LOW items remain open
+and are tagged inline.
 
 ---
 
@@ -99,14 +100,11 @@ inline.
 - **Fix.** One workflow that runs `pnpm -r typecheck && pnpm -r build`
   on push. Linter/tests can land separately.
 
-### H5 — No `app_settings` table *(fixed on review-mvp-foundation)*
-- §4.3.8 specifies it; U5 in `requirements/review-findings-v1.md`
-  flagged it; L1 schema (`db/schema.sql`) does not include it.
-- Every configurable (session TTL, retention, default lang) goes
-  in via code instead.
-- **Fix.** Create the empty table now: `key TEXT PRIMARY KEY,
-  value TEXT, updated_at INTEGER NOT NULL`. Zero rows seeded —
-  the shape is what matters.
+### H5 — No `app_settings` table *(superseded by decisions.md D1 — table dropped entirely)*
+- L1 landed the empty table per the original fix.
+- L2 kickoff reversed the direction: `app_settings` is gone.
+  Runtime tunables live in Worker env vars; retention is
+  out-of-system. See `requirements/decisions.md` D1 (2026-04-20).
 
 ### H6 — Error-response shape is inconsistent *(fixed on review-mvp-foundation)*
 - Routes return `{ error: 'forbidden' }` (string) while
@@ -169,7 +167,8 @@ inline.
 ## LOW
 
 - **L1.** `apps/api/src/auth.ts:6` `SESSION_TTL_SECONDS = 12*60*60`
-  hardcoded — moves to `app_settings` once H5 lands.
+  hardcoded — destination changed: becomes a Worker env var
+  (decisions.md D1), not a DB row. Move in L2.0 or L5.
 - **L2.** `engines.node >= 22` in root `package.json:20` has no
   `.nvmrc` to back it.
 - **L3.** `apps/web/src/i18n.tsx:32-33` navigator-language

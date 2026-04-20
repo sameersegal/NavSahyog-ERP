@@ -44,7 +44,9 @@ single account with per-environment resource names.
 
 ### 11.3 Workers
 
-Four Worker services:
+Three Worker services (the `retention-sweep` Worker from earlier
+drafts is removed per decisions.md D4 — retention is
+out-of-system):
 
 1. **`api`** — the main REST API.
    - Routes:
@@ -53,15 +55,12 @@ Four Worker services:
    - Bindings: D1 (`DB`), all KV namespaces, R2 buckets, Queues
      producers, Analytics Engine, service bindings to the
      `migrator` worker (gated).
-   - Entrypoints: `fetch`, `scheduled`, `queue` consumer.
+   - Entrypoints: `fetch`, `queue` consumer.
 2. **`derive-media`** — Queues consumer for §7.4 (thumbnails,
    posters).
    - Bindings: R2 (`MEDIA`, `MEDIA_DERIVED`), Cloudflare Images,
      D1 (`DB`) for status writes.
-3. **`retention-sweep`** — Cron consumer.
-   - Schedule: `0 2 * * *` UTC (nightly 02:00). Sweeps §7.7,
-     `audit_log` archive per §8.6, and stale KV entries.
-4. **`migrator`** — The §10.3 migration runner. Private to
+3. **`migrator`** — The §10.3 migration runner. Private to
    Super Admin via Cloudflare Access.
 
 Each Worker is its own `wrangler.toml` project under `/workers/`.
@@ -70,8 +69,7 @@ Each Worker is its own `wrangler.toml` project under `/workers/`.
 
 - **Database name**: `navsahyog-prod` / `navsahyog-staging` /
   `navsahyog-dev`.
-- **Binding**: `DB` (in `api`, `derive-media`, `retention-sweep`,
-  `migrator`).
+- **Binding**: `DB` (in `api`, `derive-media`, `migrator`).
 - **Migrations**: SQL files in `/workers/api/migrations/`, applied
   on every deploy by `wrangler d1 migrations apply` in CI.
 - **Schema source of truth**: §4. Full DDL checked in as
@@ -85,7 +83,7 @@ Buckets per §7.1, plus three operational buckets:
 | Binding | Bucket | Purpose |
 |---|---|---|
 | `MEDIA` | `media-prod` / `media-staging` | Field-captured media. |
-| `MEDIA_DERIVED` | `media-derived-prod` / `...staging` | Thumbnails and video posters. Kept separate so retention sweeps can be independent. |
+| `MEDIA_DERIVED` | `media-derived-prod` / `...staging` | Thumbnails and video posters. Kept separate so ops can lifecycle originals and derivatives independently on the bucket. |
 | `BACKUPS` | `backups-prod` | Weekly D1 snapshots (§8.9). 1-year lifecycle. |
 | `LOGS` | `logs-prod` | Workers Logpush destination (§8.8). 90-day lifecycle. |
 | `ARCHIVE` | `archive-vendor` | Post-decommission cold copy of the vendor-era corpus (§10.9). 1-year retention. |
@@ -105,7 +103,6 @@ Buckets per §7.1, plus three operational buckets:
 | Queue | Producer | Consumer | Purpose |
 |---|---|---|---|
 | `media-derive` | `api` | `derive-media` | §7.4 renditions. |
-| `retention-sweep-media` | `retention-sweep` | `retention-sweep` (self-feeding) | Batched R2 deletes with per-batch audit rows. |
 | `migration-media` | `migrator` | `migrator` | §10.6 media backfill. |
 | `sync-dlq` | `api` | manual / alert only | Dead-letter for `/api/sync/outbox` items that exhausted server-side retries. Super Admin drains. |
 
@@ -138,14 +135,13 @@ owner and an alert on age > 180 days (§8.8).
 | `ADMIN_JUMP_ACCESS_TOKEN` | `migrator` | Super Admin. Cloudflare Access application token. |
 | `VENDOR_ADMIN_COOKIE` | `migrator` (P2 fallback) | Super Admin. Only needed if §10.1 path 2 is used. |
 | `CF_IMAGES_ACCOUNT_HASH` | `derive-media` | Ops. |
-| `GRAFANA_CLOUD_PUSH_URL` | `api`, `retention-sweep` | Ops. |
+| `GRAFANA_CLOUD_PUSH_URL` | `api` | Ops. |
 
 ### 11.10 CI / CD
 
 - GitHub Actions. Repo layout:
   - `/apps/web` — Pages SPA.
-  - `/workers/api` · `/workers/derive-media` ·
-    `/workers/retention-sweep` · `/workers/migrator`.
+  - `/workers/api` · `/workers/derive-media` · `/workers/migrator`.
   - `/packages/shared` — shared TypeScript types (auto-generated
     from D1 schema via `drizzle-kit`; not runtime-coupled).
   - `/tools/migrator/checks` — §10.7 SQL checks.

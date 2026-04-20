@@ -23,13 +23,10 @@ users; it is entirely non-functional hardening.
   clears lockout and invalidates all existing sessions.
 - **Audit log (§4.3.9, §9.4).** Writes for login success / fail /
   locked, password change, OTP request / verify, user create,
-  user role change, settings update, dashboard export.
-  Super-Admin read UI.
-- **Retention (§9.3).** Worker cron sweeps R2 media past
-  `app_settings.media_retention_days`; marks the DB row
-  `deleted_at`. Student grace period after graduation (default 2
-  years) documented in settings but not auto-deleted — flag the
-  policy, deletion is manual pending legal sign-off.
+  user role change, dashboard export. Super-Admin read UI.
+- **Retention** — **removed.** Handled out-of-system per
+  decisions.md D1/D4. Retention cron, `app_settings`, and the
+  `retained_until` pin are all gone from the spec.
 - **Parent Aadhaar (§9.2).** Enforce masked-only storage on the
   server (reject full Aadhaar in request bodies). UI masks on
   display.
@@ -62,11 +59,9 @@ users; it is entirely non-functional hardening.
    tab.
 4. Super Admin can view the last 30 days of audit-log entries;
    no role below Super Admin can read from the table.
-5. Cron sweep deletes a test R2 object older than
-   `media_retention_days`; the DB row's `deleted_at` is stamped.
-6. Uploading media with forged GPS 10 km outside village
+5. Uploading media with forged GPS 10 km outside village
    coordinates is rejected at upload-commit time.
-7. Outbox drain succeeds across a mid-sync session revocation:
+6. Outbox drain succeeds across a mid-sync session revocation:
    the user is prompted to re-authenticate; the outbox is not
    lost.
 

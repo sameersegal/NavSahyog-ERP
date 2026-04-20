@@ -210,12 +210,14 @@ files link to it.
   explicitly in §4.1 conventions, or (b) move to a junction table
   (pairs with H1 path B).
 
-### U5 — Student retention grace period is orphan config
-- §9.3 mentions a "configurable grace period (default: 2 years
-  after graduation)."
-- §4.3.8 `app_settings` has no field for it.
-- **Fix.** Add `student_retention_years INTEGER NOT NULL DEFAULT 2`
-  to `app_settings` in §4.3.8.
+### U5 — Student retention grace period is orphan config *(superseded by decisions.md D1)*
+- Previously: "§9.3 mentions a configurable grace period; §4.3.8
+  `app_settings` has no field for it. Fix: add
+  `student_retention_years` to `app_settings`."
+- **Now void.** `app_settings` has been deleted entirely and
+  student-record retention is handled out-of-system (ops decides
+  when graduated records are purged directly against D1). There
+  is no field to add because there is no table to add it to.
 
 ### U6 — Idempotency: required vs. tolerated
 - §5.1 says all POST/PATCH accept `Idempotency-Key`.

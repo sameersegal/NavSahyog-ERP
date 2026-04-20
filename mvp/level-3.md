@@ -16,9 +16,10 @@ with trivial auth.
   current vs previous month, bar chart. "View More" drills to
   per-village rows.
 - **Master Creations (§3.8.7).** Super Admin screens for:
-  villages, schools, events / activities, users, qualifications,
-  app settings / retention. Each screen is dedicated (not a
-  generic table editor).
+  villages, schools, events / activities, users, qualifications.
+  Each screen is dedicated (not a generic table editor). No "app
+  settings" screen — `app_settings` was removed in L2.0
+  (decisions.md D1); retention is out-of-system.
 - **Secondary screens.**
   - Profile (§3.8.1) — read-only, "Report an error" mailto link.
   - Notice board (§3.8.2) — scope-filtered list + Super/admin
@@ -45,8 +46,8 @@ with trivial auth.
 4. Language switcher flips all static strings in-session and
    persists across re-login (read from `user.preferred_language`
    claim, fallback `localStorage`).
-5. Editing `app_settings.media_retention_days` updates the value
-   Super Admin sees on next load (retention cron itself is L5).
+5. *(App-settings acceptance criterion removed — see decisions.md
+   D1. Retention is out-of-system; there is no in-app knob.)*
 
 ## Notes
 
