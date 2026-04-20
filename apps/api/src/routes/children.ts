@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { requireAuth } from '../auth';
+import { requireAuth, requireRole } from '../auth';
 import { assertVillageInScope } from '../scope';
+import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
 
 type Student = {
@@ -31,9 +32,9 @@ children.use('*', requireAuth);
 children.get('/', async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
-  if (!villageId) return c.json({ error: 'village_id required' }, 400);
+  if (!villageId) return err(c, 'bad_request', 400, 'village_id required');
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
-    return c.json({ error: 'forbidden' }, 403);
+    return err(c, 'forbidden', 403);
   }
   const rs = await c.env.DB.prepare(
     `SELECT id, village_id, school_id, first_name, last_name, gender, dob,
@@ -47,27 +48,26 @@ children.get('/', async (c) => {
 });
 
 children.post('/', async (c) => {
+  const denied = requireRole(c, ['vc', 'af', 'cluster_admin', 'super_admin']);
+  if (denied) return denied;
   const user = c.get('user');
-  if (user.role === 'super_admin' || user.role === 'vc' || user.role === 'af' || user.role === 'cluster_admin') {
-    // allowed — cluster_admin included per §2.3
-  }
   const body = await c.req.json<AddBody>().catch(() => ({}) as AddBody);
   const { village_id, school_id, first_name, last_name, gender, dob } = body;
   if (!village_id || !school_id || !first_name || !last_name || !gender || !dob) {
-    return c.json({ error: 'missing required fields' }, 400);
+    return err(c, 'bad_request', 400, 'missing required fields');
   }
   if (!['m', 'f', 'o'].includes(gender)) {
-    return c.json({ error: 'invalid gender' }, 400);
+    return err(c, 'bad_request', 400, 'invalid gender');
   }
   if (!(await assertVillageInScope(c.env.DB, user, village_id))) {
-    return c.json({ error: 'forbidden' }, 403);
+    return err(c, 'forbidden', 403);
   }
   const school = await c.env.DB.prepare(
     'SELECT id FROM school WHERE id = ? AND village_id = ?',
   )
     .bind(school_id, village_id)
     .first<{ id: number }>();
-  if (!school) return c.json({ error: 'school not in village' }, 400);
+  if (!school) return err(c, 'bad_request', 400, 'school not in village');
   const now = Math.floor(Date.now() / 1000);
   const rs = await c.env.DB.prepare(
     `INSERT INTO student

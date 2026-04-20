@@ -120,3 +120,13 @@ CREATE TABLE attendance_mark (
 );
 
 CREATE INDEX idx_attendance_mark_session ON attendance_mark(session_id);
+
+-- §4.3.8 app_settings. Created empty in L1 so future configurables
+-- (session TTL, retention years, default language, etc.) have a
+-- home without forcing a schema change at the time of need.
+-- Key/value to start; typed columns can be added per setting later.
+CREATE TABLE app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);

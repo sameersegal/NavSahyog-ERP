@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../auth';
 import { villageIdsInScope } from '../scope';
+import { istDayStart, nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
 type VillageRow = {
@@ -13,10 +14,6 @@ type VillageRow = {
 const dashboard = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 dashboard.use('*', requireAuth);
-
-function startOfUtcDay(epochSeconds: number): number {
-  return Math.floor(epochSeconds / 86400) * 86400;
-}
 
 async function scopeVillages(
   db: D1Database,
@@ -56,9 +53,7 @@ dashboard.get('/children', async (c) => {
 
 dashboard.get('/attendance', async (c) => {
   const user = c.get('user');
-  const date = startOfUtcDay(
-    Number(c.req.query('date') ?? Math.floor(Date.now() / 1000)),
-  );
+  const date = istDayStart(Number(c.req.query('date') ?? nowEpochSeconds()));
   const ids = await villageIdsInScope(c.env.DB, user);
   const villages = await scopeVillages(c.env.DB, ids);
   if (ids.length === 0) return c.json({ villages: [], date });

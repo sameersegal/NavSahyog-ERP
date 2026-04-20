@@ -3,6 +3,12 @@ export type ScopeLevel = 'village' | 'cluster' | 'global';
 
 export type Bindings = {
   DB: D1Database;
+  // Comma-separated allowlist of origins that may make credentialed
+  // requests. Set in wrangler.toml [vars]. Empty / unset means
+  // same-origin only (the Vite dev proxy + the deployed Pages site).
+  ALLOWED_ORIGINS?: string;
+  // 'development' | 'production'. Drives the `Secure` cookie flag.
+  ENVIRONMENT?: string;
 };
 
 export type SessionUser = {

@@ -8,6 +8,7 @@ import {
   requireAuth,
   sessionCookieOptions,
 } from '../auth';
+import { err } from '../lib/errors';
 import type { Bindings, SessionUser, Variables } from '../types';
 
 type LoginBody = { user_id?: string; password?: string };
@@ -19,7 +20,7 @@ auth.post('/login', async (c) => {
   const userId = body.user_id?.trim();
   const password = body.password ?? '';
   if (!userId || !password) {
-    return c.json({ error: 'user_id and password required' }, 400);
+    return err(c, 'bad_request', 400, 'user_id and password required');
   }
   const user = await c.env.DB.prepare(
     `SELECT id, user_id, full_name, role, scope_level, scope_id
@@ -27,9 +28,9 @@ auth.post('/login', async (c) => {
   )
     .bind(userId, password)
     .first<SessionUser>();
-  if (!user) return c.json({ error: 'invalid credentials' }, 401);
+  if (!user) return err(c, 'unauthenticated', 401, 'invalid credentials');
   const { token } = await createSession(c.env.DB, user.id);
-  setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(SESSION_TTL_SECONDS));
+  setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c, SESSION_TTL_SECONDS));
   return c.json({ user });
 });
 

@@ -9,9 +9,12 @@ function fmtDob(epoch: number) {
   return new Date(epoch * 1000).toISOString().slice(0, 10);
 }
 
-function todayUtc() {
+// Start of the current IST day, in epoch seconds. Must match the
+// server's `istDayStart` in apps/api/src/lib/time.ts.
+function todayIst() {
   const now = Math.floor(Date.now() / 1000);
-  return Math.floor(now / 86400) * 86400;
+  const ist = now + 5.5 * 3600;
+  return Math.floor(ist / 86400) * 86400 - 5.5 * 3600;
 }
 
 export function Village() {
@@ -253,7 +256,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const date = todayUtc();
+  const date = todayIst();
 
   useEffect(() => {
     setSaved(false);

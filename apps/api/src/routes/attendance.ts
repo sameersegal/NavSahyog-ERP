@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
-import { requireAuth } from '../auth';
+import { requireAuth, requireRole } from '../auth';
 import { assertVillageInScope } from '../scope';
+import { err } from '../lib/errors';
+import { istDayStart, todayIst } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
 type Mark = { student_id: number; present: boolean };
@@ -10,21 +12,13 @@ const attendance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 attendance.use('*', requireAuth);
 
-function startOfUtcDay(epochSeconds: number): number {
-  return Math.floor(epochSeconds / 86400) * 86400;
-}
-
-function todayUtc(): number {
-  return startOfUtcDay(Math.floor(Date.now() / 1000));
-}
-
 attendance.get('/', async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
-  const date = Number(c.req.query('date') ?? todayUtc());
-  if (!villageId) return c.json({ error: 'village_id required' }, 400);
+  const date = Number(c.req.query('date') ?? todayIst());
+  if (!villageId) return err(c, 'bad_request', 400, 'village_id required');
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
-    return c.json({ error: 'forbidden' }, 403);
+    return err(c, 'forbidden', 403);
   }
   const session = await c.env.DB.prepare(
     'SELECT id FROM attendance_session WHERE village_id = ? AND date = ?',
@@ -47,24 +41,23 @@ attendance.get('/', async (c) => {
 });
 
 attendance.post('/', async (c) => {
+  const denied = requireRole(c, ['vc', 'af', 'cluster_admin', 'super_admin']);
+  if (denied) return denied;
   const user = c.get('user');
-  if (user.role === 'super_admin' || user.role === 'vc' || user.role === 'af' || user.role === 'cluster_admin') {
-    // allowed per §2.3
-  }
   const body = await c.req.json<PostBody>().catch(() => ({}) as PostBody);
   const villageId = body.village_id;
-  const submittedDate = body.date ?? todayUtc();
+  const submittedDate = body.date ?? todayIst();
   const marks = body.marks ?? [];
   if (!villageId || marks.length === 0) {
-    return c.json({ error: 'village_id and marks required' }, 400);
+    return err(c, 'bad_request', 400, 'village_id and marks required');
   }
   // L1: today only.
-  const date = startOfUtcDay(submittedDate);
-  if (date !== todayUtc()) {
-    return c.json({ error: 'L1 allows attendance for today only' }, 400);
+  const date = istDayStart(submittedDate);
+  if (date !== todayIst()) {
+    return err(c, 'bad_request', 400, 'L1 allows attendance for today only');
   }
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
-    return c.json({ error: 'forbidden' }, 403);
+    return err(c, 'forbidden', 403);
   }
   const studentIds = marks.map((m) => m.student_id);
   const placeholders = studentIds.map(() => '?').join(',');
@@ -76,25 +69,22 @@ attendance.post('/', async (c) => {
     .all<{ id: number }>();
   const validIds = new Set(valid.results.map((r) => r.id));
   if (validIds.size !== studentIds.length) {
-    return c.json({ error: 'some students not in village or graduated' }, 400);
+    return err(c, 'bad_request', 400, 'some students not in village or graduated');
   }
   const now = Math.floor(Date.now() / 1000);
-  const stmts: D1PreparedStatement[] = [];
-  stmts.push(
-    c.env.DB.prepare(
-      `INSERT INTO attendance_session (village_id, date, created_at, created_by)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(village_id, date) DO UPDATE SET created_at = excluded.created_at,
-         created_by = excluded.created_by`,
-    ).bind(villageId, date, now, user.id),
-  );
-  await c.env.DB.batch(stmts);
+  // INSERT-or-UPDATE the session and capture its id in one round-trip.
+  // ON CONFLICT bumps created_at/created_by so the UNIQUE row is
+  // returned either way.
   const session = await c.env.DB.prepare(
-    'SELECT id FROM attendance_session WHERE village_id = ? AND date = ?',
+    `INSERT INTO attendance_session (village_id, date, created_at, created_by)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(village_id, date) DO UPDATE SET created_at = excluded.created_at,
+       created_by = excluded.created_by
+     RETURNING id`,
   )
-    .bind(villageId, date)
+    .bind(villageId, date, now, user.id)
     .first<{ id: number }>();
-  if (!session) return c.json({ error: 'session not created' }, 500);
+  if (!session) return err(c, 'internal_error', 500, 'session not created');
   const sessionId = session.id;
   const ops: D1PreparedStatement[] = [
     c.env.DB.prepare('DELETE FROM attendance_mark WHERE session_id = ?').bind(

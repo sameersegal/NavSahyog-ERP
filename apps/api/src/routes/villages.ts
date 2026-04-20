@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { requireAuth } from '../auth';
 import { villageIdsInScope } from '../scope';
 import type { Bindings, Variables } from '../types';
+// villages route only lists what the user can already see; no
+// error-helper paths needed here yet.
 
 type VillageRow = {
   id: number;
