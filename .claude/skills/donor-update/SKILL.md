@@ -32,10 +32,10 @@ the operator's session cookie; no separate auth step.
 
 ### 1. Resolve village (only if name was given)
 
-`GET /api/geo/villages?cluster=<uuid>` does not support name
-search today. If the operator passed a name, ask them for the
-UUID rather than scanning. If later a `?q=` filter is added,
-switch to that.
+`GET /api/geo/villages?q=<name>` — case-insensitive substring
+match on village name, scope-filtered (§5.3). If the match set is
+ambiguous (> 1 result), show the operator the candidates with
+cluster/district context and ask which they meant.
 
 ### 2. Fetch stats (parallel)
 
@@ -175,16 +175,18 @@ Skill resolves:
 
 Then runs steps 2–6 and emits the markdown draft + sources block.
 
-## API reference (cross-ref)
+## Spec cross-refs
 
-All endpoints per `requirements/05-api-surface.md`:
+- **§3.9** — the workflow this skill implements (functional
+  requirements, scope, PII, consent, acceptance criteria).
+- **§2.3** — the `donor_update` capability. Today: Super Admin
+  only.
+- **§5.3 / 5.6 / 5.8 / 5.9 / 5.10** — the endpoints composed
+  above.
+- **§9.4** — each invocation writes an `audit_log` entry of
+  action `donor_update.draft`.
+- **`review-findings-v1.md` U7** — the consent-flag gap this
+  skill's "all media shareable" assumption stands in for.
 
-- §5.3 Geography — village lookup
-- §5.6 Students — `/api/children`
-- §5.8 Media — `/api/media`
-- §5.9 Attendance — `/api/attendance`
-- §5.10 Achievements — `/api/achievements`
-
-Role/scope rules from §2.3 apply: the operator can only pull
-data for villages inside their scope. A 403 on any call means
-the village is outside scope — stop and tell the operator.
+A 403 on any underlying API call means the village is outside
+the operator's scope — stop and tell the operator.
