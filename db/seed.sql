@@ -5,6 +5,7 @@
 
 DELETE FROM attendance_mark;
 DELETE FROM attendance_session;
+DELETE FROM event;
 DELETE FROM student;
 DELETE FROM school;
 DELETE FROM session;
@@ -76,3 +77,20 @@ INSERT INTO student (village_id, school_id, first_name, last_name, gender, dob, 
   (3, 3, 'Priya',  'Nambiar',  'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Rahul',  'Prabhu',   'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Sneha',  'Rao',      'f', '2017-01-01', '2024-06-01', unixepoch(), 6);
+
+-- Events & activities (§3.4.2, §4.3.4). Event master is single-tenant
+-- and stable — same list surfaces in Attendance (L2.2) and Capture
+-- (L2.4). IDs are stable so outbox/idempotency-key work later can
+-- reference them from fixtures.
+INSERT INTO event (id, name, kind, description, created_at, created_by) VALUES
+  (1, 'Annual Competition',          'event',    'AC — annual village-level competition',        unixepoch(), 6),
+  (2, 'Special Event',               'event',    'Festivals, visits, and one-off programs',      unixepoch(), 6),
+  (3, 'Board Games',                 'activity', NULL,                                           unixepoch(), 6),
+  (4, 'Running Race',                'activity', NULL,                                           unixepoch(), 6),
+  (5, 'Kho-Kho',                     'activity', NULL,                                           unixepoch(), 6),
+  (6, 'Kabaddi',                     'activity', NULL,                                           unixepoch(), 6),
+  (7, 'Prakriti Prem',               'activity', NULL,                                           unixepoch(), 6),
+  (8, 'Dhan Kaushal',                'activity', NULL,                                           unixepoch(), 6),
+  (9, 'Jal Vriddhi',                 'activity', NULL,                                           unixepoch(), 6),
+  (10,'No Activity — Raining',       'activity', 'Session cancelled due to rain',                unixepoch(), 6),
+  (11,'No Activity — Training',      'activity', 'VC away at training',                          unixepoch(), 6);

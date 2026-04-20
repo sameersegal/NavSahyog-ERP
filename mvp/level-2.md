@@ -1,7 +1,7 @@
 # Level 2 — Full write loop + full drill-down dashboards
 
-**Status:** in progress on `claude/implement-l2-features-vayvw`.
-L1 merged (PRs #18–#21). L2.0 in flight.
+**Status:** in progress. L1 merged (PRs #18–#21). L2.0 and L2.1 landed
+(PR #22). L2.2 in flight on `claude/start-l2.2-mvp-q6Ncp`.
 
 ## Goal
 
@@ -13,13 +13,13 @@ drill-down view a manager uses. Auth stays trivial.
 L2 is split into five sub-levels. Each sub-level is a self-contained
 PR; the whole thing rolls up to one "L2" status line when 2.4 lands.
 
-| Sub | Theme |
-|---|---|
-| **L2.0** | Decisions landed + `app_settings` dropped + `wrangler d1 migrations` tool + District/Region/State/Zone admin roles end-to-end |
-| **L2.1** | Children full form — parents, alt contact, edit, graduate. No photo (media is L2.4). |
-| **L2.2** | Attendance full form — event picker, today/-1/-2 window, start/end time. No voice note (media is L2.4). |
-| **L2.3** | Achievements + full drill-down dashboard across all geo levels + **CSV** export (decisions.md D2). |
-| **L2.4** | Media pipeline end-to-end against wrangler `--local` R2: presign / commit, child photo, voice note, capture screen with EXIF + geo. Production R2 binding deferred to first real deploy (decisions.md D3). |
+| Sub | Theme | Status |
+|---|---|---|
+| **L2.0** | Decisions landed + `app_settings` dropped + `wrangler d1 migrations` tool + District/Region/State/Zone admin roles end-to-end | ✅ |
+| **L2.1** | Children full form — parents, alt contact, edit, graduate. No photo (media is L2.4). | ✅ |
+| **L2.2** | Attendance full form — event picker, today/-1/-2 window, start/end time. No voice note (media is L2.4). | 🚧 |
+| **L2.3** | Achievements + full drill-down dashboard across all geo levels + **CSV** export (decisions.md D2). | — |
+| **L2.4** | Media pipeline end-to-end against wrangler `--local` R2: presign / commit, child photo, voice note, capture screen with EXIF + geo. Production R2 binding deferred to first real deploy (decisions.md D3). | — |
 
 ## In scope (across the five sub-levels)
 

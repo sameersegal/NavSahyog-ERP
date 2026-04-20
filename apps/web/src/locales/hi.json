@@ -38,7 +38,7 @@
 
   "village.back": "← सभी गाँव",
   "village.tab.children": "बच्चे",
-  "village.tab.attendance": "उपस्थिति (आज)",
+  "village.tab.attendance": "उपस्थिति",
 
   "children.count_one": "{n} बच्चा",
   "children.count_other": "{n} बच्चे",
@@ -93,6 +93,24 @@
   "attendance.absent": "अनुपस्थित",
   "attendance.save": "उपस्थिति सहेजें",
   "attendance.saving": "सहेजा जा रहा है…",
+  "attendance.date.label": "तिथि",
+  "attendance.date.today": "आज",
+  "attendance.date.yesterday": "कल",
+  "attendance.date.day_before": "परसों",
+  "attendance.new_session": "नया सत्र",
+  "attendance.edit_session": "संपादित करें",
+  "attendance.new.title": "नया उपस्थिति सत्र",
+  "attendance.edit.title": "उपस्थिति सत्र संपादित करें",
+  "attendance.none_for_date": "इस तिथि पर अभी कोई सत्र दर्ज नहीं।",
+  "attendance.session.summary": "{present}/{total} उपस्थित",
+  "attendance.form.event": "इवेंट / गतिविधि",
+  "attendance.form.start_time": "प्रारंभ समय",
+  "attendance.form.end_time": "समाप्ति समय",
+  "attendance.error.event_required": "कोई इवेंट या गतिविधि चुनें।",
+  "attendance.error.end_before_start": "समाप्ति समय प्रारंभ समय से पहले नहीं हो सकता।",
+
+  "event.kind.event": "इवेंट",
+  "event.kind.activity": "गतिविधि",
 
   "dashboard.title": "विस्तृत डैशबोर्ड",
   "dashboard.tile.children": "बच्चे",

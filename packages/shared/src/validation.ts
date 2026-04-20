@@ -28,3 +28,12 @@ export function isIsoDate(raw: string): boolean {
     date.getUTCDate() === d
   );
 }
+
+// `'HH:MM'` — 24h clock time. Used for attendance_session.start_time
+// and end_time. Same reasoning as isIsoDate: a clock reading on an
+// IST calendar date, stored as TEXT so no hidden timezone offset.
+const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function isClockTime(raw: string): boolean {
+  return CLOCK_RE.test(raw);
+}
