@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../auth';
 import { assertVillageInScope } from '../scope';
+import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
 
 type School = { id: number; village_id: number; name: string };
@@ -12,9 +13,9 @@ schools.use('*', requireAuth);
 schools.get('/', async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
-  if (!villageId) return c.json({ error: 'village_id required' }, 400);
+  if (!villageId) return err(c, 'bad_request', 400, 'village_id required');
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
-    return c.json({ error: 'forbidden' }, 403);
+    return err(c, 'forbidden', 403);
   }
   const rs = await c.env.DB.prepare(
     'SELECT id, village_id, name FROM school WHERE village_id = ? ORDER BY name',

@@ -3,10 +3,34 @@ main = "src/index.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Local-only defaults. Production env lives in [env.production] below.
+[vars]
+ENVIRONMENT = "development"
+# Comma-separated. Vite dev origin so the dev proxy isn't needed for
+# direct browser → Worker calls during testing.
+ALLOWED_ORIGINS = "http://localhost:5173"
+
 [dev]
 port = 8787
 
+# `database_id` is intentionally a placeholder for L1. Wrangler dev
+# uses the local D1 via `--local` (see `db:apply`/`db:seed` scripts);
+# the ID is only consulted when deploying. Replace before any
+# `wrangler deploy` lands.
 [[d1_databases]]
 binding = "DB"
 database_name = "navsahyog_db"
-database_id = "local-placeholder"
+database_id = "REPLACE_BEFORE_DEPLOY"
+
+# Production overrides. Bind real ID + real origin list before
+# running `wrangler deploy --env production`.
+[env.production]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+ALLOWED_ORIGINS = ""
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "navsahyog_db"
+database_id = "REPLACE_BEFORE_DEPLOY"

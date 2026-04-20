@@ -132,7 +132,7 @@ function AttendanceTable() {
   const groups = groupByCluster(data.villages);
   const totalPresent = data.villages.reduce((s, r) => s + r.present, 0);
   const totalMarked = data.villages.reduce((s, r) => s + r.total, 0);
-  const dateStr = new Date(data.date * 1000).toISOString().slice(0, 10);
+  const dateStr = data.date;
 
   return (
     <div className="space-y-4">

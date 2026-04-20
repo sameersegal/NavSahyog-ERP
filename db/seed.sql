@@ -1,5 +1,7 @@
 -- L1 seed. One geo path, one cluster with 3 villages, ~20 students.
 -- Dummy data only. Plain-text passwords (L5 replaces with Argon2id).
+--
+-- Date columns use IST 'YYYY-MM-DD' (see schema.sql header).
 
 DELETE FROM attendance_mark;
 DELETE FROM attendance_session;
@@ -40,26 +42,27 @@ INSERT INTO user (id, user_id, full_name, password, role, scope_level, scope_id,
   (5, 'cluster-bid01',  'Cluster Admin',  'password', 'cluster_admin', 'cluster', 1, unixepoch()),
   (6, 'super',          'Super Admin',    'password', 'super_admin',   'global',  NULL, unixepoch());
 
--- ~20 students spread across the 3 villages. Ages 6-12, DOB as epoch seconds (rough).
--- 2015-01-01 UTC = 1420070400; 2017-01-01 UTC = 1483228800; 2019-01-01 UTC = 1546300800
+-- ~20 students spread across the 3 villages. Ages 6-12 as of 2026.
+-- DOB and joined_at are IST calendar dates ('YYYY-MM-DD').
+-- created_at stays a UTC epoch (audit timestamp, not a calendar date).
 INSERT INTO student (village_id, school_id, first_name, last_name, gender, dob, joined_at, created_at, created_by) VALUES
-  (1, 1, 'Aarav',  'Patil',   'm', 1483228800, unixepoch(), unixepoch(), 6),
-  (1, 1, 'Aditi',  'Rao',     'f', 1483228800, unixepoch(), unixepoch(), 6),
-  (1, 1, 'Arjun',  'Deshpande','m', 1546300800, unixepoch(), unixepoch(), 6),
-  (1, 1, 'Bhavya', 'Kulkarni','f', 1420070400, unixepoch(), unixepoch(), 6),
-  (1, 1, 'Chirag', 'Naik',    'm', 1420070400, unixepoch(), unixepoch(), 6),
-  (1, 1, 'Diya',   'Shetty',  'f', 1483228800, unixepoch(), unixepoch(), 6),
-  (1, 1, 'Eshan',  'Pai',     'm', 1546300800, unixepoch(), unixepoch(), 6),
-  (2, 2, 'Farhan', 'Ali',     'm', 1420070400, unixepoch(), unixepoch(), 6),
-  (2, 2, 'Gauri',  'Hegde',   'f', 1483228800, unixepoch(), unixepoch(), 6),
-  (2, 2, 'Hitesh', 'Bhat',    'm', 1546300800, unixepoch(), unixepoch(), 6),
-  (2, 2, 'Ishaan', 'Gowda',   'm', 1483228800, unixepoch(), unixepoch(), 6),
-  (2, 2, 'Jaya',   'Kamath',  'f', 1420070400, unixepoch(), unixepoch(), 6),
-  (2, 2, 'Kiran',  'Murthy',  'm', 1546300800, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Lakshmi','Iyer',    'f', 1420070400, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Manav',  'Joshi',   'm', 1483228800, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Nidhi',  'Kalburgi','f', 1546300800, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Om',     'Mallya',  'm', 1483228800, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Priya',  'Nambiar', 'f', 1420070400, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Rahul',  'Prabhu',  'm', 1546300800, unixepoch(), unixepoch(), 6),
-  (3, 3, 'Sneha',  'Rao',     'f', 1483228800, unixepoch(), unixepoch(), 6);
+  (1, 1, 'Aarav',  'Patil',    'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (1, 1, 'Aditi',  'Rao',      'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (1, 1, 'Arjun',  'Deshpande','m', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  (1, 1, 'Bhavya', 'Kulkarni', 'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
+  (1, 1, 'Chirag', 'Naik',     'm', '2015-01-01', '2024-06-01', unixepoch(), 6),
+  (1, 1, 'Diya',   'Shetty',   'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (1, 1, 'Eshan',  'Pai',      'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  (2, 2, 'Farhan', 'Ali',      'm', '2015-01-01', '2024-06-01', unixepoch(), 6),
+  (2, 2, 'Gauri',  'Hegde',    'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (2, 2, 'Hitesh', 'Bhat',     'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  (2, 2, 'Ishaan', 'Gowda',    'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (2, 2, 'Jaya',   'Kamath',   'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
+  (2, 2, 'Kiran',  'Murthy',   'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Lakshmi','Iyer',     'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Manav',  'Joshi',    'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Nidhi',  'Kalburgi', 'f', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Om',     'Mallya',   'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Priya',  'Nambiar',  'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Rahul',  'Prabhu',   'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  (3, 3, 'Sneha',  'Rao',      'f', '2017-01-01', '2024-06-01', unixepoch(), 6);

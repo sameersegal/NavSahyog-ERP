@@ -38,9 +38,11 @@ export function Login() {
           <img src="/logo.png" alt="NavSahyog Foundation" className="w-28 h-28" />
           <h1 className="text-lg font-semibold text-primary">{t('app.name')}</h1>
         </div>
-        <p className="text-sm text-muted-fg text-center">
-          {t('auth.login.hint', { creds: 'vc-anandpur / password' })}
-        </p>
+        {import.meta.env.DEV && (
+          <p className="text-sm text-muted-fg text-center">
+            {t('auth.login.hint', { creds: 'vc-anandpur / password' })}
+          </p>
+        )}
         <label className="block">
           <span className="text-sm">{t('auth.login.user_id')}</span>
           <input

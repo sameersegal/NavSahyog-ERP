@@ -1,5 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
+import { err } from './lib/errors';
 import type { Bindings, SessionUser, Variables } from './types';
 
 const SESSION_COOKIE = 'nsf_session';
@@ -55,32 +56,39 @@ export const requireAuth: MiddlewareHandler<{
   Variables: Variables;
 }> = async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE);
-  if (!token) return c.json({ error: 'unauthenticated' }, 401);
+  if (!token) return err(c, 'unauthenticated', 401);
   const user = await loadSessionUser(c.env.DB, token);
-  if (!user) return c.json({ error: 'unauthenticated' }, 401);
+  if (!user) return err(c, 'unauthenticated', 401);
   c.set('user', user);
   await next();
 };
 
 export { SESSION_COOKIE, SESSION_TTL_SECONDS };
 
-export function sessionCookieOptions(maxAgeSeconds: number) {
+// `Secure` is required in production; without it the session
+// cookie can travel over plain HTTP. Local dev runs over HTTP, so
+// we leave it off there.
+export function sessionCookieOptions(
+  c: Context<{ Bindings: Bindings; Variables: Variables }>,
+  maxAgeSeconds: number,
+) {
   return {
     httpOnly: true,
     sameSite: 'Lax' as const,
     path: '/',
     maxAge: maxAgeSeconds,
-    secure: false,
+    secure: c.env.ENVIRONMENT === 'production',
   };
 }
 
+// Explicit allow-list. Returns a 403 response if the current user's
+// role is not in `roles`, otherwise null. Replaces the dead
+// `if (role === ... || ...) {}` blocks the L1 routes used to carry.
 export function requireRole(
   c: Context<{ Bindings: Bindings; Variables: Variables }>,
   roles: ReadonlyArray<SessionUser['role']>,
 ): Response | null {
   const user = c.get('user');
-  if (!roles.includes(user.role)) {
-    return c.json({ error: 'forbidden' }, 403);
-  }
+  if (!roles.includes(user.role)) return err(c, 'forbidden', 403);
   return null;
 }
