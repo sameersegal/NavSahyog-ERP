@@ -178,3 +178,85 @@ describe('children write — role allow-list', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('geo-admin tiers (read-only by construction)', () => {
+  // The seeded geo tree is one zone → one state → one region → one
+  // district → one cluster → three villages. Each geo admin role
+  // anchors to the one seeded row at its level. Cross-district
+  // isolation is covered by the "VC accessing a sibling village"
+  // test above (the policy layer is the same gate).
+  const tiers = [
+    { user: 'district-bid', role: 'district_admin' },
+    { user: 'region-sk', role: 'region_admin' },
+    { user: 'state-ka', role: 'state_admin' },
+    { user: 'zone-sz', role: 'zone_admin' },
+  ];
+
+  for (const tier of tiers) {
+    describe(`${tier.role} (${tier.user})`, () => {
+      it('reads every village that rolls up to its scope', async () => {
+        const token = await loginAs(tier.user);
+        // All 3 seeded villages roll up to this admin's scope.
+        for (const villageId of [1, 2, 3]) {
+          const res = await cookieFetch(
+            `/api/children?village_id=${villageId}`,
+            token,
+          );
+          expect(res.status).toBe(200);
+        }
+      });
+
+      it('cannot write children (403)', async () => {
+        const token = await loginAs(tier.user);
+        const res = await cookieFetch('/api/children', token, {
+          method: 'POST',
+          body: JSON.stringify({
+            village_id: 1,
+            school_id: 1,
+            first_name: 'Not',
+            last_name: 'Allowed',
+            gender: 'o',
+            dob: '2018-06-15',
+          }),
+        });
+        expect(res.status).toBe(403);
+      });
+
+      it('cannot write attendance (403)', async () => {
+        const token = await loginAs(tier.user);
+        const res = await cookieFetch('/api/attendance', token, {
+          method: 'POST',
+          body: JSON.stringify({
+            village_id: 1,
+            marks: [{ student_id: 1, present: true }],
+          }),
+        });
+        expect(res.status).toBe(403);
+      });
+
+      it('/auth/me reports the expected read-only capability set', async () => {
+        const token = await loginAs(tier.user);
+        const res = await cookieFetch('/auth/me', token);
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as {
+          user: { role: string; capabilities: string[] };
+        };
+        expect(body.user.role).toBe(tier.role);
+        expect(body.user.capabilities).toContain('dashboard.read');
+        expect(body.user.capabilities).not.toContain('child.write');
+        expect(body.user.capabilities).not.toContain('attendance.write');
+      });
+
+      it('sees all in-scope villages on the drill-down dashboard', async () => {
+        const token = await loginAs(tier.user);
+        const res = await cookieFetch('/api/dashboard/children', token);
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as {
+          villages: Array<{ village_id: number }>;
+        };
+        const ids = body.villages.map((v) => v.village_id).sort();
+        expect(ids).toEqual([1, 2, 3]);
+      });
+    });
+  }
+});

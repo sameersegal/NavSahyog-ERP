@@ -4,7 +4,7 @@
   "nav.home": "होम",
   "nav.dashboard": "डैशबोर्ड",
 
-  "auth.login.hint": "लैब बिल्ड — L1। आज़माएँ {creds}।",
+  "auth.login.hint": "लैब बिल्ड। आज़माएँ {creds}।",
   "auth.login.user_id": "यूज़र आईडी",
   "auth.login.password": "पासवर्ड",
   "auth.login.submit": "साइन इन करें",
@@ -27,6 +27,10 @@
   "role.vc": "ग्राम समन्वयक",
   "role.af": "क्षेत्र संचालक",
   "role.cluster_admin": "क्लस्टर एडमिन",
+  "role.district_admin": "ज़िला एडमिन",
+  "role.region_admin": "क्षेत्र एडमिन",
+  "role.state_admin": "राज्य एडमिन",
+  "role.zone_admin": "ज़ोन एडमिन",
   "role.super_admin": "सुपर एडमिन",
 
   "home.your_villages": "आपके गाँव",

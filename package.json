@@ -12,7 +12,7 @@
     "test": "pnpm -r test",
     "check:i18n": "node scripts/check-i18n.mjs",
     "screenshots": "node scripts/capture-screenshots.mjs",
-    "db:apply": "pnpm --filter @navsahyog/api db:apply",
+    "db:migrate": "pnpm --filter @navsahyog/api db:migrate",
     "db:seed": "pnpm --filter @navsahyog/api db:seed",
     "db:reset": "pnpm --filter @navsahyog/api db:reset"
   },

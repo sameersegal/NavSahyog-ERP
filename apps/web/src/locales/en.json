@@ -4,7 +4,7 @@
   "nav.home": "Home",
   "nav.dashboard": "Dashboard",
 
-  "auth.login.hint": "Lab build — L1. Try {creds}.",
+  "auth.login.hint": "Lab build. Try {creds}.",
   "auth.login.user_id": "User ID",
   "auth.login.password": "Password",
   "auth.login.submit": "Sign in",
@@ -27,6 +27,10 @@
   "role.vc": "Village Coordinator",
   "role.af": "Area Facilitator",
   "role.cluster_admin": "Cluster Admin",
+  "role.district_admin": "District Admin",
+  "role.region_admin": "Region Admin",
+  "role.state_admin": "State Admin",
+  "role.zone_admin": "Zone Admin",
   "role.super_admin": "Super Admin",
 
   "home.your_villages": "Your villages",
