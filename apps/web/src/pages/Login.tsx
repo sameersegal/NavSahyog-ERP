@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../auth';
+import { THEME_LABELS, THEME_ORDER, useTheme } from '../theme';
 
 export function Login() {
   const { login } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,19 +24,22 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-full flex items-center justify-center p-4">
+    <div className="min-h-full flex items-center justify-center p-4 bg-bg">
       <form
         onSubmit={submit}
-        className="bg-white shadow rounded-lg p-6 w-full max-w-sm space-y-4"
+        className="bg-card text-fg border border-border shadow rounded-lg p-6 w-full max-w-sm space-y-4"
       >
-        <h1 className="text-xl font-semibold text-emerald-800">NavSahyog ERP</h1>
-        <p className="text-sm text-slate-500">
+        <div className="flex flex-col items-center gap-2">
+          <img src="/logo.png" alt="NavSahyog Foundation" className="w-28 h-28" />
+          <h1 className="text-lg font-semibold text-primary">NavSahyog ERP</h1>
+        </div>
+        <p className="text-sm text-muted-fg text-center">
           Lab build — L1. Try <code>vc-anandpur</code> / <code>password</code>.
         </p>
         <label className="block">
-          <span className="text-sm text-slate-700">User ID</span>
+          <span className="text-sm">User ID</span>
           <input
-            className="mt-1 w-full border rounded px-2 py-1.5"
+            className="mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus"
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             autoComplete="username"
@@ -42,24 +47,45 @@ export function Login() {
           />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-700">Password</span>
+          <span className="text-sm">Password</span>
           <input
             type="password"
-            className="mt-1 w-full border rounded px-2 py-1.5"
+            className="mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             required
           />
         </label>
-        {error && <p className="text-sm text-rose-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         <button
           type="submit"
           disabled={busy}
-          className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white rounded px-3 py-2"
+          className="w-full bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-3 py-2"
         >
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
+        <div className="pt-2 border-t border-border">
+          <div className="text-xs font-medium text-muted-fg mb-2">Theme</div>
+          <div className="grid grid-cols-3 gap-1">
+            {THEME_ORDER.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTheme(t)}
+                aria-pressed={theme === t}
+                className={
+                  'rounded px-2 py-1.5 text-xs border ' +
+                  (theme === t
+                    ? 'bg-primary text-primary-fg border-primary'
+                    : 'bg-card text-fg border-border hover:bg-card-hover')
+                }
+              >
+                {THEME_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        </div>
       </form>
     </div>
   );

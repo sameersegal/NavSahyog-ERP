@@ -1,8 +1,10 @@
 # Level 1 — Multi-role skeleton, one cluster
 
-**Status:** scaffold landed. Typechecks pass, dev smoke tests
-green (see end-to-end verification below). Screenshots in
-`mvp/screenshots/l1/`. Open questions below remain unresolved.
+**Status:** scaffold landed, plus a UI polish pass (logo, three
+themes, user menu, responsive layout, attendance mass-ops).
+Typechecks pass, dev smoke tests green, screenshots in
+`mvp/screenshots/l1/` (desktop + mobile + per-theme). Open
+questions below remain unresolved.
 
 ## Goal
 

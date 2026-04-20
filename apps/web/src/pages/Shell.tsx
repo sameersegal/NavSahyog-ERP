@@ -1,43 +1,59 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../auth';
+import { UserMenu } from '../components/UserMenu';
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
   const { pathname } = useLocation();
   return (
-    <div className="min-h-full flex flex-col">
-      <header className="bg-emerald-700 text-white">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-6">
-          <Link to="/" className="font-semibold">NavSahyog ERP</Link>
-          <nav className="flex gap-4 text-sm">
-            <Link
-              to="/"
-              className={pathname === '/' ? 'underline' : 'opacity-80 hover:opacity-100'}
-            >
-              Home
-            </Link>
-            <Link
-              to="/dashboard"
-              className={pathname === '/dashboard' ? 'underline' : 'opacity-80 hover:opacity-100'}
-            >
-              Dashboard
-            </Link>
+    <div className="min-h-full flex flex-col bg-bg">
+      <header className="bg-primary text-primary-fg shadow">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3 sm:gap-6">
+          <Link to="/" className="flex items-center gap-2 min-w-0">
+            <img
+              src="/logo.png"
+              alt=""
+              className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full p-0.5 shrink-0"
+            />
+            <span className="font-semibold text-sm sm:text-base truncate">
+              NavSahyog ERP
+            </span>
+          </Link>
+          <nav className="flex gap-3 sm:gap-5 text-sm">
+            <NavLink to="/" active={pathname === '/'}>Home</NavLink>
+            <NavLink to="/dashboard" active={pathname === '/dashboard'}>Dashboard</NavLink>
           </nav>
-          <div className="ml-auto text-sm flex items-center gap-3">
-            <span className="opacity-80">{user?.full_name} · {user?.role}</span>
-            <button
-              className="bg-white/10 hover:bg-white/20 rounded px-2 py-1"
-              onClick={() => { void logout(); }}
-            >
-              Sign out
-            </button>
+          <div className="ml-auto">
+            <UserMenu />
           </div>
         </div>
       </header>
       <main className="flex-1">
-        <div className="max-w-5xl mx-auto p-4">{children}</div>
+        <div className="max-w-5xl mx-auto p-3 sm:p-4">{children}</div>
       </main>
     </div>
+  );
+}
+
+function NavLink({
+  to,
+  active,
+  children,
+}: {
+  to: string;
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      className={
+        'py-1 ' +
+        (active
+          ? 'underline underline-offset-4 font-medium'
+          : 'opacity-85 hover:opacity-100')
+      }
+    >
+      {children}
+    </Link>
   );
 }

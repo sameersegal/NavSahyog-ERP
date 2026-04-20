@@ -49,11 +49,12 @@ function TileButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded px-3 py-2 text-sm ${
-        active
-          ? 'bg-emerald-700 text-white'
-          : 'bg-white text-slate-700 shadow hover:bg-emerald-50'
-      }`}
+      className={
+        'rounded px-3 py-2 text-sm border ' +
+        (active
+          ? 'bg-primary text-primary-fg border-primary'
+          : 'bg-card text-fg border-border hover:bg-card-hover')
+      }
     >
       {children}
     </button>
@@ -71,38 +72,40 @@ function ChildrenTable() {
       .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
   }, []);
 
-  if (err) return <p className="text-rose-600">{err}</p>;
-  if (!rows) return <p className="text-slate-500">Loading…</p>;
+  if (err) return <p className="text-danger">{err}</p>;
+  if (!rows) return <p className="text-muted-fg">Loading…</p>;
   const groups = groupByCluster(rows);
   const total = rows.reduce((s, r) => s + r.count, 0);
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded shadow p-4 text-sm">
-        <span className="text-slate-500">Total children in scope: </span>
+      <div className="bg-card border border-border rounded p-4 text-sm">
+        <span className="text-muted-fg">Total children in scope: </span>
         <span className="font-semibold">{total}</span>
       </div>
       {groups.map((g) => (
-        <div key={g.cluster_id} className="bg-white rounded shadow">
-          <div className="px-4 py-2 border-b text-sm font-medium text-slate-700">
+        <div key={g.cluster_id} className="bg-card border border-border rounded overflow-hidden">
+          <div className="px-4 py-2 border-b border-border text-sm font-medium">
             {g.cluster_name}
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="px-4 py-2 font-normal">Village</th>
-                <th className="px-4 py-2 font-normal text-right">Children</th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.villages.map((v) => (
-                <tr key={v.village_id} className="border-t">
-                  <td className="px-4 py-2">{v.village_name}</td>
-                  <td className="px-4 py-2 text-right">{v.count}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-fg">
+                  <th className="px-4 py-2 font-normal">Village</th>
+                  <th className="px-4 py-2 font-normal text-right">Children</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {g.villages.map((v) => (
+                  <tr key={v.village_id} className="border-t border-border">
+                    <td className="px-4 py-2">{v.village_name}</td>
+                    <td className="px-4 py-2 text-right">{v.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
     </div>
@@ -120,46 +123,48 @@ function AttendanceTable() {
       .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
   }, []);
 
-  if (err) return <p className="text-rose-600">{err}</p>;
-  if (!data) return <p className="text-slate-500">Loading…</p>;
+  if (err) return <p className="text-danger">{err}</p>;
+  if (!data) return <p className="text-muted-fg">Loading…</p>;
   const groups = groupByCluster(data.villages);
   const totalPresent = data.villages.reduce((s, r) => s + r.present, 0);
   const totalMarked = data.villages.reduce((s, r) => s + r.total, 0);
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded shadow p-4 text-sm">
-        <span className="text-slate-500">
+      <div className="bg-card border border-border rounded p-4 text-sm">
+        <span className="text-muted-fg">
           {new Date(data.date * 1000).toISOString().slice(0, 10)} — present:{' '}
         </span>
         <span className="font-semibold">{totalPresent}</span>
-        <span className="text-slate-500"> / {totalMarked} marked</span>
+        <span className="text-muted-fg"> / {totalMarked} marked</span>
       </div>
       {groups.map((g) => (
-        <div key={g.cluster_id} className="bg-white rounded shadow">
-          <div className="px-4 py-2 border-b text-sm font-medium text-slate-700">
+        <div key={g.cluster_id} className="bg-card border border-border rounded overflow-hidden">
+          <div className="px-4 py-2 border-b border-border text-sm font-medium">
             {g.cluster_name}
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="px-4 py-2 font-normal">Village</th>
-                <th className="px-4 py-2 font-normal text-right">Present</th>
-                <th className="px-4 py-2 font-normal text-right">Marked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.villages.map((v) => (
-                <tr key={v.village_id} className="border-t">
-                  <td className="px-4 py-2">{v.village_name}</td>
-                  <td className="px-4 py-2 text-right">{v.present}</td>
-                  <td className="px-4 py-2 text-right">
-                    {v.marked ? v.total : <span className="text-slate-400">—</span>}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-fg">
+                  <th className="px-4 py-2 font-normal">Village</th>
+                  <th className="px-4 py-2 font-normal text-right">Present</th>
+                  <th className="px-4 py-2 font-normal text-right">Marked</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {g.villages.map((v) => (
+                  <tr key={v.village_id} className="border-t border-border">
+                    <td className="px-4 py-2">{v.village_name}</td>
+                    <td className="px-4 py-2 text-right">{v.present}</td>
+                    <td className="px-4 py-2 text-right">
+                      {v.marked ? v.total : <span className="text-muted-fg">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
     </div>

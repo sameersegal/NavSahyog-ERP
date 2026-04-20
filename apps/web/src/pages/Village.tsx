@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type AttendanceMark, type Child, type School } from '../api';
+import { api, type AttendanceMark, type Child, type School, type Village as VillageT } from '../api';
 
 type Tab = 'children' | 'attendance';
 
 function fmtDob(epoch: number) {
-  const d = new Date(epoch * 1000);
-  return d.toISOString().slice(0, 10);
+  return new Date(epoch * 1000).toISOString().slice(0, 10);
 }
 
 function todayUtc() {
@@ -18,15 +17,31 @@ export function Village() {
   const { id } = useParams();
   const villageId = Number(id);
   const [tab, setTab] = useState<Tab>('children');
+  const [village, setVillage] = useState<VillageT | null>(null);
+
+  useEffect(() => {
+    if (!villageId) return;
+    api.villages().then((r) => {
+      setVillage(r.villages.find((v) => v.id === villageId) ?? null);
+    });
+  }, [villageId]);
 
   if (!villageId) return <p>Invalid village.</p>;
 
   return (
     <div className="space-y-4">
-      <Link to="/" className="text-sm text-emerald-700 hover:underline">
+      <Link to="/" className="text-sm text-primary hover:underline">
         ← All villages
       </Link>
-      <div className="flex gap-4 border-b">
+      <div>
+        <h1 className="text-xl font-semibold">{village?.name ?? ''}</h1>
+        {village && (
+          <p className="text-xs text-muted-fg">
+            {village.cluster_name} · {village.code}
+          </p>
+        )}
+      </div>
+      <div className="flex gap-4 border-b border-border">
         <TabButton active={tab === 'children'} onClick={() => setTab('children')}>
           Children
         </TabButton>
@@ -57,8 +72,8 @@ function TabButton({
       onClick={onClick}
       className={`px-3 py-2 text-sm -mb-px border-b-2 ${
         active
-          ? 'border-emerald-700 text-emerald-800 font-medium'
-          : 'border-transparent text-slate-500 hover:text-slate-800'
+          ? 'border-primary text-primary font-medium'
+          : 'border-transparent text-muted-fg hover:text-fg'
       }`}
     >
       {children}
@@ -83,16 +98,18 @@ function ChildrenTab({ villageId }: { villageId: number }) {
 
   useEffect(() => { load(); }, [load]);
 
-  if (err) return <p className="text-rose-600">{err}</p>;
-  if (!children) return <p className="text-slate-500">Loading…</p>;
+  if (err) return <p className="text-danger">{err}</p>;
+  if (!children) return <p className="text-muted-fg">Loading…</p>;
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">{children.length} child{children.length === 1 ? '' : 'ren'}</h2>
+      <div className="flex justify-between items-center gap-2">
+        <h2 className="text-lg font-semibold">
+          {children.length} child{children.length === 1 ? '' : 'ren'}
+        </h2>
         <button
           onClick={() => setShow((v) => !v)}
-          className="text-sm bg-emerald-700 hover:bg-emerald-800 text-white rounded px-3 py-1.5"
+          className="text-sm bg-primary hover:bg-primary-hover text-primary-fg rounded px-3 py-1.5"
         >
           {show ? 'Cancel' : 'Add child'}
         </button>
@@ -107,19 +124,20 @@ function ChildrenTab({ villageId }: { villageId: number }) {
           }}
         />
       )}
-      <ul className="bg-white rounded shadow divide-y">
+      <ul className="bg-card border border-border rounded divide-y divide-border">
         {children.map((c) => (
-          <li key={c.id} className="p-3 flex justify-between text-sm">
-            <span>
-              <span className="font-medium">{c.first_name} {c.last_name}</span>
-              <span className="ml-2 text-xs text-slate-500">
-                {c.gender === 'm' ? 'M' : c.gender === 'f' ? 'F' : 'O'} · DOB {fmtDob(c.dob)}
-              </span>
+          <li
+            key={c.id}
+            className="p-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
+          >
+            <span className="font-medium">{c.first_name} {c.last_name}</span>
+            <span className="text-xs text-muted-fg">
+              {c.gender === 'm' ? 'M' : c.gender === 'f' ? 'F' : 'O'} · DOB {fmtDob(c.dob)}
             </span>
           </li>
         ))}
         {children.length === 0 && (
-          <li className="p-3 text-sm text-slate-500">No children yet.</li>
+          <li className="p-3 text-sm text-muted-fg">No children yet.</li>
         )}
       </ul>
     </div>
@@ -165,31 +183,27 @@ function AddChildForm({
     }
   }
 
+  const field =
+    'mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus';
+
   return (
-    <form onSubmit={submit} className="bg-white rounded shadow p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <form
+      onSubmit={submit}
+      className="bg-card border border-border rounded p-4 space-y-3"
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
-          <span className="text-sm text-slate-700">First name</span>
-          <input
-            className="mt-1 w-full border rounded px-2 py-1.5"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            required
-          />
+          <span className="text-sm">First name</span>
+          <input className={field} value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-700">Last name</span>
-          <input
-            className="mt-1 w-full border rounded px-2 py-1.5"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
-          />
+          <span className="text-sm">Last name</span>
+          <input className={field} value={lastName} onChange={(e) => setLastName(e.target.value)} required />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-700">Gender</span>
+          <span className="text-sm">Gender</span>
           <select
-            className="mt-1 w-full border rounded px-2 py-1.5"
+            className={field}
             value={gender}
             onChange={(e) => setGender(e.target.value as 'm' | 'f' | 'o')}
           >
@@ -199,19 +213,13 @@ function AddChildForm({
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-700">DOB</span>
-          <input
-            type="date"
-            className="mt-1 w-full border rounded px-2 py-1.5"
-            value={dob}
-            onChange={(e) => setDob(e.target.value)}
-            required
-          />
+          <span className="text-sm">DOB</span>
+          <input type="date" className={field} value={dob} onChange={(e) => setDob(e.target.value)} required />
         </label>
-        <label className="block col-span-2">
-          <span className="text-sm text-slate-700">School</span>
+        <label className="block sm:col-span-2">
+          <span className="text-sm">School</span>
           <select
-            className="mt-1 w-full border rounded px-2 py-1.5"
+            className={field}
             value={schoolId}
             onChange={(e) => setSchoolId(Number(e.target.value))}
             required
@@ -222,11 +230,11 @@ function AddChildForm({
           </select>
         </label>
       </div>
-      {err && <p className="text-sm text-rose-600">{err}</p>}
+      {err && <p className="text-sm text-danger">{err}</p>}
       <button
         type="submit"
         disabled={busy}
-        className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white rounded px-3 py-2 text-sm"
+        className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-3 py-2 text-sm"
       >
         {busy ? 'Saving…' : 'Save child'}
       </button>
@@ -247,6 +255,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
     Promise.all([api.children(villageId), api.attendance(villageId, date)])
       .then(([c, a]) => {
         setChildren(c.children);
+        // Default: everyone present. Override with any existing marks.
         const byStudent: Record<number, boolean> = {};
         for (const child of c.children) byStudent[child.id] = true;
         for (const m of a.marks) byStudent[m.student_id] = m.present;
@@ -254,6 +263,19 @@ function AttendanceTab({ villageId }: { villageId: number }) {
       })
       .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
   }, [villageId, date]);
+
+  function setAll(present: boolean) {
+    if (!children) return;
+    const next: Record<number, boolean> = {};
+    for (const c of children) next[c.id] = present;
+    setMarks(next);
+    setSaved(false);
+  }
+
+  function toggleOne(id: number, present: boolean) {
+    setMarks((prev) => ({ ...prev, [id]: present }));
+    setSaved(false);
+  }
 
   async function submit() {
     if (!children) return;
@@ -273,38 +295,75 @@ function AttendanceTab({ villageId }: { villageId: number }) {
     }
   }
 
-  if (err) return <p className="text-rose-600">{err}</p>;
-  if (!children) return <p className="text-slate-500">Loading…</p>;
+  const counts = useMemo(() => {
+    if (!children) return { present: 0, total: 0 };
+    let present = 0;
+    for (const c of children) if (marks[c.id]) present += 1;
+    return { present, total: children.length };
+  }, [children, marks]);
+
+  if (err) return <p className="text-danger">{err}</p>;
+  if (!children) return <p className="text-muted-fg">Loading…</p>;
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold">
-        Attendance for {new Date(date * 1000).toISOString().slice(0, 10)}
-      </h2>
-      <ul className="bg-white rounded shadow divide-y">
-        {children.map((c) => (
-          <li key={c.id} className="p-3 flex items-center justify-between">
-            <span>{c.first_name} {c.last_name}</span>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={marks[c.id] ?? false}
-                onChange={(e) => setMarks({ ...marks, [c.id]: e.target.checked })}
-              />
-              Present
-            </label>
-          </li>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">
+            {new Date(date * 1000).toISOString().slice(0, 10)}
+          </h2>
+          <p className="text-sm text-muted-fg">
+            {counts.present} present · {counts.total - counts.present} absent ·{' '}
+            {counts.total} total
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAll(true)}
+            className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
+          >
+            Mark all present
+          </button>
+          <button
+            onClick={() => setAll(false)}
+            className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
+          >
+            Mark all absent
+          </button>
+        </div>
+      </div>
+      <ul className="bg-card border border-border rounded divide-y divide-border">
+        {children.map((c) => {
+          const present = marks[c.id] ?? false;
+          return (
+            <li key={c.id}>
+              <label className="p-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-card-hover">
+                <span className="font-medium">{c.first_name} {c.last_name}</span>
+                <span className="inline-flex items-center gap-2 text-sm">
+                  <span className={present ? 'text-primary' : 'text-muted-fg'}>
+                    {present ? 'Present' : 'Absent'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={present}
+                    onChange={(e) => toggleOne(c.id, e.target.checked)}
+                    className="w-5 h-5 accent-[hsl(var(--primary))]"
+                  />
+                </span>
+              </label>
+            </li>
+          );
+        })}
       </ul>
       <div className="flex items-center gap-3">
         <button
           onClick={submit}
           disabled={busy || children.length === 0}
-          className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white rounded px-3 py-2 text-sm"
+          className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm"
         >
           {busy ? 'Saving…' : 'Save attendance'}
         </button>
-        {saved && <span className="text-emerald-700 text-sm">Saved.</span>}
+        {saved && <span className="text-primary text-sm">Saved.</span>}
       </div>
     </div>
   );

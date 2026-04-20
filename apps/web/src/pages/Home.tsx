@@ -13,24 +13,24 @@ export function Home() {
       .catch((e) => setError(e instanceof Error ? e.message : 'failed'));
   }, []);
 
-  if (error) return <p className="text-rose-600">{error}</p>;
-  if (!villages) return <p className="text-slate-500">Loading…</p>;
+  if (error) return <p className="text-danger">{error}</p>;
+  if (!villages) return <p className="text-muted-fg">Loading…</p>;
 
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Your villages</h2>
       {villages.length === 0 ? (
-        <p className="text-slate-500">No villages in scope.</p>
+        <p className="text-muted-fg">No villages in scope.</p>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {villages.map((v) => (
             <li key={v.id}>
               <Link
                 to={`/village/${v.id}`}
-                className="block bg-white rounded shadow p-4 hover:bg-emerald-50"
+                className="block bg-card hover:bg-card-hover border border-border rounded-lg p-4 transition-colors"
               >
                 <div className="font-medium">{v.name}</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-muted-fg">
                   {v.cluster_name} · {v.code}
                 </div>
               </Link>
