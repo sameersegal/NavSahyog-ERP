@@ -123,6 +123,13 @@ dependent section in the same commit:
 - When reviewing a PR, use `mcp__github__pull_request_read`
   rather than fetching the branch locally unless you need to
   run something. Comment sparingly.
+- **Embed UI screenshots inline in the PR body** for any change
+  with a visible surface (new page, layout shift, dashboard view,
+  non-trivial CSS). Commit the PNGs under a sensible path (e.g.
+  `mvp/screenshots/<level>/`) and reference them with raw GitHub
+  URLs — `https://github.com/<owner>/<repo>/blob/<branch>/<path>?raw=true`
+  — so they render in the PR description. Skip for API-only or
+  docs-only changes.
 
 ### Bespoke-simplification principle
 Before adding any requirement or writing any code, ask: *would

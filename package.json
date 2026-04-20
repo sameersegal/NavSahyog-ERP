@@ -1,0 +1,22 @@
+{
+  "name": "navsahyog-erp",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter @navsahyog/api dev",
+    "dev:web": "pnpm --filter @navsahyog/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:apply": "pnpm --filter @navsahyog/api db:apply",
+    "db:seed": "pnpm --filter @navsahyog/api db:seed",
+    "db:reset": "pnpm --filter @navsahyog/api db:reset"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
