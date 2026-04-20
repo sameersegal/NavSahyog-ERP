@@ -28,7 +28,8 @@ is the canonical reference.
   Timestamps are Unix epoch seconds.
 - **Soft delete**: a non-null `deleted_at` hides the row from
   normal queries. Hard delete is reserved for GDPR-style erasure
-  (Super Admin path) and for retention cron (media only).
+  (Super Admin path). Retention deletes happen out-of-system
+  (see §9.3, decisions.md D1/D4).
 - **Scope columns**: tables that need scope filtering carry the
   lowest-applicable geo FK (`village_id`, `cluster_id`, …). Higher
   levels are derived by join.
@@ -61,7 +62,7 @@ is the canonical reference.
 | `notification` | **Keep**, renamed `notice`. |
 | `referencelink` | **Keep**, renamed `reference_link`. |
 | `quickPhoneLinks`, `quickVideoLinks` | **Merge** into `quick_link` (kind = `phone` / `video`). |
-| `legacy_settings` | **Keep**, renamed `app_settings` (single row). |
+| `legacy_settings` | **Drop.** Retention out-of-system; other knobs are Worker env vars (decisions.md D1). |
 | *(new)* | `audit_log` — append-only (§9.4). |
 
 ### 4.3 Table catalogue
@@ -217,7 +218,7 @@ notes. Replaces four vendor tables.
 Indexes: `(village_id, captured_at)`, `tag_event_id`,
 `(kind, deleted_at)`.
 
-#### 4.3.8 Content & settings
+#### 4.3.8 Content
 
 **`notice`** — formerly `notification`.
 - `id`, `uuid`, `title`, `body`,
@@ -240,15 +241,10 @@ Indexes: `(village_id, captured_at)`, `tag_event_id`,
 - `id`, `body TEXT NOT NULL`, *audit*. Super Admin writes a new
   row; clients fetch the latest non-deleted row.
 
-**`app_settings`** — single-row config (renamed from the vendor's
-`legacy_settings`).
-- `id INTEGER PRIMARY KEY CHECK (id = 1)`
-- `media_retention_days INTEGER NOT NULL DEFAULT 180`
-- `session_ttl_minutes INTEGER NOT NULL DEFAULT 720`
-- `otp_ttl_minutes INTEGER NOT NULL DEFAULT 10`
-- `otp_max_per_hour INTEGER NOT NULL DEFAULT 3`
-- `default_language TEXT NOT NULL DEFAULT 'en'`
-- *audit columns*
+**No `app_settings` table.** The vendor's `legacy_settings` has no
+bespoke equivalent. Runtime tunables (session TTL, OTP TTL, default
+language) live in Worker env vars; retention timelines are
+handled out-of-system (see §9.3, decisions.md D1/D4).
 
 #### 4.3.9 Audit
 
@@ -259,8 +255,7 @@ Indexes: `(village_id, captured_at)`, `tag_event_id`,
   failed-login attempts where identity is unverified.
 - `action TEXT NOT NULL` — e.g. `login.success`, `login.fail`,
   `login.locked`, `password.change`, `otp.request`, `otp.verify`,
-  `user.create`, `user.role_change`, `settings.update`,
-  `export.dashboard`.
+  `user.create`, `user.role_change`, `export.dashboard`.
 - `target_type TEXT`, `target_id INTEGER` — nullable; the affected
   row when applicable.
 - `metadata_json TEXT` — small JSON blob for action-specific
@@ -270,12 +265,13 @@ Indexes: `(village_id, captured_at)`, `tag_event_id`,
 
 ### 4.4 Summary
 
-- **22 tables** in the bespoke schema (vendor had 35).
+- **21 tables** in the bespoke schema (vendor had 35).
 - Removed: `ngo_features`, `role_permission`, `teacher_roles`,
   `teacher_roles_assign`, `country`, `territory`, `taluk`,
   `MembershipType`, `village_pgm_status`, `student_pgm_status`,
   `teacher_pgm_status`, `eventsNew`, `attendanceOffline`,
-  `event_image_offline`, `event_video_offline`.
+  `event_image_offline`, `event_video_offline`, `legacy_settings`
+  (no bespoke equivalent — decisions.md D1).
 - Merged: `teacher` + `login_user_data` → `user`;
   `event_image` + `event_video` (+ offline pairs) → `media`;
   `quickPhoneLinks` + `quickVideoLinks` → `quick_link`.

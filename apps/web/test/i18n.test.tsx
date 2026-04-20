@@ -37,7 +37,7 @@ describe('i18n', () => {
         <Probe keyName="auth.login.hint" params={{ creds: 'alice / pw' }} />
       </LanguageProvider>,
     );
-    expect(screen.getByTestId('out')).toHaveTextContent('Lab build — L1. Try alice / pw.');
+    expect(screen.getByTestId('out')).toHaveTextContent('Lab build. Try alice / pw.');
   });
 
   it('selects the correct plural form', () => {

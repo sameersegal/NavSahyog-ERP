@@ -2,7 +2,18 @@ import { env, SELF } from 'cloudflare:test';
 // `?raw` inlines the file as a string at test-bundle time. We can't
 // readFileSync at runtime because the worker runtime doesn't expose
 // the host filesystem.
-import schemaSql from '../../../db/schema.sql?raw';
+//
+// import.meta.glob returns every migration file sorted by name so new
+// migrations (0002_*.sql, 0003_*.sql, …) slot in without touching
+// this file. Production schema is applied by `wrangler d1 migrations
+// apply` against the same folder.
+const migrationModules = import.meta.glob<string>(
+  '../../../db/migrations/*.sql',
+  { query: '?raw', import: 'default', eager: true },
+);
+const migrations: string[] = Object.keys(migrationModules)
+  .sort()
+  .map((path) => migrationModules[path] as unknown as string);
 import seedSql from '../../../db/seed.sql?raw';
 
 // D1.exec() expects one statement per line; our SQL is formatted
@@ -17,8 +28,10 @@ function statementsFrom(raw: string): string[] {
 }
 
 export async function applySchema(db: D1Database): Promise<void> {
-  for (const stmt of statementsFrom(schemaSql)) {
-    await db.prepare(stmt).run();
+  for (const migration of migrations) {
+    for (const stmt of statementsFrom(migration)) {
+      await db.prepare(stmt).run();
+    }
   }
 }
 

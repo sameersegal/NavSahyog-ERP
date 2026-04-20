@@ -20,19 +20,23 @@
 - Alternate contact requires a relationship label.
 
 ### 9.3 Data retention
-- Media retention is configurable via `app_settings.media_retention_days`
-  (§4.3.8). A Worker cron deletes R2 objects past the threshold and
-  marks the DB row `deleted_at`.
-- Student records are retained for the duration of the program plus
-  a configurable grace period (default: 2 years after graduation).
-- Audit-log retention: 7 years (confirm with stakeholder).
+- **Out-of-system.** Retention timelines for student records and
+  media are managed by ops, not by this application. The app does
+  not run a retention cron and does not store a retention-policy
+  configuration. See decisions.md D1/D4.
+- Implications: graduated students stay queryable via the
+  graduated-at column (`graduated_at IS NOT NULL`); hard deletion is
+  an ops action against D1, not a scheduled Worker. Media R2
+  objects are lifecycled on the bucket itself.
+- Audit-log retention stays an open ops question (§11.12) — it's a
+  policy, not an app setting.
 
 ### 9.4 Audit trail
 - Every write stamps `created_by/at`, `updated_by/at`,
   `deleted_by/at` (soft delete).
 - Append-only `audit_log` table records: login, password change,
-  OTP issue/verify, failed login, user create / role change,
-  retention-setting change, data export.
+  OTP issue/verify, failed login, user create / role change, data
+  export.
 - Readable only by Super Admin.
 
 ### 9.5 Security baseline

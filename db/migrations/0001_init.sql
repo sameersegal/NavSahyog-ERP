@@ -1,5 +1,12 @@
--- L1 schema. Subset of requirements §4.
--- Simplifications vs §4:
+-- 0001_init — baseline schema.
+--
+-- Applied via `wrangler d1 migrations apply` (see apps/api/package.json
+-- `db:migrate`). This file is the source of truth for the initial
+-- schema; subsequent structural changes land as 0002_*.sql, 0003_*.sql,
+-- etc. Never edit this file after it has been applied to any database
+-- you care about — write a new migration instead.
+--
+-- Simplifications vs requirements §4:
 --   * No uuid columns yet (L2+).
 --   * Plain-text passwords (L5 replaces with Argon2id).
 --   * No soft-delete on most tables; only student.graduated_at exists.
@@ -11,10 +18,14 @@
 --     student.dob, student.joined_at, student.graduated_at,
 --     attendance_session.date.
 --   * Instants (TTLs, audit timestamps) use INTEGER UTC epoch
---     seconds. Examples: created_at, expires_at, app_settings.updated_at.
+--     seconds. Examples: created_at, expires_at.
 --   * The split exists so a "date" column never carries a hidden
 --     timezone offset. See apps/api/src/lib/time.ts for the single
 --     "now → today's IST date" boundary.
+--
+-- Retention (student records, media): handled out-of-system by ops,
+-- not by this app. No app_settings table, no retention cron. See
+-- requirements/decisions.md D1/D4 (2026-04-20).
 
 PRAGMA foreign_keys = ON;
 
@@ -130,13 +141,3 @@ CREATE TABLE attendance_mark (
 );
 
 CREATE INDEX idx_attendance_mark_session ON attendance_mark(session_id);
-
--- §4.3.8 app_settings. Created empty in L1 so future configurables
--- (session TTL, retention years, default language, etc.) have a
--- home without forcing a schema change at the time of need.
--- Key/value to start; typed columns can be added per setting later.
-CREATE TABLE app_settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
-);

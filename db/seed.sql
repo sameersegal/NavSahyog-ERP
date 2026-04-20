@@ -33,14 +33,24 @@ INSERT INTO school (id, village_id, name) VALUES
   (3, 3, 'Chandragiri Primary School');
 
 -- Users. Passwords are plain-text per L1 (see mvp/level-1.md).
--- Convention: <role>-<village-or-cluster>, password "password".
+-- Convention: <role>-<scope>, password "password".
+--
+-- IDs 1–6 are the L1 write-tier accounts (kept stable so
+-- student.created_by = 6 foreign keys from the L1 seed still
+-- resolve). IDs 7–10 are the L2 read-only geo-admin tiers. Each
+-- anchors to the one seeded row at its scope level (Bidar district /
+-- South Karnataka region / Karnataka state / South Zone).
 INSERT INTO user (id, user_id, full_name, password, role, scope_level, scope_id, created_at) VALUES
-  (1, 'vc-anandpur',    'VC Anandpur',    'password', 'vc',            'village', 1, unixepoch()),
-  (2, 'vc-belur',       'VC Belur',       'password', 'vc',            'village', 2, unixepoch()),
-  (3, 'vc-chandragiri', 'VC Chandragiri', 'password', 'vc',            'village', 3, unixepoch()),
-  (4, 'af-bid01',       'AF Bidar 01',    'password', 'af',            'cluster', 1, unixepoch()),
-  (5, 'cluster-bid01',  'Cluster Admin',  'password', 'cluster_admin', 'cluster', 1, unixepoch()),
-  (6, 'super',          'Super Admin',    'password', 'super_admin',   'global',  NULL, unixepoch());
+  (1, 'vc-anandpur',    'VC Anandpur',     'password', 'vc',             'village',  1,    unixepoch()),
+  (2, 'vc-belur',       'VC Belur',        'password', 'vc',             'village',  2,    unixepoch()),
+  (3, 'vc-chandragiri', 'VC Chandragiri',  'password', 'vc',             'village',  3,    unixepoch()),
+  (4, 'af-bid01',       'AF Bidar 01',     'password', 'af',             'cluster',  1,    unixepoch()),
+  (5, 'cluster-bid01',  'Cluster Admin',   'password', 'cluster_admin',  'cluster',  1,    unixepoch()),
+  (6, 'super',          'Super Admin',     'password', 'super_admin',    'global',   NULL, unixepoch()),
+  (7, 'district-bid',   'District Admin',  'password', 'district_admin', 'district', 1,    unixepoch()),
+  (8, 'region-sk',      'Region Admin',    'password', 'region_admin',   'region',   1,    unixepoch()),
+  (9, 'state-ka',       'State Admin',     'password', 'state_admin',    'state',    1,    unixepoch()),
+  (10,'zone-sz',        'Zone Admin',      'password', 'zone_admin',     'zone',     1,    unixepoch());
 
 -- ~20 students spread across the 3 villages. Ages 6-12 as of 2026.
 -- DOB and joined_at are IST calendar dates ('YYYY-MM-DD').

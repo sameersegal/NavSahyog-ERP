@@ -12,8 +12,8 @@ Derived from the onboarding doc and the decompiled app.
 | Village Coordinator (VC, a.k.a. Teacher) | One village | Daily attendance, achievements, capture media |
 | Area Facilitator (AF) | Multiple villages in a cluster | VC actions + pick village on media upload, manage students |
 | Cluster Admin | A cluster | AF actions + master data within their cluster |
-| District / Region / State / Zone Admin | Respective geo level | Read-only drill-down dashboards + Excel export |
-| Super Admin | Global | User management, all master CRUD, retention config |
+| District / Region / State / Zone Admin | Respective geo level | Read-only drill-down dashboards + CSV export |
+| Super Admin | Global | User management, all master CRUD |
 
 ### 2.2 Geo scope (simplified hierarchy)
 ```
@@ -38,10 +38,9 @@ within the user's effective scope; `—` = denied.
 | Add achievement | ✔ | ✔ | ✔ | — | ✔ |
 | Drill-down dashboard | own village | cluster | cluster | own level | global |
 | Consolidated dashboard | — | cluster | cluster | own level | global |
-| Excel export | — | ✔ | ✔ | ✔ | ✔ |
+| CSV export | — | ✔ | ✔ | ✔ | ✔ |
 | Manage users | — | — | ✔ | ✔ | ✔ |
 | Master CRUD (villages, schools, events…) | — | — | ✔ | ✔ | ✔ |
-| Retention / app settings | — | — | — | — | ✔ |
 
 **Acceptance:** every write endpoint enforces scope server-side from
 the session claim. A VC cannot mark attendance for another village by

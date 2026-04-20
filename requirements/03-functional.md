@@ -182,8 +182,9 @@ Before upload, each item must be tagged as exactly one of:
   metric).
 - Picking a metric opens India → Zone → State → Region → District →
   Cluster → Village drill (§2.2).
-- Each level renders a table with the metric value and an **Excel
+- Each level renders a table with the metric value and a **CSV
   download** button; tapping a row drills to the next level.
+  (`.xlsx` is out; see decisions.md D2.)
 - **Acceptance**: the leaf (village) level shows per-student detail
   for Children; per-session rows for Attendance; per-award rows for
   Achievements.
@@ -198,7 +199,7 @@ Before upload, each item must be tagged as exactly one of:
 - **View More** drills to per-village rows within the chosen cluster.
 
 #### 3.6.3 Acceptance
-- Excel export mirrors the on-screen table exactly (same columns,
+- CSV export mirrors the on-screen table exactly (same columns,
   same order, same filter).
 - A District+ admin cannot see another district's data (enforced
   server-side).
@@ -269,7 +270,8 @@ Parity with the vendor app; keep them minimal.
 #### 3.8.7 Master Creations (Super Admin only)
 - Consolidated CRUD for each master (villages, schools, events,
   activities, qualifications, roles, reference links, quick links,
-  notices, users, retention settings). Not a generic table editor —
-  one dedicated screen per master, with only the fields the bespoke
-  app actually uses.
+  notices, users). Not a generic table editor — one dedicated
+  screen per master, with only the fields the bespoke app actually
+  uses. No "app settings" screen — retention is out-of-system; other
+  tunables are Worker env vars (decisions.md D1).
 

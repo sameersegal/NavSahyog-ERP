@@ -14,13 +14,18 @@ ALLOWED_ORIGINS = "http://localhost:5173"
 port = 8787
 
 # `database_id` is intentionally a placeholder for L1. Wrangler dev
-# uses the local D1 via `--local` (see `db:apply`/`db:seed` scripts);
-# the ID is only consulted when deploying. Replace before any
+# uses the local D1 via `--local` (see `db:migrate`/`db:seed`); the
+# ID is only consulted when deploying. Replace before any
 # `wrangler deploy` lands.
+#
+# `migrations_dir` is relative to wrangler.toml. `wrangler d1
+# migrations apply navsahyog_db --local` replays pending files from
+# that folder (see apps/api/package.json `db:migrate`).
 [[d1_databases]]
 binding = "DB"
 database_name = "navsahyog_db"
 database_id = "REPLACE_BEFORE_DEPLOY"
+migrations_dir = "../../db/migrations"
 
 # Production overrides. Bind real ID + real origin list before
 # running `wrangler deploy --env production`.
@@ -34,3 +39,4 @@ ALLOWED_ORIGINS = ""
 binding = "DB"
 database_name = "navsahyog_db"
 database_id = "REPLACE_BEFORE_DEPLOY"
+migrations_dir = "../../db/migrations"

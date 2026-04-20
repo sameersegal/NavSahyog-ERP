@@ -1,12 +1,20 @@
-// Shapes that are part of the API contract (Role, Capability,
-// User) come from @navsahyog/shared — same source the server reads.
-// Shapes specific to a response body (Village, Child, etc.) live
+// Shapes that are part of the API contract (Role, Capability, User,
+// Student) come from @navsahyog/shared — same source the server reads.
+// Shapes specific to a response body (Village, School, etc.) live
 // here until we have a reason to share them.
 
-export type { AuthUser as User, Capability, Role, ScopeLevel } from '@navsahyog/shared';
-export { can } from '@navsahyog/shared';
+export type {
+  AuthUser as User,
+  Capability,
+  Role,
+  ScopeLevel,
+  Student as Child,
+  Gender,
+  GraduationReason,
+} from '@navsahyog/shared';
+export { can, isIndianPhone, isIsoDate } from '@navsahyog/shared';
 
-import type { AuthUser } from '@navsahyog/shared';
+import type { AuthUser, GraduationReason, Student } from '@navsahyog/shared';
 
 export type Village = {
   id: number;
@@ -18,19 +26,41 @@ export type Village = {
 
 export type School = { id: number; village_id: number; name: string };
 
-export type Child = {
-  id: number;
+export type AttendanceMark = { student_id: number; present: boolean };
+
+// Wire shape accepted by POST / PATCH /api/children for the
+// parent + alt-contact block. Null omits; server treats all fields
+// as nullable. Booleans are coerced to 0/1 server-side.
+export type ChildProfile = {
+  father_name?: string | null;
+  father_phone?: string | null;
+  father_has_smartphone?: boolean | null;
+  mother_name?: string | null;
+  mother_phone?: string | null;
+  mother_has_smartphone?: boolean | null;
+  alt_contact_name?: string | null;
+  alt_contact_phone?: string | null;
+  alt_contact_relationship?: string | null;
+};
+
+export type ChildCoreCreate = {
   village_id: number;
   school_id: number;
   first_name: string;
   last_name: string;
   gender: 'm' | 'f' | 'o';
-  dob: string;            // IST 'YYYY-MM-DD'
-  joined_at: string;      // IST 'YYYY-MM-DD'
-  graduated_at: string | null;
+  dob: string;             // IST 'YYYY-MM-DD'
+  joined_at?: string;      // IST 'YYYY-MM-DD'; server defaults to today
 };
 
-export type AttendanceMark = { student_id: number; present: boolean };
+export type ChildCorePatch = {
+  school_id?: number;
+  first_name?: string;
+  last_name?: string;
+  gender?: 'm' | 'f' | 'o';
+  dob?: string;
+  joined_at?: string;
+};
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -39,8 +69,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `HTTP ${res.status}`);
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: { code?: string; message?: string };
+    };
+    throw new Error(
+      body.error?.message ?? body.error?.code ?? `HTTP ${res.status}`,
+    );
   }
   return (await res.json()) as T;
 }
@@ -56,17 +90,27 @@ export const api = {
   villages: () => req<{ villages: Village[] }>('/api/villages'),
   schools: (villageId: number) =>
     req<{ schools: School[] }>(`/api/schools?village_id=${villageId}`),
-  children: (villageId: number) =>
-    req<{ children: Child[] }>(`/api/children?village_id=${villageId}`),
-  addChild: (body: {
-    village_id: number;
-    school_id: number;
-    first_name: string;
-    last_name: string;
-    gender: 'm' | 'f' | 'o';
-    dob: string;          // IST 'YYYY-MM-DD'
-  }) =>
+  children: (villageId: number, opts?: { includeGraduated?: boolean }) =>
+    req<{ children: Student[] }>(
+      `/api/children?village_id=${villageId}${opts?.includeGraduated ? '&include_graduated=1' : ''}`,
+    ),
+  child: (id: number) =>
+    req<{ child: Student }>(`/api/children/${id}`),
+  addChild: (body: ChildCoreCreate & ChildProfile) =>
     req<{ id: number }>('/api/children', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateChild: (id: number, body: ChildCorePatch & ChildProfile) =>
+    req<{ child: Student }>(`/api/children/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  graduateChild: (
+    id: number,
+    body: { graduated_at?: string; graduation_reason?: GraduationReason } = {},
+  ) =>
+    req<{ child: Student }>(`/api/children/${id}/graduate`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

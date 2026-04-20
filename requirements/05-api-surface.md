@@ -44,7 +44,7 @@ fetches.
 |---|---|---|
 | `POST` | `/auth/login` | Body `{ user_id, password }`. Returns session token + user profile. Increments `failed_login_count` on failure; locks account at 3. |
 | `POST` | `/auth/change-password` | Authenticated. Body `{ old_password, new_password }`. Rejects re-entering `TEST*1234` (§3.1.2). Clears all other sessions. |
-| `POST` | `/auth/otp/request` | Body `{ user_id, channel: 'email' \| 'sms' }`. Rate-limited per `app_settings.otp_max_per_hour`. |
+| `POST` | `/auth/otp/request` | Body `{ user_id, channel: 'email' \| 'sms' }`. Rate-limited per `OTP_MAX_PER_HOUR` Worker env var. |
 | `POST` | `/auth/otp/verify` | Body `{ user_id, code }`. Returns a short-lived `password_reset_token`. |
 | `POST` | `/auth/password-reset` | Body `{ password_reset_token, new_password }`. Unlocks and clears all sessions. |
 | `POST` | `/auth/logout` | Deletes the KV session. |
@@ -155,16 +155,16 @@ transactionally.
 
 ### 5.11 Dashboards — `/api/dashboard/*`
 
-Read-only, scope-filtered. Excel generation runs in the Worker and
-streams an `.xlsx` response.
+Read-only, scope-filtered. Export generation runs in the Worker and
+streams a `text/csv` response (decisions.md D2 — CSV replaces XLSX).
 
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/api/dashboard/drilldown?metric=&level=&id=` | Metric ∈ `vc`, `af`, `children`, `attendance`, `achievements`. Returns rows for the next level below `(level, id)`. |
-| `GET` | `/api/dashboard/drilldown.xlsx?…` | Same filters; XLSX download. |
+| `GET` | `/api/dashboard/drilldown.csv?…` | Same filters; CSV download. |
 | `GET` | `/api/dashboard/consolidated?cluster=&date=` | Single-day view. |
 | `GET` | `/api/dashboard/consolidated?cluster=&from=&to=` | Range view. |
-| `GET` | `/api/dashboard/consolidated.xlsx?…` | XLSX. |
+| `GET` | `/api/dashboard/consolidated.csv?…` | CSV. |
 
 Replaces the vendor's `getAttendanceStatusby{Level}`,
 `ListDatewise…`, `ListRangewise…`, `ListClusterWiseStarOfMonth`,
@@ -181,12 +181,11 @@ Replaces the vendor's `getAttendanceStatusby{Level}`,
 | `GET` | `/api/about` | Current version. |
 | `POST` | `/api/about` | Super Admin — creates a new version. |
 
-### 5.13 Settings — `/api/settings`
+### 5.13 Settings
 
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/api/settings` | Any authenticated user (for `default_language`, `media_retention_days` advisories on client). |
-| `PATCH` | `/api/settings` | Super Admin. Writes `audit_log.settings.update` with before/after. |
+No `/api/settings` endpoint. Runtime tunables live in Worker env
+vars; retention is out-of-system. Section number retained for
+stable cross-references.
 
 ### 5.14 Sync / outbox — `/api/sync/*`
 
@@ -205,7 +204,7 @@ Supports the offline outbox (§6). Full semantics in Part 4.
 
 ### 5.16 Summary
 
-Route count: **≈ 32** top-level paths (many supporting multiple
+Route count: **≈ 30** top-level paths (many supporting multiple
 verbs). The vendor's 286 `operation:` codes collapse into these
 because:
 

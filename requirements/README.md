@@ -35,6 +35,7 @@ preserved in prose so inline cross-references still make sense.
 | Doc | Purpose |
 |---|---|
 | [`review-findings-v1.md`](./review-findings-v1.md) | First-pass critical review. Blockers, gaps, over/under-specification, and factual issues flagged for the team meeting. Resolve these before implementation begins. |
+| [`decisions.md`](./decisions.md) | Durable record of decisions that have amended the spec. Each row lists what changed and which spec sections moved with it. |
 
 ## Consolidated open items
 

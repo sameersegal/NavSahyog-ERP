@@ -146,19 +146,21 @@ straightforward copies (`name → name`) are omitted.
 - EXIF GPS copied into `media.latitude` / `media.longitude`
   (and preserved in the file itself during R2 upload).
 - Video duration / size metadata copied where present.
-- Retention: migrated media inherit
-  `app_settings.media_retention_days`. Super Admin can
-  `retained_until`-pin showcase media during P7 before the first
-  sweep.
+- Retention: out-of-system (§7.7, decisions.md D1/D4). Ops handles
+  R2 lifecycle directly — no `retained_until` pin, no retention
+  cron. Showcase / legal-hold preservation is an operational
+  convention on the bucket.
 
 **Content** — `aboutus`, `notification`, `referencelink`,
-`quickPhoneLinks`, `quickVideoLinks`, `legacy_settings`:
+`quickPhoneLinks`, `quickVideoLinks`:
 
 - Drop `CorpId`; filter to NavSahyog.
 - `quickPhoneLinks` + `quickVideoLinks` → `quick_link` with
   `kind`.
-- `legacy_settings` → `app_settings` (single row); missing fields
-  default per §4.3.8.
+- `legacy_settings`: **not migrated** (decisions.md D1). Reviewed
+  once as a reference for the bespoke app's Worker env-var
+  defaults (session TTL, OTP TTL, default language); the values
+  themselves are baked into code/env, not loaded from a DB row.
 
 **Not migrated** (vendor artefacts without a target table):
 

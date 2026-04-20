@@ -34,7 +34,7 @@ role / scope model on the smallest possible feature surface.
   - `POST /api/attendance` — `{ village_id, student_marks: [{student_id, present}] }`.
   - `GET /api/attendance?village_id=…&date=…`.
 - **Drill-down dashboard (§3.6.1, 2 tiles).** Children + Attendance
-  only. Cluster → village drill. No Excel export.
+  only. Cluster → village drill. No CSV export.
 - **PWA shell (§11.2).** React + Vite on Cloudflare Pages. Install
   prompt out of scope.
 - **Themes (not in requirements).** Three themes shipped: `light`
@@ -60,7 +60,7 @@ role / scope model on the smallest possible feature surface.
   (§3.8.1–§3.8.5).
 - Offline mode, IndexedDB outbox (§3.7, §6).
 - Password hashing, lockout, OTP, forced change (§3.1.2–§3.1.4).
-- Excel export (§3.6.3).
+- CSV export (§3.6.3).
 - Audit log (§9.4).
 - Retention cron (§9.3).
 - Migration (§10).

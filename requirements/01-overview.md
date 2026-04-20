@@ -56,7 +56,7 @@ for every primitive.
 | API | Workers (TypeScript). |
 | Database | D1 (SQLite). |
 | Media | R2 with presigned multipart uploads. |
-| Async | Queues (offline-upload retry, retention sweep). |
+| Async | Queues (offline-upload retry, media derivation). |
 | Sessions / OTP | KV. |
 | Live counters (optional) | Durable Objects per cluster. |
 

@@ -90,14 +90,14 @@ against user enumeration.
 
 ### 8.4 Session & token TTLs
 
-| Token | Store | Default TTL | Configurable? |
+| Token | Store | Default TTL | Tuned via |
 |---|---|---|---|
-| Session token (`/auth/login`) | KV namespace `sessions` | `app_settings.session_ttl_minutes` (720 = 12 h) | Yes |
-| OTP code | KV namespace `otp` | `app_settings.otp_ttl_minutes` (10 min) | Yes |
-| `password_reset_token` (§5.2) | KV namespace `otp` | 5 min (not configurable) | No |
-| Presigned R2 URL (original) | R2 | 15 min | No |
-| Presigned R2 URL (thumbnail) | R2 | 60 min | No |
-| Idempotency replay | KV namespace `idem` | 24 h | No |
+| Session token (`/auth/login`) | KV namespace `sessions` | 720 min (12 h) | `SESSION_TTL_MINUTES` env var |
+| OTP code | KV namespace `otp` | 10 min | `OTP_TTL_MINUTES` env var |
+| `password_reset_token` (§5.2) | KV namespace `otp` | 5 min | constant |
+| Presigned R2 URL (original) | R2 | 15 min | constant |
+| Presigned R2 URL (thumbnail) | R2 | 60 min | constant |
+| Idempotency replay | KV namespace `idem` | 24 h | constant |
 
 Cookie attributes for session token:
 `HttpOnly; Secure; SameSite=Lax; Path=/; Domain=navsahyog.org`.
@@ -114,7 +114,7 @@ counters where fine-grained).
 |---|---|---|
 | `/auth/login` | 10 / min | per IP |
 | `/auth/login` (failure) | 10 / 5 min | per user_id |
-| `/auth/otp/request` | `app_settings.otp_max_per_hour` (3) | per user |
+| `/auth/otp/request` | `OTP_MAX_PER_HOUR` env var (default 3) | per user |
 | `/auth/password-reset` | 5 / hour | per user |
 | `/api/sync/outbox` | 60 / min | per session |
 | `/api/media/presign` | 120 / min | per session |
@@ -147,7 +147,7 @@ Soft delete (`deleted_at` + `deleted_by`, §4.1) applies to:
   `region`, `state`, `zone`.
 - `event`, `qualification`, `achievement`,
   `attendance_session`, `notice`, `reference_link`, `quick_link`.
-- `media` (original deleted by retention cron — see §7.7).
+- `media` (row soft-deleted on user action — see §7.7; R2 object lifecycle is out-of-system).
 
 Never soft-deleted (hard delete only):
 
@@ -187,7 +187,6 @@ can reverse a delete within 30 days by clearing `deleted_at`.
 - D1 query error rate > 0.5 % over 15 min.
 - Outbox drain failure rate > 10 % over 1 hour (from client
   `sync.report`, §6.11).
-- R2 cron retention sweep missing for > 36 h.
 
 ### 8.9 Reliability & backup
 
@@ -195,10 +194,10 @@ can reverse a delete within 30 days by clearing `deleted_at`.
   Worker also exports to R2 as `backups/d1/{yyyy-mm-dd}.sql.gz`
   with 1-year retention (Super Admin restore path; tested
   quarterly — see §10 dry-run).
-- **R2**: media bucket has versioning disabled (cost) but the
-  retention cron's delete is logged to `audit_log` with the
-  object key, so recovery within 24 h is possible from R2's
-  lifecycle-tombstone grace window.
+- **R2**: media bucket has versioning disabled (cost). Deletion is
+  an out-of-system ops action (§7.7); ops logs the delete manifest
+  externally so recovery within R2's lifecycle-tombstone grace
+  window stays possible.
 - **KV**: session / OTP / idempotency are ephemeral; no backup
   needed.
 - **RTO / RPO targets**: RTO 4 h, RPO 24 h. Higher frequencies

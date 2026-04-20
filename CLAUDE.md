@@ -105,7 +105,7 @@ dependent section in the same commit:
 | Schema column | §4 DDL · §5 request/response · §6 outbox body shape · §10 field mapping |
 | New endpoint | §5 · §6.4 (offline-enqueuable?) · §8.5 rate limits · §11.9 secrets if it calls an external service |
 | New workflow | §3 · capability matrix · scope rules · §6.1 offline scope |
-| Retention / settings | §4.3.8 `app_settings` · §7.7 · §9.3 · §11.3 cron |
+| Retention / runtime config | Out-of-system (decisions.md D1/D4). No `app_settings` table, no retention cron. §7.7 + §9.3 document the boundary; runtime tunables are Worker env vars. |
 | Non-functional target | §8.13 SLOs · §11.11 cost envelope |
 
 ### Git and PRs

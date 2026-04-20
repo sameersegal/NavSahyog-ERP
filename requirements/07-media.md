@@ -38,8 +38,8 @@ Rationale:
 | video | `video/mp4` (H.264 + AAC) | 200 MiB raw | Mandatory transcode on device to 720p / ≤ 2 Mbps if source > 50 MiB. |
 | audio | `audio/mp4` (AAC) or `audio/ogg` (Opus) | 16 MiB raw | Voice notes only; max duration 5 min (client-enforced). |
 
-The Worker rejects commits (§5.8) with a 413 when
-`bytes > app_settings.media_bytes_limit[kind]`; the client
+The Worker rejects commits (§5.8) with a 413 when `bytes` exceeds
+the per-kind cap above (constants in the `api` Worker); the client
 pre-validates to avoid wasted uploads.
 
 ### 7.3 Upload pipeline
@@ -124,18 +124,16 @@ ceiling. Cache purge on delete is best-effort.
 
 ### 7.7 Retention
 
-- The value lives in `app_settings.media_retention_days` (default
-  180).
-- A daily Worker cron (`media-retention`) sweeps R2 for objects
-  older than the threshold (using the `yyyy/mm/dd` prefix for
-  efficient listing), deletes them, and sets `deleted_at` on the
-  corresponding `media` rows.
-- Derived renditions are deleted together with the original.
-- Deletions are logged to `audit_log` as a single
-  `media.retention_sweep` event per day with a count.
-- A Super Admin can **pin** specific media (field
-  `media.retained_until`) to override the retention sweep — used
-  for legal holds and showcase media.
+Media retention is **out-of-system** (decisions.md D1/D4). The app
+neither runs a retention cron nor exposes a Super Admin
+"retained_until" pin. Operational lifecycle on R2 (age-based
+deletion, legal hold, showcase preservation) is managed by ops
+directly on the bucket, outside this application.
+
+The `media` row carries a `deleted_at` column for *soft-delete on
+user action* (§5.7 `DELETE /api/media/:uuid`). Hard delete of the
+R2 object and row at the end of the retention window is an
+operational task, not a scheduled Worker.
 
 ### 7.8 Acceptance criteria
 
@@ -160,7 +158,4 @@ ceiling. Cache purge on delete is best-effort.
       transformation) vs in-Worker `wasm-vips` (free, CPU time).
 - [ ] Confirm video max length — 5 min is a guess; longer films
       may need chunked uploads per scene.
-- [ ] Decide retention default: 180 days matches the vendor's
-      default; NavSahyog may want longer for legal/showcase archives
-      (consider the `retained_until` pin in §7.7 as the escape hatch).
 
