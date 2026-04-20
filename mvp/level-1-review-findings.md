@@ -12,7 +12,7 @@ one-line fix.
 This doc is **not** part of the spec — it's a working list. As each
 item lands, mark it `fixed in <commit/PR>`.
 
-**Status:** B1, B2, B3, B4, H3, H4 (partial — CI workflow only),
+**Status:** B1, B2, B3, B4, H3, H4 (CI + tests — linter still open),
 H5, H6, H7, M1, M2, M3, M4, M5 are fixed on
 `claude/review-mvp-foundation-OGA8L`. H1 (PWA), H2 (migrations),
 M6 (scope_id FK), and the LOW items remain open and are tagged
@@ -88,7 +88,7 @@ inline.
   HTTP in production.
 - **Fix.** Drive from a Worker var (`ENVIRONMENT === 'production'`).
 
-### H4 — No CI, no linter, no tests *(partial — CI workflow added)*
+### H4 — No CI, no linter, no tests *(CI + tests landed; linter still open)*
 - No `.github/workflows/`, no eslint/prettier, no vitest.
 - PR-level verification ("typechecks pass, 186 KB bundle") is not
   enforced on future PRs.
