@@ -27,6 +27,9 @@ export type VillageActivity = {
   village_id: number;
   village_name: string;
   cluster_name: string;
+  // Name of the VC assigned to this village, if any. Null when no
+  // VC is assigned (valid state during onboarding or between rotations).
+  coordinator_name: string | null;
   children_count: number;
   // Sessions run in the last 7 days (today inclusive).
   sessions_this_week: number;
@@ -40,6 +43,28 @@ export type VillageActivity = {
   at_risk: boolean;
 };
 
+// A Star of the Month row rolled up for the home / dashboard card.
+// Current + previous month lists are computed separately so the card
+// can render "Last month" even when the current month has none yet.
+export type StarOfTheMonth = {
+  achievement_id: number;
+  student_id: number;
+  student_name: string;
+  village_id: number;
+  village_name: string;
+  date: string;                    // IST 'YYYY-MM-DD'
+  description: string;
+};
+
+// One data point on the rolling attendance trend. Three entries in
+// chronological order (prev-prev, prev, current) drive the home
+// trend line. `pct` is null when the month had zero marks.
+export type AttendanceTrendPoint = {
+  month: string;                   // 'YYYY-MM'
+  pct: number | null;
+  sessions: number;
+};
+
 // Drives the "at-risk" chip and the insight card. 4 days means "no
 // activity since the Monday session" when today is Friday — tight
 // enough to catch real gaps, loose enough to not flag weekends.
@@ -49,7 +74,8 @@ export type InsightsResponse = {
   // "India", "Bidar Cluster 1", etc. Drives the KPI strip heading.
   scope_label: string;
   // Scope-filtered counts: children, villages in scope, attendance %
-  // this week, achievements this month. Empty list for users with
+  // this week, images uploaded this month, videos uploaded this month,
+  // achievements this month, at-risk count. Empty list for users with
   // no villages in scope (shouldn't happen outside test fixtures).
   kpis: InsightKpi[];
   // Up to 5 villages with the best attendance % this week. Empty
@@ -61,6 +87,14 @@ export type InsightsResponse = {
   // Every village in scope, ordered alphabetically. Powers the home
   // village grid (replaces the old /api/villages call there).
   all_villages: VillageActivity[];
+  // Rolling 3-month attendance trend for the whole scope. Ordered
+  // oldest → newest, always exactly 3 entries (missing months return
+  // `{ month, pct: null, sessions: 0 }`).
+  attendance_trend: AttendanceTrendPoint[];
+  // Stars of the Month — current and previous calendar months.
+  // Empty arrays when the month has no SoMs yet.
+  stars_current_month: StarOfTheMonth[];
+  stars_prev_month: StarOfTheMonth[];
 };
 
 export type StreakResponse = {

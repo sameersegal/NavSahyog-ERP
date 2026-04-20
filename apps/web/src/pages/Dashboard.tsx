@@ -252,39 +252,18 @@ export function Dashboard() {
 }
 
 function InsightRail({ insights }: { insights: InsightsResponse }) {
-  const { t } = useI18n();
   const withCards =
     insights.at_risk_villages.length > 0 || insights.top_villages.length > 1;
+  const starsAvailable =
+    insights.stars_current_month.length > 0 ||
+    insights.stars_prev_month.length > 0;
+  const trendAvailable = insights.attendance_trend.some((p) => p.pct !== null);
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {insights.kpis.map((k) => {
-          const isPct = k.label === 'attendance_week' || k.label === 'attendance_month';
-          const trendColor =
-            k.trend === 'up' ? 'text-primary'
-            : k.trend === 'down' ? 'text-danger'
-            : 'text-muted-fg';
-          const arrow =
-            k.trend === 'up' ? '▲'
-            : k.trend === 'down' ? '▼'
-            : k.trend === 'flat' ? '•' : null;
-          return (
-            <div key={k.label} className="bg-card border border-border rounded-lg p-3 flex flex-col gap-0.5">
-              <div className="text-xs text-muted-fg uppercase tracking-wide">
-                {t(`home.kpi.${k.label}`)}
-              </div>
-              <div className="text-xl font-semibold">
-                {k.value}{isPct ? '%' : ''}
-              </div>
-              {k.delta !== null && arrow && (
-                <div className={`text-xs ${trendColor}`}>
-                  {arrow} {k.delta > 0 ? '+' : ''}{k.delta}{isPct ? 'pp' : ''}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </section>
+      <KpiStrip kpis={insights.kpis} />
+      {trendAvailable && (
+        <AttendanceTrendInline points={insights.attendance_trend} />
+      )}
       {withCards && (
         <div className="grid gap-3 md:grid-cols-2">
           {insights.at_risk_villages.length > 0 && (
@@ -294,6 +273,150 @@ function InsightRail({ insights }: { insights: InsightsResponse }) {
             <TopMini villages={insights.top_villages.slice(0, 5)} />
           )}
         </div>
+      )}
+      {starsAvailable && (
+        <StarsInline
+          current={insights.stars_current_month}
+          previous={insights.stars_prev_month}
+        />
+      )}
+    </div>
+  );
+}
+
+function KpiStrip({ kpis }: { kpis: InsightsResponse['kpis'] }) {
+  const { t } = useI18n();
+  return (
+    <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+      {kpis.map((k) => {
+        const isPct =
+          k.label === 'attendance_week' || k.label === 'attendance_month';
+        const trendColor =
+          k.trend === 'up' ? 'text-primary'
+          : k.trend === 'down' ? 'text-danger'
+          : 'text-muted-fg';
+        const arrow =
+          k.trend === 'up' ? '▲'
+          : k.trend === 'down' ? '▼'
+          : k.trend === 'flat' ? '•' : null;
+        return (
+          <div key={k.label} className="bg-card border border-border rounded-lg p-3 flex flex-col gap-0.5">
+            <div className="text-xs text-muted-fg uppercase tracking-wide">
+              {t(`home.kpi.${k.label}`)}
+            </div>
+            <div className="text-xl font-semibold">
+              {k.value}{isPct ? '%' : ''}
+            </div>
+            {k.delta !== null && arrow && (
+              <div className={`text-xs ${trendColor}`}>
+                {arrow} {k.delta > 0 ? '+' : ''}{k.delta}{isPct ? 'pp' : ''}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function AttendanceTrendInline({
+  points,
+}: {
+  points: InsightsResponse['attendance_trend'];
+}) {
+  const { t } = useI18n();
+  const max = Math.max(...points.map((p) => p.pct ?? 0), 1);
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 flex flex-wrap items-end gap-4">
+      <div className="min-w-[140px]">
+        <h3 className="text-sm font-semibold">{t('home.trend.title')}</h3>
+        <p className="text-xs text-muted-fg">{t('home.trend.hint')}</p>
+      </div>
+      <div className="flex-1 grid grid-cols-3 gap-4">
+        {points.map((p) => {
+          const height = p.pct === null ? 0 : Math.max(6, Math.round((p.pct / max) * 56));
+          return (
+            <div key={p.month} className="flex flex-col items-center gap-1">
+              <div className="h-16 flex items-end">
+                {p.pct === null ? (
+                  <span className="text-muted-fg text-sm">—</span>
+                ) : (
+                  <div
+                    className="w-8 rounded-t bg-primary/70"
+                    style={{ height: `${height}px` }}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+              <div className="text-sm font-semibold">
+                {p.pct === null ? '—' : `${p.pct}%`}
+              </div>
+              <div className="text-xs text-muted-fg">
+                {formatMonthLabel(p.month)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatMonthLabel(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${names[(m - 1) % 12]} ${String(y).slice(2)}`;
+}
+
+function StarsInline({
+  current,
+  previous,
+}: {
+  current: InsightsResponse['stars_current_month'];
+  previous: InsightsResponse['stars_prev_month'];
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold">{t('home.stars.title')}</h3>
+        <span className="text-xs text-muted-fg">{t('home.stars.hint')}</span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <StarsBlock label={t('home.stars.this_month')} stars={current} />
+        <StarsBlock label={t('home.stars.last_month')} stars={previous} />
+      </div>
+    </div>
+  );
+}
+
+function StarsBlock({
+  label,
+  stars,
+}: {
+  label: string;
+  stars: InsightsResponse['stars_current_month'];
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-medium text-muted-fg uppercase tracking-wide">
+        {label}
+      </div>
+      {stars.length === 0 ? (
+        <p className="text-sm text-muted-fg">{t('home.stars.empty')}</p>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {stars.slice(0, 5).map((s) => (
+            <li key={s.achievement_id} className="flex items-baseline gap-2">
+              <span aria-hidden="true">⭐</span>
+              <span className="truncate">
+                <span className="font-medium">{s.student_name}</span>
+                <span className="text-muted-fg"> · {s.village_name}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
