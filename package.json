@@ -7,7 +7,7 @@
     "dev": "pnpm -r --parallel dev",
     "dev:api": "pnpm --filter @navsahyog/api dev",
     "dev:web": "pnpm --filter @navsahyog/web dev",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @navsahyog/web run build && pnpm --filter @navsahyog/api run build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "check:i18n": "node scripts/check-i18n.mjs",

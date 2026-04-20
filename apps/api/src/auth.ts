@@ -65,18 +65,20 @@ export const requireAuth: MiddlewareHandler<{
 
 export { SESSION_COOKIE, SESSION_TTL_SECONDS };
 
-// `Secure` is required in production; without it the session
-// cookie can travel over plain HTTP. Local dev runs over HTTP, so
-// we leave it off there.
+// `Secure` is required on any deployed environment; without it the
+// session cookie can travel over plain HTTP. Local dev + the test
+// harness run over HTTP, so we leave it off there. Staging +
+// production both get Secure.
 export function sessionCookieOptions(
   c: Context<{ Bindings: Bindings; Variables: Variables }>,
   maxAgeSeconds: number,
 ) {
+  const env = c.env.ENVIRONMENT;
   return {
     httpOnly: true,
     sameSite: 'Lax' as const,
     path: '/',
     maxAge: maxAgeSeconds,
-    secure: c.env.ENVIRONMENT === 'production',
+    secure: env !== 'development' && env !== 'test' && env !== undefined,
   };
 }

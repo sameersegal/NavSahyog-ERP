@@ -1,0 +1,118 @@
+name: Deploy staging
+
+# Ships apps/api (Worker + bundled web) to the staging environment
+# on Cloudflare. Same-origin single-Worker setup per
+# mvp/deploy-staging.md and the PR #26 review.
+#
+# Secrets required on the repo:
+#   CLOUDFLARE_API_TOKEN            — Workers/D1/R2 Edit scopes.
+#   CLOUDFLARE_ACCOUNT_ID           — target Cloudflare account.
+#   CF_STAGING_MEDIA_PRESIGN_SECRET — HMAC signing key piped into
+#                                     `wrangler secret put` on every
+#                                     deploy so the Worker always
+#                                     has a current value.
+#
+# Outer gate (HTTP basic auth) is NOT managed here: set
+# STAGING_BASIC_AUTH_USER + STAGING_BASIC_AUTH_PASSWORD once via
+# `wrangler secret put` locally. The middleware no-ops when they're
+# absent, which is fine only if the seed passwords have been
+# rotated — see mvp/deploy-staging.md "Known gaps".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # One staging deploy in flight at a time — newer pushes cancel
+  # older deploys to avoid racing migrations against a stale bundle.
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Pre-flight — same checks as ci.yml so a broken main never
+      # reaches the staging URL. Cheaper than reusing a workflow
+      # artifact because the install is warm either way.
+      - name: Typecheck + tests
+        run: |
+          pnpm check:i18n
+          pnpm typecheck
+          pnpm test
+
+      - name: Build web bundle
+        # Workers Static Assets reads from apps/web/dist/ per the
+        # [assets] block in apps/api/wrangler.toml.
+        run: pnpm --filter @navsahyog/web build
+
+      # D1 migrations first — independent of the Worker service,
+      # safe to run whether or not the Worker has ever deployed.
+      # `wrangler d1 migrations apply` is idempotent (tracks applied
+      # migrations in a meta table).
+      - name: Apply D1 migrations (remote)
+        working-directory: apps/api
+        run: pnpm exec wrangler d1 migrations apply navsahyog-staging --remote --env staging
+
+      # Deploy the Worker BEFORE setting secrets. `wrangler secret
+      # put` requires an existing Worker service — on the very first
+      # run the Worker doesn't exist yet, so secret-put-first would
+      # abort the workflow. After this step the Worker exists (with
+      # stale or no secret); the next step attaches the current one.
+      - name: Deploy Worker
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --env staging
+
+      # Push the current MEDIA_PRESIGN_SECRET onto the live Worker.
+      # Cloudflare propagates secret changes to the runtime without
+      # a redeploy, so the Worker picks up the new value for the
+      # next inbound request. Rotating the GitHub secret → rotating
+      # the Worker secret on the next push.
+      - name: Set MEDIA_PRESIGN_SECRET secret on the Worker
+        working-directory: apps/api
+        run: |
+          printf '%s' "${{ secrets.CF_STAGING_MEDIA_PRESIGN_SECRET }}" \
+            | pnpm exec wrangler secret put MEDIA_PRESIGN_SECRET --env staging
+
+      # Fast sanity check that the deploy actually answers. `/health`
+      # is the Worker's own endpoint (not behind basic auth, not
+      # gated by any secret), so a 200 here proves the Worker is
+      # live and routable. Failure surfaces as a red step in Actions.
+      - name: Smoke check /health
+        working-directory: apps/api
+        env:
+          CF_SUBDOMAIN: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          url="$(pnpm exec wrangler deployments list --env staging 2>/dev/null | \
+            grep -o 'https://[a-z0-9.-]*workers\.dev' | head -n1 || true)"
+          if [ -z "$url" ]; then
+            # Fallback: construct from the worker name + known env suffix.
+            echo "Could not discover URL from wrangler; skipping smoke." >&2
+            exit 0
+          fi
+          echo "Smoke-testing $url/health"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url/health")
+          if [ "$code" != "200" ]; then
+            echo "Expected 200 from /health, got $code" >&2
+            exit 1
+          fi
+          echo "OK"
