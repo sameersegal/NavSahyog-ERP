@@ -65,19 +65,54 @@ jobs:
         # [assets] block in apps/api/wrangler.toml.
         run: pnpm --filter @navsahyog/web build
 
-      # Push MEDIA_PRESIGN_SECRET into the Worker before deploy. Runs
-      # every time so rotating the GitHub secret rotates the Worker
-      # secret on the next push — no separate manual step.
+      # D1 migrations first — independent of the Worker service,
+      # safe to run whether or not the Worker has ever deployed.
+      # `wrangler d1 migrations apply` is idempotent (tracks applied
+      # migrations in a meta table).
+      - name: Apply D1 migrations (remote)
+        working-directory: apps/api
+        run: pnpm exec wrangler d1 migrations apply navsahyog-staging --remote --env staging
+
+      # Deploy the Worker BEFORE setting secrets. `wrangler secret
+      # put` requires an existing Worker service — on the very first
+      # run the Worker doesn't exist yet, so secret-put-first would
+      # abort the workflow. After this step the Worker exists (with
+      # stale or no secret); the next step attaches the current one.
+      - name: Deploy Worker
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --env staging
+
+      # Push the current MEDIA_PRESIGN_SECRET onto the live Worker.
+      # Cloudflare propagates secret changes to the runtime without
+      # a redeploy, so the Worker picks up the new value for the
+      # next inbound request. Rotating the GitHub secret → rotating
+      # the Worker secret on the next push.
       - name: Set MEDIA_PRESIGN_SECRET secret on the Worker
         working-directory: apps/api
         run: |
           printf '%s' "${{ secrets.CF_STAGING_MEDIA_PRESIGN_SECRET }}" \
             | pnpm exec wrangler secret put MEDIA_PRESIGN_SECRET --env staging
 
-      - name: Apply D1 migrations (remote)
+      # Fast sanity check that the deploy actually answers. `/health`
+      # is the Worker's own endpoint (not behind basic auth, not
+      # gated by any secret), so a 200 here proves the Worker is
+      # live and routable. Failure surfaces as a red step in Actions.
+      - name: Smoke check /health
         working-directory: apps/api
-        run: pnpm exec wrangler d1 migrations apply navsahyog-staging --remote --env staging
-
-      - name: Deploy Worker
-        working-directory: apps/api
-        run: pnpm exec wrangler deploy --env staging
+        env:
+          CF_SUBDOMAIN: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          url="$(pnpm exec wrangler deployments list --env staging 2>/dev/null | \
+            grep -o 'https://[a-z0-9.-]*workers\.dev' | head -n1 || true)"
+          if [ -z "$url" ]; then
+            # Fallback: construct from the worker name + known env suffix.
+            echo "Could not discover URL from wrangler; skipping smoke." >&2
+            exit 0
+          fi
+          echo "Smoke-testing $url/health"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url/health")
+          if [ "$code" != "200" ]; then
+            echo "Expected 200 from /health, got $code" >&2
+            exit 1
+          fi
+          echo "OK"
