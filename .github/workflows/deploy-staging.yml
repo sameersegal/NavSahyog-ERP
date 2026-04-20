@@ -1,0 +1,83 @@
+name: Deploy staging
+
+# Ships apps/api (Worker + bundled web) to the staging environment
+# on Cloudflare. Same-origin single-Worker setup per
+# mvp/deploy-staging.md and the PR #26 review.
+#
+# Secrets required on the repo:
+#   CLOUDFLARE_API_TOKEN            — Workers/D1/R2 Edit scopes.
+#   CLOUDFLARE_ACCOUNT_ID           — target Cloudflare account.
+#   CF_STAGING_MEDIA_PRESIGN_SECRET — HMAC signing key piped into
+#                                     `wrangler secret put` on every
+#                                     deploy so the Worker always
+#                                     has a current value.
+#
+# Outer gate (HTTP basic auth) is NOT managed here: set
+# STAGING_BASIC_AUTH_USER + STAGING_BASIC_AUTH_PASSWORD once via
+# `wrangler secret put` locally. The middleware no-ops when they're
+# absent, which is fine only if the seed passwords have been
+# rotated — see mvp/deploy-staging.md "Known gaps".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # One staging deploy in flight at a time — newer pushes cancel
+  # older deploys to avoid racing migrations against a stale bundle.
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Pre-flight — same checks as ci.yml so a broken main never
+      # reaches the staging URL. Cheaper than reusing a workflow
+      # artifact because the install is warm either way.
+      - name: Typecheck + tests
+        run: |
+          pnpm check:i18n
+          pnpm typecheck
+          pnpm test
+
+      - name: Build web bundle
+        # Workers Static Assets reads from apps/web/dist/ per the
+        # [assets] block in apps/api/wrangler.toml.
+        run: pnpm --filter @navsahyog/web build
+
+      # Push MEDIA_PRESIGN_SECRET into the Worker before deploy. Runs
+      # every time so rotating the GitHub secret rotates the Worker
+      # secret on the next push — no separate manual step.
+      - name: Set MEDIA_PRESIGN_SECRET secret on the Worker
+        working-directory: apps/api
+        run: |
+          printf '%s' "${{ secrets.CF_STAGING_MEDIA_PRESIGN_SECRET }}" \
+            | pnpm exec wrangler secret put MEDIA_PRESIGN_SECRET --env staging
+
+      - name: Apply D1 migrations (remote)
+        working-directory: apps/api
+        run: pnpm exec wrangler d1 migrations apply navsahyog-staging --remote --env staging
+
+      - name: Deploy Worker
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --env staging

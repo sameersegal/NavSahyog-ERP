@@ -7,17 +7,28 @@ export type { Role, ScopeLevel };
 export type Bindings = {
   DB: D1Database;
   MEDIA: R2Bucket;
+  // Workers Static Assets fetcher. Bound via the top-level
+  // `[assets]` block in wrangler.toml; used by the SPA fallback in
+  // src/index.ts. Absent in the test harness — the fallback branch
+  // already guards on presence.
+  ASSETS?: Fetcher;
   // Comma-separated allowlist of origins that may make credentialed
-  // requests. Set in wrangler.toml [vars]. Empty / unset means
-  // same-origin only (the Vite dev proxy + the deployed Pages site).
+  // cross-origin requests. Single-Worker same-origin deploys leave
+  // this empty.
   ALLOWED_ORIGINS?: string;
-  // 'development' | 'production'. Drives the `Secure` cookie flag
-  // and, for L2.4, the upload-token signing default.
+  // 'development' | 'staging' | 'production'. Drives the `Secure`
+  // cookie flag (non-dev gets Secure) and, for L2.4, the upload-
+  // token signing default.
   ENVIRONMENT?: string;
   // HMAC secret for media upload tokens. Dev default lives in
-  // wrangler.toml [vars]; production must be set via
-  // `wrangler secret put MEDIA_PRESIGN_SECRET`.
+  // wrangler.toml [vars]; non-dev MUST be set via
+  // `wrangler secret put MEDIA_PRESIGN_SECRET`. Missing → 500 on
+  // presign (fail-closed; see src/routes/media.ts).
   MEDIA_PRESIGN_SECRET?: string;
+  // HTTP basic auth gate for the staging URL. Activated only when
+  // BOTH are set via `wrangler secret put`. A no-op in dev / test.
+  STAGING_BASIC_AUTH_USER?: string;
+  STAGING_BASIC_AUTH_PASSWORD?: string;
 };
 
 // The session-bound user — DB row shape, no computed capabilities.

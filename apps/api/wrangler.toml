@@ -6,12 +6,38 @@ compatibility_flags = ["nodejs_compat"]
 # Local-only defaults. Production env lives in [env.production] below.
 [vars]
 ENVIRONMENT = "development"
-# Comma-separated. Vite dev origin so the dev proxy isn't needed for
-# direct browser → Worker calls during testing.
+# Comma-separated. Only consulted for genuine cross-origin callers;
+# single-Worker same-origin serving (see `[assets]` below) needs no
+# CORS allowlist for same-site traffic. Keep the Vite dev origin so
+# `pnpm --filter @navsahyog/web dev` on 5173 can still hit
+# `pnpm --filter @navsahyog/api dev` on 8787 before the [assets]
+# bundle is built.
 ALLOWED_ORIGINS = "http://localhost:5173"
 # HMAC secret for media upload tokens (L2.4). Dev-only default;
-# non-dev must set via `wrangler secret put MEDIA_PRESIGN_SECRET`.
+# non-dev MUST set via `wrangler secret put MEDIA_PRESIGN_SECRET`.
+# If left unset in staging/production, the server fail-closes with
+# a 500 on presign — deliberate, do not paper over with a placeholder
+# var here.
+#
+# Wrangler warns "vars.MEDIA_PRESIGN_SECRET exists at the top level,
+# but not on env.staging.vars" on deploy — that's the intended
+# behaviour. We WANT the dev-only value to not leak into staging;
+# the real secret ships via `wrangler secret put`.
 MEDIA_PRESIGN_SECRET = "dev-only-change-me"
+
+# Workers Static Assets — serves the built web bundle from the same
+# Worker that serves /api and /auth, so everything is same-origin.
+# Fixes the cross-origin session-cookie + relative-media-URL
+# blockers from PR #26 review.
+#
+# SPA fallback (serving index.html on unknown routes) is performed
+# inside the Worker, not via `not_found_handling`. Reason: with the
+# platform-level SPA fallback, any 404 from the Worker — including
+# `/api/unknown` — gets replaced by index.html, which is wrong for
+# API clients. Our `app.notFound` branches on the path prefix.
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
 
 [dev]
 port = 8787
@@ -43,8 +69,17 @@ preview_bucket_name = "media-staging"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
-ALLOWED_ORIGINS = "https://navsahyog-app.pages.dev,https://staging.navsahyog.org"
-MEDIA_PRESIGN_SECRET = "set-via-secret"
+# Single-origin via [assets] at the top level — same-origin serving
+# means CORS is irrelevant for the deployed URL. Leave empty so any
+# stray cross-origin caller is rejected.
+ALLOWED_ORIGINS = ""
+
+# Secrets (not committed — set before first deploy):
+#   wrangler secret put MEDIA_PRESIGN_SECRET --env staging
+#   wrangler secret put STAGING_BASIC_AUTH_USER --env staging
+#   wrangler secret put STAGING_BASIC_AUTH_PASSWORD --env staging
+# The basic-auth vars gate the whole Worker except the token-gated
+# PUT /api/media/upload/:uuid (middleware in src/index.ts).
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -57,14 +92,22 @@ binding = "MEDIA"
 bucket_name = "media-staging"
 preview_bucket_name = "media-staging"
 
+# Workers Static Assets — wrangler does not inherit the top-level
+# [assets] into per-env configs (same rule as [[d1_databases]] /
+# [[r2_buckets]]). Duplicated here so the staging deploy actually
+# bundles the web dist/ and the ASSETS fetcher binding exists at
+# runtime.
+[env.staging.assets]
+directory = "../web/dist"
+binding = "ASSETS"
+
 # Production overrides. Bind real resource IDs + domains before
 # running `wrangler deploy --env production`.
 [env.production]
 
 [env.production.vars]
 ENVIRONMENT = "production"
-ALLOWED_ORIGINS = "https://app.navsahyog.org,https://navsahyog.org"
-MEDIA_PRESIGN_SECRET = "set-via-secret"
+ALLOWED_ORIGINS = ""
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -76,3 +119,7 @@ migrations_dir = "../../db/migrations"
 binding = "MEDIA"
 bucket_name = "media-prod"
 preview_bucket_name = "media-prod"
+
+[env.production.assets]
+directory = "../web/dist"
+binding = "ASSETS"
