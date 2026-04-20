@@ -59,6 +59,21 @@ export function Village() {
         {village && (
           <p className="text-xs text-muted-fg">
             {village.cluster_name} · {village.code}
+            {village.coordinator_name ? (
+              <>
+                {' '}·{' '}
+                <span className="text-fg">
+                  {t('village.header.vc', { name: village.coordinator_name })}
+                </span>
+              </>
+            ) : (
+              <>
+                {' '}·{' '}
+                <span className="italic">
+                  {t('village.header.vc_unassigned')}
+                </span>
+              </>
+            )}
           </p>
         )}
       </div>

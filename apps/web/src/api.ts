@@ -26,8 +26,10 @@ export type {
   GeoLevel,
 } from '@navsahyog/shared';
 export type {
+  AttendanceTrendPoint,
   InsightKpi,
   InsightsResponse,
+  StarOfTheMonth,
   StreakResponse,
   VillageActivity,
 } from '@navsahyog/shared';
@@ -64,6 +66,7 @@ export type Village = {
   code: string;
   cluster_id: number;
   cluster_name: string;
+  coordinator_name: string | null;
 };
 
 export type School = { id: number; village_id: number; name: string };

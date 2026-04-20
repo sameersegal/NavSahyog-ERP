@@ -5,20 +5,24 @@
 //     and redirect to that village. Saves a wasted tap every time
 //     they log in (VCs are the most frequent users, in the field,
 //     one-handed).
-//   * Everyone else → KPI strip + insight cards + village grid
-//     annotated with an activity chip (green = fresh, red = lapsed).
+//   * Everyone else → KPI strip + 3-month attendance trend + insight
+//     cards (at-risk / top-this-week / stars-of-the-month) + a
+//     village grid annotated with coordinator name + activity chip.
 //
-// Data comes from /api/insights (scope-filtered). That one call
-// replaces the old /api/villages call here — the insights payload
-// includes a full village list so we don't need a second round-trip.
+// Data comes from /api/insights (scope-filtered). That single call
+// replaces the old /api/villages fetch and carries everything the
+// page needs — trend points, KPI deltas, stars, village activity —
+// so the home screen renders with one round-trip.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AT_RISK_THRESHOLD_DAYS,
   api,
+  type AttendanceTrendPoint,
   type InsightKpi,
   type InsightsResponse,
+  type StarOfTheMonth,
   type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
@@ -61,6 +65,9 @@ export function Home() {
     return null;
   }
 
+  const starsAvailable =
+    data.stars_current_month.length > 0 || data.stars_prev_month.length > 0;
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
@@ -74,6 +81,8 @@ export function Home() {
 
       <KpiStrip kpis={data.kpis} />
 
+      <AttendanceTrend trend={data.attendance_trend} />
+
       {(data.at_risk_villages.length > 0 || data.top_villages.length > 1) && (
         <div className="grid gap-3 md:grid-cols-2">
           {data.at_risk_villages.length > 0 && (
@@ -83,6 +92,13 @@ export function Home() {
             <TopVillagesCard villages={data.top_villages} />
           )}
         </div>
+      )}
+
+      {starsAvailable && (
+        <StarsCard
+          current={data.stars_current_month}
+          previous={data.stars_prev_month}
+        />
       )}
 
       <section>
@@ -105,9 +121,12 @@ export function Home() {
   );
 }
 
+// KPI strip grows to 6 tiles (children, attendance 7d, images-month,
+// videos-month, achievements-month, at-risk). The 3-col grid breakpoint
+// at sm + 6-col at lg keeps two rows on phones, one on desktop.
 function KpiStrip({ kpis }: { kpis: InsightKpi[] }) {
   return (
-    <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+    <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
       {kpis.map((k) => (
         <KpiTile key={k.label} k={k} />
       ))}
@@ -143,6 +162,66 @@ function KpiTile({ k }: { k: InsightKpi }) {
       )}
     </div>
   );
+}
+
+// Three-month attendance trend. Rendered as three inline month
+// labels + bars so non-graphing browsers (and sunlight theme) still
+// read it. Bar height is proportional to pct; a null month shows a
+// muted "—" so an empty month reads as "no data", not "0%".
+function AttendanceTrend({ trend }: { trend: AttendanceTrendPoint[] }) {
+  const { t } = useI18n();
+  if (trend.every((p) => p.pct === null)) return null;
+  const max = Math.max(...trend.map((p) => p.pct ?? 0), 1);
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold">{t('home.trend.title')}</h3>
+        <span className="text-xs text-muted-fg">{t('home.trend.hint')}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {trend.map((p) => (
+          <TrendBar key={p.month} point={p} max={max} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TrendBar({ point, max }: { point: AttendanceTrendPoint; max: number }) {
+  const { t } = useI18n();
+  const height = point.pct === null ? 0 : Math.max(8, Math.round((point.pct / max) * 72));
+  const monthLabel = formatMonth(point.month);
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="h-20 w-full flex items-end justify-center">
+        {point.pct === null ? (
+          <span className="text-muted-fg text-sm">—</span>
+        ) : (
+          <div
+            className="w-10 rounded-t bg-primary/70"
+            style={{ height: `${height}px` }}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+      <div className="text-lg font-semibold">
+        {point.pct === null ? '—' : `${point.pct}%`}
+      </div>
+      <div className="text-xs text-muted-fg">{monthLabel}</div>
+      <div className="text-xs text-muted-fg">
+        {t('home.trend.sessions', { n: point.sessions })}
+      </div>
+    </div>
+  );
+}
+
+// Short month name for the trend axis label. Parses the 'YYYY-MM'
+// string locally (no Intl timezone pitfalls) so the same three
+// letters render identically regardless of client locale.
+function formatMonth(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${names[(m - 1) % 12]} ${String(y).slice(2)}`;
 }
 
 function AtRiskCard({ villages }: { villages: VillageActivity[] }) {
@@ -209,10 +288,64 @@ function TopVillagesCard({ villages }: { villages: VillageActivity[] }) {
   );
 }
 
-// Village card with an activity chip. Colour is driven by
-// `days_since_last_session` — green for same-day, amber for 1–3
-// days, red for 4+ (at-risk). The chip is informational; the whole
-// card is still the tap target.
+// Stars of the Month — two-column card (current vs previous). Each
+// column lists star students with their village. Empty columns
+// render an em-dash so the card still reads when one of the months
+// has no data yet (happens early in a fresh month).
+function StarsCard({
+  current,
+  previous,
+}: {
+  current: StarOfTheMonth[];
+  previous: StarOfTheMonth[];
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold">{t('home.stars.title')}</h3>
+        <span className="text-xs text-muted-fg">{t('home.stars.hint')}</span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <StarsColumn label={t('home.stars.this_month')} stars={current} />
+        <StarsColumn label={t('home.stars.last_month')} stars={previous} />
+      </div>
+    </div>
+  );
+}
+
+function StarsColumn({ label, stars }: { label: string; stars: StarOfTheMonth[] }) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium text-muted-fg uppercase tracking-wide">
+        {label}
+      </div>
+      {stars.length === 0 ? (
+        <p className="text-sm text-muted-fg">{t('home.stars.empty')}</p>
+      ) : (
+        <ul className="space-y-1.5 text-sm">
+          {stars.map((s) => (
+            <li key={s.achievement_id} className="flex items-baseline gap-2">
+              <span aria-hidden="true">⭐</span>
+              <div className="min-w-0">
+                <div className="truncate">
+                  <span className="font-medium">{s.student_name}</span>
+                  <span className="text-muted-fg"> · {s.village_name}</span>
+                </div>
+                <div className="text-xs text-muted-fg truncate">{s.description}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Village card — activity chip colour driven by days-since-last.
+// Now also shows the coordinator name under the cluster line so
+// back-office knows who to ping about a village without drilling in.
 function VillageCard({ v }: { v: VillageActivity }) {
   const { t } = useI18n();
   const days = v.days_since_last_session;
@@ -244,6 +377,11 @@ function VillageCard({ v }: { v: VillageActivity }) {
         </span>
       </div>
       <div className="text-xs text-muted-fg">{v.cluster_name}</div>
+      <div className="text-xs text-muted-fg truncate">
+        {v.coordinator_name
+          ? t('home.card.vc', { name: v.coordinator_name })
+          : t('home.card.vc_unassigned')}
+      </div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
         <span className="text-muted-fg">
           {t('home.card.children', { n: v.children_count })}
