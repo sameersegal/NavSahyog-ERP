@@ -24,6 +24,9 @@ export function Shell({ children }: { children: ReactNode }) {
             <NavLink to="/" active={pathname === '/'}>
               {t('nav.home')}
             </NavLink>
+            <NavLink to="/capture" active={pathname === '/capture'}>
+              {t('nav.capture')}
+            </NavLink>
             <NavLink to="/achievements" active={pathname === '/achievements'}>
               {t('nav.achievements')}
             </NavLink>

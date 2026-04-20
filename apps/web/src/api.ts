@@ -19,6 +19,9 @@ export type {
   Achievement,
   AchievementWithStudent,
   AchievementType,
+  Media,
+  MediaKind,
+  MediaWithUrls,
   DashboardMetric,
   GeoLevel,
 } from '@navsahyog/shared';
@@ -41,6 +44,8 @@ import type {
   Event,
   GeoLevel,
   GraduationReason,
+  MediaKind,
+  MediaWithUrls,
   Student,
 } from '@navsahyog/shared';
 
@@ -77,6 +82,7 @@ export type ChildCoreCreate = {
   gender: 'm' | 'f' | 'o';
   dob: string;             // IST 'YYYY-MM-DD'
   joined_at?: string;      // IST 'YYYY-MM-DD'; server defaults to today
+  photo_media_id?: number | null;
 };
 
 export type ChildCorePatch = {
@@ -86,6 +92,7 @@ export type ChildCorePatch = {
   gender?: 'm' | 'f' | 'o';
   dob?: string;
   joined_at?: string;
+  photo_media_id?: number | null;
 };
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -155,6 +162,7 @@ export const api = {
     start_time: string;     // IST 'HH:MM'
     end_time: string;       // IST 'HH:MM'
     marks: AttendanceMark[];
+    voice_note_media_id?: number | null;
   }) =>
     req<{ session_id: number; count: number }>('/api/attendance', {
       method: 'POST',
@@ -203,6 +211,24 @@ export const api = {
     }),
   deleteAchievement: (id: number) =>
     req<{ ok: true }>(`/api/achievements/${id}`, { method: 'DELETE' }),
+  media: (opts: {
+    village_id?: number;
+    kind?: MediaKind;
+    from?: number;
+    to?: number;
+  } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.village_id) qs.set('village_id', String(opts.village_id));
+    if (opts.kind) qs.set('kind', opts.kind);
+    if (opts.from) qs.set('from', String(opts.from));
+    if (opts.to) qs.set('to', String(opts.to));
+    const suffix = qs.toString();
+    return req<{ media: MediaWithUrls[] }>(
+      `/api/media${suffix ? `?${suffix}` : ''}`,
+    );
+  },
+  getMedia: (id: number) =>
+    req<{ media: MediaWithUrls }>(`/api/media/${id}`),
   dashboardDrilldown: (opts: DrilldownQuery) =>
     req<DrilldownResponse>(
       `/api/dashboard/drilldown?${drilldownQs(opts)}`,

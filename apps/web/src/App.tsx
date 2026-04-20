@@ -5,6 +5,7 @@ import { Home } from './pages/Home';
 import { Village } from './pages/Village';
 import { Dashboard } from './pages/Dashboard';
 import { Achievements } from './pages/Achievements';
+import { Capture } from './pages/Capture';
 import { Shell } from './pages/Shell';
 
 export function App() {
@@ -29,6 +30,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/village/:id" element={<Village />} />
+        <Route path="/capture" element={<Capture />} />
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
