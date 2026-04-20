@@ -37,6 +37,13 @@ role / scope model on the smallest possible feature surface.
   only. Cluster → village drill. No Excel export.
 - **PWA shell (§11.2).** React + Vite on Cloudflare Pages. Install
   prompt out of scope.
+- **Themes (not in requirements).** Three themes shipped: `light`
+  (default back-office), `dark` (low-light / evening review), and
+  `sunlight` (high-contrast, thicker borders, larger base font,
+  intended for outdoor field use on Android). Theme is stored in
+  localStorage and applied via a `data-theme` attribute on
+  `<html>`; all surfaces read HSL CSS vars so adding a fourth is
+  a one-file change. Exposed on Login and in the user menu.
 - **Language switcher (§3.8.6).** en + hi catalogs shipped, exposed
   on Login and in the user menu. Pulled into L1 early because the
   cost was low and the field-staff UI is Hindi-first. Adding more
@@ -76,6 +83,9 @@ role / scope model on the smallest possible feature surface.
 8. Language toggle (en ↔ hi) flips every page including nav,
    forms, roles, theme labels, and plural counters; `<html lang>`
    updates; choice persists across reload.
+9. Theme toggle (light / dark / sunlight) recolours every page;
+   sunlight increases base font and border weight for outdoor
+   legibility; choice persists across reload.
 
 ## Stack choices for this level
 
