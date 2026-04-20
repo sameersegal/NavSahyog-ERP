@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { isIndianPhone, type GraduationReason, type Student } from '@navsahyog/shared';
 import { requireAuth } from '../auth';
 import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
@@ -6,30 +7,181 @@ import { err } from '../lib/errors';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
-type Student = {
-  id: number;
-  village_id: number;
-  school_id: number;
-  first_name: string;
-  last_name: string;
-  gender: 'm' | 'f' | 'o';
-  dob: string;
-  joined_at: string;
-  graduated_at: string | null;
+type ProfileBody = {
+  father_name?: string | null;
+  father_phone?: string | null;
+  father_has_smartphone?: 0 | 1 | boolean | null;
+  mother_name?: string | null;
+  mother_phone?: string | null;
+  mother_has_smartphone?: 0 | 1 | boolean | null;
+  alt_contact_name?: string | null;
+  alt_contact_phone?: string | null;
+  alt_contact_relationship?: string | null;
 };
 
-type AddBody = {
+type AddBody = ProfileBody & {
   village_id?: number;
   school_id?: number;
   first_name?: string;
   last_name?: string;
   gender?: 'm' | 'f' | 'o';
   dob?: string;
+  joined_at?: string;
 };
+
+type PatchBody = ProfileBody & {
+  school_id?: number;
+  first_name?: string;
+  last_name?: string;
+  gender?: 'm' | 'f' | 'o';
+  dob?: string;
+  joined_at?: string;
+};
+
+type GraduateBody = {
+  graduated_at?: string;
+  graduation_reason?: GraduationReason;
+};
+
+// Student shape we actually project out. Same as the shared wire
+// shape, sourced directly from the DB so a column add flows through
+// with no hand-maintained mapping. `created_at` / `created_by` /
+// `updated_at` / `updated_by` stay server-internal for now.
+const STUDENT_COLUMNS = `
+  id, village_id, school_id, first_name, last_name, gender, dob,
+  joined_at, graduated_at, graduation_reason,
+  father_name, father_phone, father_has_smartphone,
+  mother_name, mother_phone, mother_has_smartphone,
+  alt_contact_name, alt_contact_phone, alt_contact_relationship
+`;
 
 const children = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 children.use('*', requireAuth);
+
+// ---- helpers ------------------------------------------------------
+
+function normaliseFlag(raw: unknown): 0 | 1 | null | 'invalid' {
+  if (raw === null || raw === undefined) return null;
+  if (raw === true || raw === 1) return 1;
+  if (raw === false || raw === 0) return 0;
+  return 'invalid';
+}
+
+function normalisePhone(raw: unknown): string | null | 'invalid' {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'string') return 'invalid';
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  return isIndianPhone(trimmed) ? trimmed : 'invalid';
+}
+
+type ParsedProfile = {
+  father_name: string | null;
+  father_phone: string | null;
+  father_has_smartphone: 0 | 1 | null;
+  mother_name: string | null;
+  mother_phone: string | null;
+  mother_has_smartphone: 0 | 1 | null;
+  alt_contact_name: string | null;
+  alt_contact_phone: string | null;
+  alt_contact_relationship: string | null;
+};
+
+type ProfileError = { message: string };
+
+// Parses + validates the parent/alt-contact block shared by POST
+// (create) and PATCH (edit). Returns a ProfileError if any field is
+// malformed, `null` if `requireParent` was set and neither parent is
+// named, or `null` if neither parent has a smartphone and alt
+// contact is incomplete. Otherwise returns the fully-typed block.
+function parseProfile(
+  body: ProfileBody,
+  requireParent: boolean,
+): ParsedProfile | ProfileError {
+  const fatherName = (body.father_name ?? '').toString().trim() || null;
+  const motherName = (body.mother_name ?? '').toString().trim() || null;
+  if (requireParent && !fatherName && !motherName) {
+    return { message: 'at least one parent required' };
+  }
+
+  const fatherPhone = normalisePhone(body.father_phone);
+  if (fatherPhone === 'invalid') {
+    return { message: 'father_phone must be a valid Indian mobile number' };
+  }
+  const motherPhone = normalisePhone(body.mother_phone);
+  if (motherPhone === 'invalid') {
+    return { message: 'mother_phone must be a valid Indian mobile number' };
+  }
+
+  const fatherSmartphone = normaliseFlag(body.father_has_smartphone);
+  if (fatherSmartphone === 'invalid') {
+    return { message: 'father_has_smartphone must be boolean' };
+  }
+  const motherSmartphone = normaliseFlag(body.mother_has_smartphone);
+  if (motherSmartphone === 'invalid') {
+    return { message: 'mother_has_smartphone must be boolean' };
+  }
+
+  // A smartphone flag is only meaningful alongside a phone number.
+  if (fatherSmartphone !== null && fatherPhone === null) {
+    return { message: 'father_has_smartphone set without father_phone' };
+  }
+  if (motherSmartphone !== null && motherPhone === null) {
+    return { message: 'mother_has_smartphone set without mother_phone' };
+  }
+
+  // §3.2.2: alt contact is required when neither parent has a
+  // smartphone. The rule triggers only when at least one parent
+  // phone exists (no smartphone flag is meaningless without a phone).
+  const anyParentSmartphone =
+    fatherSmartphone === 1 || motherSmartphone === 1;
+  const anyParentPhone = fatherPhone !== null || motherPhone !== null;
+  const altName = (body.alt_contact_name ?? '').toString().trim() || null;
+  const altPhoneRaw = normalisePhone(body.alt_contact_phone);
+  if (altPhoneRaw === 'invalid') {
+    return { message: 'alt_contact_phone must be a valid Indian mobile number' };
+  }
+  const altRelationship = (body.alt_contact_relationship ?? '').toString().trim() || null;
+
+  const altProvided = altName !== null || altPhoneRaw !== null || altRelationship !== null;
+  if (altProvided && (!altName || !altPhoneRaw || !altRelationship)) {
+    return {
+      message: 'alt_contact_* requires name, phone, and relationship together',
+    };
+  }
+
+  if (anyParentPhone && !anyParentSmartphone && !altProvided) {
+    return {
+      message: 'alt contact required when neither parent has a smartphone',
+    };
+  }
+
+  return {
+    father_name: fatherName,
+    father_phone: fatherPhone,
+    father_has_smartphone: fatherSmartphone,
+    mother_name: motherName,
+    mother_phone: motherPhone,
+    mother_has_smartphone: motherSmartphone,
+    alt_contact_name: altName,
+    alt_contact_phone: altPhoneRaw,
+    alt_contact_relationship: altRelationship,
+  };
+}
+
+async function loadStudent(
+  db: D1Database,
+  id: number,
+): Promise<Student | null> {
+  const row = await db
+    .prepare(`SELECT ${STUDENT_COLUMNS} FROM student WHERE id = ?`)
+    .bind(id)
+    .first<Student>();
+  return row ?? null;
+}
+
+// ---- routes -------------------------------------------------------
 
 children.get('/', requireCap('child.read'), async (c) => {
   const user = c.get('user');
@@ -38,15 +190,27 @@ children.get('/', requireCap('child.read'), async (c) => {
   if (!(await assertVillageInScope(c.env.DB, user, villageId))) {
     return err(c, 'forbidden', 403);
   }
-  const rs = await c.env.DB.prepare(
-    `SELECT id, village_id, school_id, first_name, last_name, gender, dob,
-            joined_at, graduated_at
-     FROM student WHERE village_id = ? AND graduated_at IS NULL
-     ORDER BY first_name, last_name`,
-  )
-    .bind(villageId)
-    .all<Student>();
+  const includeGraduated = c.req.query('include_graduated') === '1';
+  const sql = includeGraduated
+    ? `SELECT ${STUDENT_COLUMNS} FROM student WHERE village_id = ?
+       ORDER BY graduated_at IS NULL DESC, first_name, last_name`
+    : `SELECT ${STUDENT_COLUMNS} FROM student
+       WHERE village_id = ? AND graduated_at IS NULL
+       ORDER BY first_name, last_name`;
+  const rs = await c.env.DB.prepare(sql).bind(villageId).all<Student>();
   return c.json({ children: rs.results });
+});
+
+children.get('/:id', requireCap('child.read'), async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  if (!id) return err(c, 'bad_request', 400, 'id required');
+  const student = await loadStudent(c.env.DB, id);
+  if (!student) return err(c, 'not_found', 404);
+  if (!(await assertVillageInScope(c.env.DB, user, student.village_id))) {
+    return err(c, 'forbidden', 403);
+  }
+  return c.json({ child: student });
 });
 
 children.post('/', requireCap('child.write'), async (c) => {
@@ -62,6 +226,10 @@ children.post('/', requireCap('child.write'), async (c) => {
   if (!isIsoDate(dob)) {
     return err(c, 'bad_request', 400, 'dob must be YYYY-MM-DD');
   }
+  const joinedAt = body.joined_at ?? todayIstDate();
+  if (!isIsoDate(joinedAt)) {
+    return err(c, 'bad_request', 400, 'joined_at must be YYYY-MM-DD');
+  }
   if (!(await assertVillageInScope(c.env.DB, user, village_id))) {
     return err(c, 'forbidden', 403);
   }
@@ -71,26 +239,173 @@ children.post('/', requireCap('child.write'), async (c) => {
     .bind(school_id, village_id)
     .first<{ id: number }>();
   if (!school) return err(c, 'bad_request', 400, 'school not in village');
+
+  const profile = parseProfile(body, true);
+  if ('message' in profile) return err(c, 'bad_request', 400, profile.message);
+
+  const now = nowEpochSeconds();
   const rs = await c.env.DB.prepare(
     `INSERT INTO student
-       (village_id, school_id, first_name, last_name, gender, dob,
-        joined_at, created_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (village_id, school_id, first_name, last_name, gender, dob, joined_at,
+        father_name, father_phone, father_has_smartphone,
+        mother_name, mother_phone, mother_has_smartphone,
+        alt_contact_name, alt_contact_phone, alt_contact_relationship,
+        created_at, created_by, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?,
+             ?, ?, ?,
+             ?, ?, ?,
+             ?, ?, ?,
+             ?, ?, ?, ?)
      RETURNING id`,
   )
     .bind(
       village_id,
       school_id,
-      first_name,
-      last_name,
+      first_name.trim(),
+      last_name.trim(),
       gender,
       dob,
-      todayIstDate(),
-      nowEpochSeconds(),
+      joinedAt,
+      profile.father_name,
+      profile.father_phone,
+      profile.father_has_smartphone,
+      profile.mother_name,
+      profile.mother_phone,
+      profile.mother_has_smartphone,
+      profile.alt_contact_name,
+      profile.alt_contact_phone,
+      profile.alt_contact_relationship,
+      now,
+      user.id,
+      now,
       user.id,
     )
     .first<{ id: number }>();
   return c.json({ id: rs?.id }, 201);
+});
+
+children.patch('/:id', requireCap('child.write'), async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  if (!id) return err(c, 'bad_request', 400, 'id required');
+  const existing = await loadStudent(c.env.DB, id);
+  if (!existing) return err(c, 'not_found', 404);
+  if (!(await assertVillageInScope(c.env.DB, user, existing.village_id))) {
+    return err(c, 'forbidden', 403);
+  }
+  if (existing.graduated_at) {
+    return err(c, 'bad_request', 400, 'graduated students cannot be edited');
+  }
+
+  const body = await c.req.json<PatchBody>().catch(() => ({}) as PatchBody);
+
+  // Core fields — accept partial updates. village_id is intentionally
+  // not editable (changing a village crosses scope boundaries;
+  // handle that separately if it ever becomes a requirement).
+  const firstName = body.first_name?.trim() ?? existing.first_name;
+  const lastName = body.last_name?.trim() ?? existing.last_name;
+  const gender = body.gender ?? existing.gender;
+  if (!['m', 'f', 'o'].includes(gender)) {
+    return err(c, 'bad_request', 400, 'invalid gender');
+  }
+  const dob = body.dob ?? existing.dob;
+  if (!isIsoDate(dob)) {
+    return err(c, 'bad_request', 400, 'dob must be YYYY-MM-DD');
+  }
+  const joinedAt = body.joined_at ?? existing.joined_at;
+  if (!isIsoDate(joinedAt)) {
+    return err(c, 'bad_request', 400, 'joined_at must be YYYY-MM-DD');
+  }
+  const schoolId = body.school_id ?? existing.school_id;
+  if (schoolId !== existing.school_id) {
+    const school = await c.env.DB.prepare(
+      'SELECT id FROM school WHERE id = ? AND village_id = ?',
+    )
+      .bind(schoolId, existing.village_id)
+      .first<{ id: number }>();
+    if (!school) return err(c, 'bad_request', 400, 'school not in village');
+  }
+
+  // For the profile block PATCH is all-or-nothing: the body carries
+  // the desired new block. Partial-merge would require tracking which
+  // of the nine fields were omitted vs set-to-null, which the loose
+  // ProfileBody shape can't distinguish.
+  const profile = parseProfile(body, false);
+  if ('message' in profile) return err(c, 'bad_request', 400, profile.message);
+
+  const now = nowEpochSeconds();
+  await c.env.DB.prepare(
+    `UPDATE student SET
+       school_id = ?, first_name = ?, last_name = ?, gender = ?,
+       dob = ?, joined_at = ?,
+       father_name = ?, father_phone = ?, father_has_smartphone = ?,
+       mother_name = ?, mother_phone = ?, mother_has_smartphone = ?,
+       alt_contact_name = ?, alt_contact_phone = ?, alt_contact_relationship = ?,
+       updated_at = ?, updated_by = ?
+     WHERE id = ?`,
+  )
+    .bind(
+      schoolId,
+      firstName,
+      lastName,
+      gender,
+      dob,
+      joinedAt,
+      profile.father_name,
+      profile.father_phone,
+      profile.father_has_smartphone,
+      profile.mother_name,
+      profile.mother_phone,
+      profile.mother_has_smartphone,
+      profile.alt_contact_name,
+      profile.alt_contact_phone,
+      profile.alt_contact_relationship,
+      now,
+      user.id,
+      id,
+    )
+    .run();
+  const fresh = await loadStudent(c.env.DB, id);
+  return c.json({ child: fresh });
+});
+
+children.post('/:id/graduate', requireCap('child.write'), async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  if (!id) return err(c, 'bad_request', 400, 'id required');
+  const existing = await loadStudent(c.env.DB, id);
+  if (!existing) return err(c, 'not_found', 404);
+  if (!(await assertVillageInScope(c.env.DB, user, existing.village_id))) {
+    return err(c, 'forbidden', 403);
+  }
+  if (existing.graduated_at) {
+    return err(c, 'bad_request', 400, 'already graduated');
+  }
+  const body = await c.req.json<GraduateBody>().catch(() => ({}) as GraduateBody);
+  const graduatedAt = body.graduated_at ?? todayIstDate();
+  if (!isIsoDate(graduatedAt)) {
+    return err(c, 'bad_request', 400, 'graduated_at must be YYYY-MM-DD');
+  }
+  if (graduatedAt > todayIstDate()) {
+    return err(c, 'bad_request', 400, 'graduated_at cannot be in the future');
+  }
+  if (graduatedAt < existing.joined_at) {
+    return err(c, 'bad_request', 400, 'graduated_at cannot precede joined_at');
+  }
+  const reason = body.graduation_reason ?? 'pass_out';
+  if (!['pass_out', 'other'].includes(reason)) {
+    return err(c, 'bad_request', 400, 'invalid graduation_reason');
+  }
+  const now = nowEpochSeconds();
+  await c.env.DB.prepare(
+    `UPDATE student
+       SET graduated_at = ?, graduation_reason = ?, updated_at = ?, updated_by = ?
+       WHERE id = ?`,
+  )
+    .bind(graduatedAt, reason, now, user.id, id)
+    .run();
+  const fresh = await loadStudent(c.env.DB, id);
+  return c.json({ child: fresh });
 });
 
 export default children;
