@@ -37,13 +37,16 @@ const attendance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 attendance.use('*', requireAuth);
 
 // §3.3.1/§3.3.3: submissions accepted only for today, today-1, today-2.
-// Returns null on acceptance, a reason string on rejection.
-function windowReject(date: string): string | null {
-  if (date === todayIstDate()) return null;
-  const today = new Date(`${todayIstDate()}T00:00:00Z`);
+// `today` is captured once at the request entry so every call below
+// agrees on the same IST calendar date even if the request straddles
+// IST midnight. Returns null on acceptance, a reason string on
+// rejection.
+function windowReject(date: string, today: string): string | null {
+  if (date === today) return null;
+  const todayD = new Date(`${today}T00:00:00Z`);
   const target = new Date(`${date}T00:00:00Z`);
   const dayMs = 24 * 60 * 60 * 1000;
-  const diffDays = Math.round((today.getTime() - target.getTime()) / dayMs);
+  const diffDays = Math.round((todayD.getTime() - target.getTime()) / dayMs);
   if (diffDays < 0) return 'date cannot be in the future';
   if (diffDays > 2) return 'date must be within the last 3 days (today, today-1, today-2)';
   return null;
@@ -108,7 +111,10 @@ attendance.post('/', requireCap('attendance.write'), async (c) => {
   const body = await c.req.json<PostBody>().catch(() => ({}) as PostBody);
   const villageId = body.village_id;
   const eventId = body.event_id;
-  const date = body.date ?? todayIstDate();
+  // Capture today once so the default-date, window check, and any
+  // future uses inside this handler can't straddle an IST midnight.
+  const today = todayIstDate();
+  const date = body.date ?? today;
   const marks = body.marks ?? [];
   const startTime = body.start_time;
   const endTime = body.end_time;
@@ -123,7 +129,7 @@ attendance.post('/', requireCap('attendance.write'), async (c) => {
   if (!isIsoDate(date)) {
     return err(c, 'bad_request', 400, 'date must be YYYY-MM-DD');
   }
-  const windowErr = windowReject(date);
+  const windowErr = windowReject(date, today);
   if (windowErr) return err(c, 'bad_request', 400, windowErr);
   if (!startTime || !isClockTime(startTime)) {
     return err(c, 'bad_request', 400, 'start_time must be HH:MM');
@@ -156,19 +162,20 @@ attendance.post('/', requireCap('attendance.write'), async (c) => {
     return err(c, 'bad_request', 400, 'some students not in village or graduated');
   }
   const now = nowEpochSeconds();
-  // UPSERT on (village_id, date, event_id). A resubmission for the
-  // same (village, date, event) replaces the marks and bumps
-  // updated_at/by — spec §3.3.3.
+  // UPSERT on (village_id, date, event_id). On first insert
+  // updated_at/by stay NULL so "never updated" is distinguishable
+  // from "just updated"; on conflict both columns are populated and
+  // start_time / end_time may be edited — spec §3.3.3.
   const session = await c.env.DB.prepare(
     `INSERT INTO attendance_session
        (village_id, event_id, date, start_time, end_time,
-        created_at, created_by, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(village_id, date, event_id) DO UPDATE SET
        start_time = excluded.start_time,
        end_time = excluded.end_time,
-       updated_at = excluded.updated_at,
-       updated_by = excluded.updated_by
+       updated_at = ?,
+       updated_by = ?
      RETURNING id`,
   )
     .bind(villageId, eventId, date, startTime, endTime, now, user.id, now, user.id)

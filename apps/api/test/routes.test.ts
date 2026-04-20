@@ -284,6 +284,37 @@ describe('attendance', () => {
     expect(replayed?.marks.find((m) => m.student_id === 2)?.present).toBe(true);
   });
 
+  it('resubmission drops students that are no longer in the payload', async () => {
+    // Regression cover for the DELETE-then-INSERT pattern in the POST
+    // handler: if a resubmission omits a student that was on the
+    // previous submission, the stale mark must not linger.
+    const token = await loginAs('vc-anandpur');
+    const first = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        marks: [
+          { student_id: 1, present: true },
+          { student_id: 2, present: true },
+        ],
+      })),
+    });
+    expect(first.status).toBe(200);
+    const subset = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        marks: [{ student_id: 1, present: false }],
+      })),
+    });
+    expect(subset.status).toBe(200);
+
+    const get = await cookieFetch('/api/attendance?village_id=1', token);
+    const g = (await get.json()) as {
+      sessions: Array<{ event_id: number; marks: { student_id: number; present: boolean }[] }>;
+    };
+    const session = g.sessions.find((s) => s.event_id === 3);
+    expect(session?.marks.map((m) => m.student_id)).toEqual([1]);
+  });
+
   it('dashboard counts a student once across multiple sessions', async () => {
     const token = await loginAs('vc-anandpur');
     // Two sessions; student 1 present in both, student 2 present only in first.
