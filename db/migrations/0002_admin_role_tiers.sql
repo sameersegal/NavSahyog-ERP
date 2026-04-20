@@ -53,4 +53,11 @@ ALTER TABLE user_new RENAME TO user;
 -- The DROP cascades the index; recreate it.
 CREATE INDEX idx_user_scope ON user(scope_level, scope_id);
 
+-- Standard SQLite 12-step: verify FKs resolve against the rebuilt
+-- `user` table before re-enabling enforcement. A clean run returns
+-- zero rows. Wrangler D1 migrations execute silently — surface any
+-- violations by running this statement manually via `wrangler d1
+-- execute --command 'PRAGMA foreign_key_check;'` after applying.
+PRAGMA foreign_key_check;
+
 PRAGMA foreign_keys = ON;

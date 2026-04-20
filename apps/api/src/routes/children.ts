@@ -142,14 +142,14 @@ function parseProfile(
     fatherSmartphone === 1 || motherSmartphone === 1;
   const anyParentPhone = fatherPhone !== null || motherPhone !== null;
   const altName = (body.alt_contact_name ?? '').toString().trim() || null;
-  const altPhoneRaw = normalisePhone(body.alt_contact_phone);
-  if (altPhoneRaw === 'invalid') {
+  const altPhone = normalisePhone(body.alt_contact_phone);
+  if (altPhone === 'invalid') {
     return { message: 'alt_contact_phone must be a valid Indian mobile number' };
   }
   const altRelationship = (body.alt_contact_relationship ?? '').toString().trim() || null;
 
-  const altProvided = altName !== null || altPhoneRaw !== null || altRelationship !== null;
-  if (altProvided && (!altName || !altPhoneRaw || !altRelationship)) {
+  const altProvided = altName !== null || altPhone !== null || altRelationship !== null;
+  if (altProvided && (!altName || !altPhone || !altRelationship)) {
     return {
       message: 'alt_contact_* requires name, phone, and relationship together',
     };
@@ -169,7 +169,7 @@ function parseProfile(
     mother_phone: motherPhone,
     mother_has_smartphone: motherSmartphone,
     alt_contact_name: altName,
-    alt_contact_phone: altPhoneRaw,
+    alt_contact_phone: altPhone,
     alt_contact_relationship: altRelationship,
   };
 }
