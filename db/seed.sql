@@ -121,3 +121,42 @@ INSERT INTO achievement (student_id, description, date, type, gold_count, silver
   (3,  'Running race — under-10',                 strftime('%Y-%m', 'now') || '-12', 'silver', NULL, 1,    unixepoch(), 6),
   (9,  'Kho-Kho inter-village championship',      strftime('%Y-%m', 'now') || '-15', 'gold',   2,    NULL, unixepoch(), 6),
   (15, 'Board games — puzzle solving',            strftime('%Y-%m', 'now') || '-08', 'silver', NULL, 1,    unixepoch(), 6);
+
+-- Attendance sessions. Synthetic fixture data to light up the insights
+-- panel, streak chip, and drill-down dashboards. Profiles by village:
+--   * Anandpur (v1):     NONE. Kept deliberately clean so the
+--                        attendance route tests can insert a single
+--                        session and assert its ratio without the
+--                        seed skewing the drilldown window.
+--   * Belur (v2):        every day for the last 21 days (unbroken
+--                        streak, ~82% attendance). Star village —
+--                        tops the "this week" insight card.
+--   * Chandragiri (v3):  ran every 2 days up to 5 days ago, then
+--                        silence (surfaces as the "at-risk village"
+--                        insight card).
+-- Events cycle across activities 3..8 so the session list isn't
+-- monotone.
+INSERT INTO attendance_session (village_id, event_id, date, start_time, end_time, created_at, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 27)
+SELECT 2, 3 + (n % 6), date('now', '-' || n || ' days'), '10:30', '11:30', unixepoch(), 2
+FROM days WHERE n BETWEEN 0 AND 20;
+
+INSERT INTO attendance_session (village_id, event_id, date, start_time, end_time, created_at, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 27)
+SELECT 3, 3 + (n % 6), date('now', '-' || n || ' days'), '10:00', '11:00', unixepoch(), 3
+FROM days WHERE n >= 5 AND n % 2 = 1 AND n <= 25;
+
+-- Attendance marks — one row per (session, child-in-village). Present
+-- flag uses deterministic modular arithmetic so each seeded village
+-- gets a distinguishable attendance %:
+--   v2: ~82% present (star village)
+--   v3: ~58% (worst, matching its lapsed status)
+INSERT INTO attendance_mark (session_id, student_id, present)
+SELECT s.id, c.id,
+  CASE s.village_id
+    WHEN 2 THEN CASE WHEN ((s.id * 11 + c.id * 5) % 6) = 0 THEN 0 ELSE 1 END
+    ELSE       CASE WHEN ((s.id * 17 + c.id * 3) % 5) <= 1 THEN 0 ELSE 1 END
+  END
+FROM attendance_session s
+JOIN student c ON c.village_id = s.village_id
+WHERE c.graduated_at IS NULL;

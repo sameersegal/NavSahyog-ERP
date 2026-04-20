@@ -25,11 +25,18 @@ export type {
   DashboardMetric,
   GeoLevel,
 } from '@navsahyog/shared';
+export type {
+  InsightKpi,
+  InsightsResponse,
+  StreakResponse,
+  VillageActivity,
+} from '@navsahyog/shared';
 export {
   can,
   isIndianPhone,
   isIsoDate,
   isClockTime,
+  AT_RISK_THRESHOLD_DAYS,
   DASHBOARD_METRICS,
   GEO_LEVELS,
 } from '@navsahyog/shared';
@@ -44,8 +51,10 @@ import type {
   Event,
   GeoLevel,
   GraduationReason,
+  InsightsResponse,
   MediaKind,
   MediaWithUrls,
+  StreakResponse,
   Student,
 } from '@navsahyog/shared';
 
@@ -237,6 +246,8 @@ export const api = {
   // need the response body on the client).
   dashboardDrilldownCsvUrl: (opts: DrilldownQuery) =>
     `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
+  insights: () => req<InsightsResponse>('/api/insights'),
+  streaks: () => req<StreakResponse>('/api/streaks/me'),
 };
 
 export type DrilldownQuery = {

@@ -647,36 +647,15 @@ function ChildForm(props: ChildFormProps) {
         <p className="text-xs text-muted-fg">{t('children.form.phone_hint')}</p>
       </fieldset>
 
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold">{t('children.form.alt_contact')}</legend>
-        {altRequired && (
-          <p className="text-xs text-danger">
-            {t('children.form.alt_contact.required_hint')}
-          </p>
-        )}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <label className="block">
-            <span className="text-sm">{t('children.form.alt_contact_name')}</span>
-            <input className={FIELD} value={altName} onChange={(e) => setAltName(e.target.value)} required={altRequired} />
-          </label>
-          <label className="block">
-            <span className="text-sm">{t('children.form.alt_contact_phone')}</span>
-            <input
-              className={FIELD}
-              value={altPhone}
-              onChange={(e) => setAltPhone(e.target.value)}
-              type="tel"
-              autoComplete="off"
-              placeholder="+91"
-              required={altRequired}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm">{t('children.form.alt_contact_relationship')}</span>
-            <input className={FIELD} value={altRelationship} onChange={(e) => setAltRelationship(e.target.value)} required={altRequired} />
-          </label>
-        </div>
-      </fieldset>
+      <AltContactSection
+        altName={altName}
+        setAltName={setAltName}
+        altPhone={altPhone}
+        setAltPhone={setAltPhone}
+        altRelationship={altRelationship}
+        setAltRelationship={setAltRelationship}
+        altRequired={altRequired}
+      />
 
       {err && <p className="text-sm text-danger">{err}</p>}
       <div className="flex items-center gap-3">
@@ -700,6 +679,122 @@ function ChildForm(props: ChildFormProps) {
         </button>
       </div>
     </form>
+  );
+}
+
+// Alt-contact block hidden behind a disclosure when it's not
+// required (i.e. at least one parent has a smartphone). This keeps
+// the child form short for the common case and reminds the VC to
+// fill it only when §3.3 demands.
+function AltContactSection({
+  altName,
+  setAltName,
+  altPhone,
+  setAltPhone,
+  altRelationship,
+  setAltRelationship,
+  altRequired,
+}: {
+  altName: string;
+  setAltName: (v: string) => void;
+  altPhone: string;
+  setAltPhone: (v: string) => void;
+  altRelationship: string;
+  setAltRelationship: (v: string) => void;
+  altRequired: boolean;
+}) {
+  const { t } = useI18n();
+  const hasValue =
+    altName.trim() !== '' || altPhone.trim() !== '' || altRelationship.trim() !== '';
+  // Open when required, when already filled, or when the user
+  // clicks the "Add alt contact" CTA. Closed otherwise to keep the
+  // form short.
+  const [open, setOpen] = useState(altRequired || hasValue);
+  useEffect(() => {
+    if (altRequired || hasValue) setOpen(true);
+  }, [altRequired, hasValue]);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-sm text-primary hover:underline"
+      >
+        {t('children.form.alt_contact.add')}
+      </button>
+    );
+  }
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-sm font-semibold">
+        {t('children.form.alt_contact')}
+      </legend>
+      {altRequired ? (
+        <p className="text-xs text-danger">
+          {t('children.form.alt_contact.required_hint')}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-fg">
+          {t('children.form.alt_contact.optional_hint')}
+        </p>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <AltContactFieldsSlot
+          altName={altName}
+          setAltName={setAltName}
+          altPhone={altPhone}
+          setAltPhone={setAltPhone}
+          altRelationship={altRelationship}
+          setAltRelationship={setAltRelationship}
+          altRequired={altRequired}
+        />
+      </div>
+    </fieldset>
+  );
+}
+
+function AltContactFieldsSlot({
+  altName,
+  setAltName,
+  altPhone,
+  setAltPhone,
+  altRelationship,
+  setAltRelationship,
+  altRequired,
+}: {
+  altName: string;
+  setAltName: (v: string) => void;
+  altPhone: string;
+  setAltPhone: (v: string) => void;
+  altRelationship: string;
+  setAltRelationship: (v: string) => void;
+  altRequired: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <>
+      <label className="block">
+        <span className="text-sm">{t('children.form.alt_contact_name')}</span>
+        <input className={FIELD} value={altName} onChange={(e) => setAltName(e.target.value)} required={altRequired} />
+      </label>
+      <label className="block">
+        <span className="text-sm">{t('children.form.alt_contact_phone')}</span>
+        <input
+          className={FIELD}
+          value={altPhone}
+          onChange={(e) => setAltPhone(e.target.value)}
+          type="tel"
+          autoComplete="off"
+          placeholder="+91"
+          required={altRequired}
+        />
+      </label>
+      <label className="block">
+        <span className="text-sm">{t('children.form.alt_contact_relationship')}</span>
+        <input className={FIELD} value={altRelationship} onChange={(e) => setAltRelationship(e.target.value)} required={altRequired} />
+      </label>
+    </>
   );
 }
 
@@ -795,6 +890,24 @@ function dateOffset(days: number): string {
   return new Date(istMs).toISOString().slice(0, 10);
 }
 
+function CountBadge({
+  variant,
+  label,
+}: {
+  variant: 'present' | 'absent';
+  label: string;
+}) {
+  const cls =
+    variant === 'present'
+      ? 'bg-primary/15 text-primary'
+      : 'bg-danger/10 text-danger';
+  return (
+    <span className={`text-xs px-2 py-1 rounded-full font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 type Editor =
   | { mode: 'new' }
   | { mode: 'edit'; session: AttendanceSessionWithMarks };
@@ -809,6 +922,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
   const [sessions, setSessions] = useState<AttendanceSessionWithMarks[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -871,6 +985,12 @@ function AttendanceTab({ villageId }: { villageId: number }) {
         onEdit={(s) => setEditor({ mode: 'edit', session: s })}
       />
 
+      {toast && (
+        <div className="bg-primary/10 border border-primary/30 text-primary rounded px-3 py-2 text-sm">
+          {toast}
+        </div>
+      )}
+
       {canWrite && editor && (
         <SessionForm
           key={editor.mode === 'edit' ? editor.session.id : 'new'}
@@ -879,8 +999,36 @@ function AttendanceTab({ villageId }: { villageId: number }) {
           events={events}
           children={children}
           existing={editor.mode === 'edit' ? editor.session : null}
-          onSaved={() => {
+          onSaved={(summary) => {
             setEditor(null);
+            // Post-save comparison toast: pct against the best pct
+            // in the (now-reloaded) session list for this date. On
+            // first save of the day the toast says "steady"; once
+            // there are siblings we can promote to "best/ matches".
+            if (summary) {
+              const priorBest = sessions.reduce((best, s) => {
+                if (s.marks.length === 0) return best;
+                const p = Math.round(
+                  (s.marks.filter((m) => m.present).length / s.marks.length) * 100,
+                );
+                return Math.max(best, p);
+              }, 0);
+              const thisPct = summary.total === 0 ? 0 : Math.round((summary.present / summary.total) * 100);
+              const hint =
+                thisPct > priorBest
+                  ? t('streak.toast.best_of_week')
+                  : thisPct === priorBest
+                    ? t('streak.toast.matches_best')
+                    : t('streak.toast.steady');
+              setToast(
+                t('streak.toast.saved', {
+                  present: summary.present,
+                  total: summary.total,
+                  hint,
+                }),
+              );
+              setTimeout(() => setToast(null), 4000);
+            }
             load();
           }}
           onCancel={() => setEditor(null)}
@@ -1103,6 +1251,32 @@ function VoiceNoteRecorder({
   );
 }
 
+// Minutes between two HH:MM strings. Negative when end < start.
+function minutesBetween(start: string, end: string): number {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return (eh! * 60 + em!) - (sh! * 60 + sm!);
+}
+// HH:MM rounded to the nearest 5 minutes, IST wall clock.
+function nowIstClock(): string {
+  const ist = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
+  let m = ist.getUTCMinutes();
+  const rounded = Math.round(m / 5) * 5;
+  const addH = rounded === 60 ? 1 : 0;
+  const mm = rounded === 60 ? 0 : rounded;
+  const hh = (ist.getUTCHours() + addH) % 24;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+function addMinutes(time: string, mins: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const total = (h! * 60 + m! + mins + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// Typical session lengths from the onboarding doc. These map to
+// single-tap chips so the VC never types a time.
+const DURATION_CHIPS = [30, 45, 60, 90] as const;
+
 function SessionForm({
   villageId,
   date,
@@ -1117,7 +1291,7 @@ function SessionForm({
   events: Event[];
   children: Child[];
   existing: AttendanceSessionWithMarks | null;
-  onSaved: () => void;
+  onSaved: (summary?: { present: number; total: number }) => void;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
@@ -1146,6 +1320,20 @@ function SessionForm({
     for (const c of children) if (marks[c.id]) present += 1;
     return { present, total: children.length };
   }, [children, marks]);
+  const activeDuration = minutesBetween(startTime, endTime);
+
+  function setStartToNow() {
+    const now = nowIstClock();
+    setStartTime(now);
+    // Preserve the currently selected duration when the start time
+    // slides, so tapping "Now" then "60 min" works the way you'd
+    // expect and doesn't force you to re-pick the chip.
+    const dur = activeDuration > 0 ? activeDuration : 60;
+    setEndTime(addMinutes(now, dur));
+  }
+  function setDuration(mins: number) {
+    setEndTime(addMinutes(startTime, mins));
+  }
 
   function setAll(present: boolean) {
     const next: Record<number, boolean> = {};
@@ -1179,7 +1367,7 @@ function SessionForm({
           present: marks[c.id] ?? false,
         })),
       });
-      onSaved();
+      onSaved({ present: counts.present, total: counts.total });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'failed');
     } finally {
@@ -1218,26 +1406,58 @@ function SessionForm({
             ))}
           </select>
         </label>
-        <label className="block">
-          <span className="text-sm">{t('attendance.form.start_time')}</span>
-          <input
-            type="time"
-            className={FIELD}
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            required
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">{t('attendance.form.end_time')}</span>
-          <input
-            type="time"
-            className={FIELD}
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            required
-          />
-        </label>
+        <div className="sm:col-span-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="text-sm">{t('attendance.form.start_time')}</span>
+              <input
+                type="time"
+                className={FIELD}
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+              />
+            </label>
+            <button
+              type="button"
+              onClick={setStartToNow}
+              className="h-[38px] bg-card hover:bg-card-hover border border-border rounded px-3 text-sm"
+            >
+              {t('attendance.form.start_now')}
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-fg">
+              {t('attendance.form.duration')}
+            </span>
+            {DURATION_CHIPS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDuration(d)}
+                aria-pressed={activeDuration === d}
+                className={
+                  'rounded-full px-3 py-1 text-xs border ' +
+                  (activeDuration === d
+                    ? 'bg-primary text-primary-fg border-primary'
+                    : 'bg-card text-fg border-border hover:bg-card-hover')
+                }
+              >
+                {t('attendance.form.duration_chip', { mins: d })}
+              </button>
+            ))}
+            <label className="text-xs text-muted-fg ml-2">
+              {t('attendance.form.end_time')}{' '}
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="bg-card text-fg border border-border rounded px-2 py-1 text-xs"
+                required
+              />
+            </label>
+          </div>
+        </div>
       </div>
 
       <VoiceNoteRecorder
@@ -1247,13 +1467,19 @@ function SessionForm({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-fg">
-          {t('attendance.counts', {
-            present: counts.present,
-            absent: counts.total - counts.present,
-            total: counts.total,
-          })}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <CountBadge
+            variant="present"
+            label={t('attendance.badge.present', { n: counts.present })}
+          />
+          <CountBadge
+            variant="absent"
+            label={t('attendance.badge.absent', { n: counts.total - counts.present })}
+          />
+          <span className="text-xs text-muted-fg">
+            {t('attendance.badge.of', { total: counts.total })}
+          </span>
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
@@ -1277,22 +1503,35 @@ function SessionForm({
           const present = marks[c.id] ?? false;
           return (
             <li key={c.id}>
-              <label className="p-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-card-hover">
+              <button
+                type="button"
+                onClick={() => toggleOne(c.id, !present)}
+                aria-pressed={present}
+                className={
+                  'w-full min-h-[52px] p-3 flex items-center justify-between gap-3 text-left ' +
+                  (present ? 'hover:bg-card-hover' : 'bg-danger/5 hover:bg-danger/10')
+                }
+              >
                 <span className="font-medium">
                   {c.first_name} {c.last_name}
                 </span>
                 <span className="inline-flex items-center gap-2 text-sm">
-                  <span className={present ? 'text-primary' : 'text-muted-fg'}>
+                  <span className={present ? 'text-primary font-medium' : 'text-danger font-medium'}>
                     {present ? t('attendance.present') : t('attendance.absent')}
                   </span>
-                  <input
-                    type="checkbox"
-                    checked={present}
-                    onChange={(e) => toggleOne(c.id, e.target.checked)}
-                    className="w-5 h-5 accent-[hsl(var(--primary))]"
-                  />
+                  <span
+                    aria-hidden="true"
+                    className={
+                      'inline-flex items-center justify-center w-6 h-6 rounded-full border text-xs ' +
+                      (present
+                        ? 'bg-primary text-primary-fg border-primary'
+                        : 'bg-card border-border text-muted-fg')
+                    }
+                  >
+                    {present ? '✓' : ''}
+                  </span>
                 </span>
-              </label>
+              </button>
             </li>
           );
         })}

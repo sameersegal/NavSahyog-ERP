@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   api,
+  AT_RISK_THRESHOLD_DAYS,
   DASHBOARD_METRICS,
   type DashboardMetric,
   type DrilldownQuery,
   type DrilldownResponse,
   type GeoLevel,
+  type InsightsResponse,
+  type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
@@ -31,6 +35,45 @@ function todayIstDate(): string {
 function firstOfMonthIst(): string {
   return todayIstDate().slice(0, 7) + '-01';
 }
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function firstOfPrevMonthIst(): string {
+  const [y, m] = todayIstDate().slice(0, 7).split('-').map(Number) as [number, number];
+  const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  return `${prev}-01`;
+}
+function lastOfPrevMonthIst(): string {
+  return addDays(firstOfMonthIst(), -1);
+}
+
+// Period presets. Each returns a {from, to} pair the user would
+// otherwise have to construct by hand. "Custom" keeps whatever's in
+// the inputs; it's the escape hatch for date-range analysis.
+type PresetKey = 'today' | 'this_week' | 'this_month' | 'last_month' | 'custom';
+
+function applyPreset(key: PresetKey, from: string, to: string): { from: string; to: string } {
+  const today = todayIstDate();
+  switch (key) {
+    case 'today':      return { from: today, to: today };
+    case 'this_week':  return { from: addDays(today, -6), to: today };
+    case 'this_month': return { from: firstOfMonthIst(), to: today };
+    case 'last_month': return { from: firstOfPrevMonthIst(), to: lastOfPrevMonthIst() };
+    case 'custom':     return { from, to };
+  }
+}
+
+function detectPreset(from: string, to: string): PresetKey {
+  const today = todayIstDate();
+  if (from === today && to === today) return 'today';
+  if (from === addDays(today, -6) && to === today) return 'this_week';
+  if (from === firstOfMonthIst() && to === today) return 'this_month';
+  if (from === firstOfPrevMonthIst() && to === lastOfPrevMonthIst()) return 'last_month';
+  return 'custom';
+}
 
 export function Dashboard() {
   const { t } = useI18n();
@@ -38,14 +81,15 @@ export function Dashboard() {
   const startingPos = user ? defaultPosition(user) : { level: 'india' as GeoLevel, id: null };
   const [metric, setMetric] = useState<DashboardMetric>('children');
   const [pos, setPos] = useState<Position>(startingPos);
-  // Period state; only sent to the server for attendance / achievements.
   const [from, setFrom] = useState(firstOfMonthIst());
   const [to, setTo] = useState(todayIstDate());
   const [data, setData] = useState<DrilldownResponse | null>(null);
+  const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const needsPeriod = metric === 'attendance' || metric === 'achievements';
+  const preset = detectPreset(from, to);
 
   const query = useMemo<DrilldownQuery>(
     () => ({
@@ -74,12 +118,19 @@ export function Dashboard() {
     reload();
   }, [reload]);
 
+  // Insights ride alongside the table. Same scope as the rest of
+  // the app; no period filter (the insights card is always "now").
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .insights()
+      .then((r) => { if (!cancelled) setInsights(r); })
+      .catch(() => { if (!cancelled) setInsights(null); });
+    return () => { cancelled = true; };
+  }, []);
+
   function onMetricChange(m: DashboardMetric) {
     setMetric(m);
-    // Reset position to the user's scope floor so they land at the
-    // top of the new metric's tree rather than wherever they were
-    // for the old one. For super admin that's India; for everyone
-    // else, their scope level.
     setPos(startingPos);
   }
 
@@ -97,9 +148,19 @@ export function Dashboard() {
     setPos({ level: c.level, id: c.id });
   }
 
+  function onPreset(key: PresetKey) {
+    const next = applyPreset(key, from, to);
+    setFrom(next.from);
+    setTo(next.to);
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
+
+      {insights && pos.level === startingPos.level && pos.id === startingPos.id && (
+        <InsightRail insights={insights} />
+      )}
 
       <div className="flex flex-wrap gap-2">
         {DASHBOARD_METRICS.map((m) => (
@@ -114,25 +175,42 @@ export function Dashboard() {
       </div>
 
       {needsPeriod && (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <label className="flex items-center gap-2">
-            <span className="text-muted-fg">{t('dashboard.period.from')}</span>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="bg-card text-fg border border-border rounded px-2 py-1.5"
-            />
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="text-muted-fg">{t('dashboard.period.to')}</span>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="bg-card text-fg border border-border rounded px-2 py-1.5"
-            />
-          </label>
+        <div className="flex flex-wrap items-center gap-2">
+          {(['today', 'this_week', 'this_month', 'last_month', 'custom'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => {
+                if (k === 'custom') return;
+                onPreset(k);
+              }}
+              aria-pressed={preset === k}
+              className={
+                'rounded-full px-3 py-1 text-xs border ' +
+                (preset === k
+                  ? 'bg-primary text-primary-fg border-primary'
+                  : 'bg-card text-fg border-border hover:bg-card-hover')
+              }
+            >
+              {t(`dashboard.preset.${k}`)}
+            </button>
+          ))}
+          {preset === 'custom' && (
+            <div className="flex items-center gap-2 text-sm ml-1">
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="bg-card text-fg border border-border rounded px-2 py-1"
+              />
+              <span className="text-muted-fg">–</span>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="bg-card text-fg border border-border rounded px-2 py-1"
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -173,6 +251,108 @@ export function Dashboard() {
   );
 }
 
+function InsightRail({ insights }: { insights: InsightsResponse }) {
+  const { t } = useI18n();
+  const withCards =
+    insights.at_risk_villages.length > 0 || insights.top_villages.length > 1;
+  return (
+    <div className="space-y-4">
+      <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {insights.kpis.map((k) => {
+          const isPct = k.label === 'attendance_week' || k.label === 'attendance_month';
+          const trendColor =
+            k.trend === 'up' ? 'text-primary'
+            : k.trend === 'down' ? 'text-danger'
+            : 'text-muted-fg';
+          const arrow =
+            k.trend === 'up' ? '▲'
+            : k.trend === 'down' ? '▼'
+            : k.trend === 'flat' ? '•' : null;
+          return (
+            <div key={k.label} className="bg-card border border-border rounded-lg p-3 flex flex-col gap-0.5">
+              <div className="text-xs text-muted-fg uppercase tracking-wide">
+                {t(`home.kpi.${k.label}`)}
+              </div>
+              <div className="text-xl font-semibold">
+                {k.value}{isPct ? '%' : ''}
+              </div>
+              {k.delta !== null && arrow && (
+                <div className={`text-xs ${trendColor}`}>
+                  {arrow} {k.delta > 0 ? '+' : ''}{k.delta}{isPct ? 'pp' : ''}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </section>
+      {withCards && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {insights.at_risk_villages.length > 0 && (
+            <AtRiskMini villages={insights.at_risk_villages.slice(0, 5)} />
+          )}
+          {insights.top_villages.length > 1 && (
+            <TopMini villages={insights.top_villages.slice(0, 5)} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AtRiskMini({ villages }: { villages: VillageActivity[] }) {
+  const { t } = useI18n();
+  return (
+    <div className="bg-card border border-danger/30 rounded-lg p-4 space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-danger">
+          {t('home.at_risk.title')}
+        </h3>
+        <span className="text-xs text-muted-fg">
+          {t('home.at_risk.threshold', { days: AT_RISK_THRESHOLD_DAYS })}
+        </span>
+      </div>
+      <ul className="space-y-1 text-sm">
+        {villages.map((v) => (
+          <li key={v.village_id} className="flex items-baseline justify-between gap-2">
+            <Link to={`/village/${v.village_id}`} className="text-primary hover:underline truncate">
+              {v.village_name}
+            </Link>
+            <span className="text-xs text-muted-fg shrink-0">
+              {v.days_since_last_session === null
+                ? t('home.at_risk.never')
+                : t('home.at_risk.days', { days: v.days_since_last_session })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function TopMini({ villages }: { villages: VillageActivity[] }) {
+  const { t } = useI18n();
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 space-y-2">
+      <h3 className="text-sm font-semibold">{t('home.top.title')}</h3>
+      <ul className="space-y-1 text-sm">
+        {villages.map((v, i) => (
+          <li key={v.village_id} className="flex items-baseline justify-between gap-2">
+            <span className="flex items-baseline gap-2 min-w-0">
+              <span className="text-xs text-muted-fg w-4 shrink-0">{i + 1}</span>
+              <Link to={`/village/${v.village_id}`} className="text-primary hover:underline truncate">
+                {v.village_name}
+              </Link>
+            </span>
+            <span className="text-xs font-medium shrink-0">
+              {v.attendance_pct_week}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function TileButton({
   active,
   onClick,
@@ -208,6 +388,12 @@ function DrillDownTable({
 }) {
   const { t } = useI18n();
   const drillable = data.child_level !== 'detail' && data.child_level !== null;
+  // Columns whose header ends in "%" get rendered with a trailing
+  // "%" glyph — the server already returns the numeric value but
+  // the vendor parity table was headed "Attendance %" / cell "80",
+  // which reads wrong. The glyph swap happens here so backend-side
+  // CSV stays numeric.
+  const pctCols = data.headers.map((h) => h.trim().endsWith('%'));
   return (
     <div className="bg-card border border-border rounded overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-border text-sm">
@@ -262,19 +448,23 @@ function DrillDownTable({
                     (canDrill ? 'cursor-pointer hover:bg-card-hover' : '')
                   }
                 >
-                  {row.map((cell, i) => (
-                    <td
-                      key={i}
-                      className={
-                        'px-4 py-2 ' +
-                        (i === 0
-                          ? (canDrill ? 'text-primary' : '')
-                          : 'text-right')
-                      }
-                    >
-                      {cell ?? ''}
-                    </td>
-                  ))}
+                  {row.map((cell, i) => {
+                    const display =
+                      pctCols[i] && typeof cell === 'number' ? `${cell}%` : cell ?? '';
+                    return (
+                      <td
+                        key={i}
+                        className={
+                          'px-4 py-2 ' +
+                          (i === 0
+                            ? (canDrill ? 'text-primary' : '')
+                            : 'text-right tabular-nums')
+                        }
+                      >
+                        {display}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}

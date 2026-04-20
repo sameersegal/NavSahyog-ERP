@@ -99,36 +99,75 @@ export function Capture() {
     { group: 'activity', label: t('capture.form.activity'), items: events.filter((e) => e.kind === 'activity') },
   ];
 
+  const singleVillage = villages.length === 1;
+
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-semibold">{t('capture.title')}</h1>
 
       <div className="bg-card border border-border rounded p-4 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <label className="block">
-            <span className="text-sm">{t('capture.form.village')}</span>
-            <select
-              className={FIELD}
-              value={villageId ?? ''}
-              onChange={(e) => setVillageId(Number(e.target.value))}
-            >
-              {villages.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm">{t('capture.form.kind')}</span>
-            <select
-              className={FIELD}
-              value={kind}
-              onChange={(e) => setKind(e.target.value as MediaKind)}
-            >
-              <option value="image">{t('capture.form.kind.image')}</option>
-              <option value="video">{t('capture.form.kind.video')}</option>
-              <option value="audio">{t('capture.form.kind.audio')}</option>
-            </select>
-          </label>
+        {/* Kind selector as segmented buttons — photo / video / audio.
+            Three big touch targets are faster than a dropdown in the
+            field, and the icons make the choice legible at a glance. */}
+        <div>
+          <div className="text-xs text-muted-fg uppercase tracking-wide mb-1.5">
+            {t('capture.form.kind')}
+          </div>
+          <div
+            role="radiogroup"
+            aria-label={t('capture.form.kind')}
+            className="inline-flex rounded-lg border border-border overflow-hidden"
+          >
+            {(['image', 'video', 'audio'] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={kind === k}
+                onClick={() => setKind(k)}
+                className={
+                  'px-4 py-2 text-sm min-w-[84px] flex items-center justify-center gap-1.5 border-r border-border last:border-r-0 ' +
+                  (kind === k
+                    ? 'bg-primary text-primary-fg'
+                    : 'bg-card text-fg hover:bg-card-hover')
+                }
+              >
+                <span aria-hidden="true">
+                  {k === 'image' ? '📷' : k === 'video' ? '🎬' : '🎙'}
+                </span>
+                {t(`capture.form.kind.${k}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={`grid grid-cols-1 gap-3 ${singleVillage ? 'sm:grid-cols-1' : 'sm:grid-cols-2'}`}>
+          {/* Village picker. For single-village users the dropdown is
+              useless noise — we show a read-only chip instead. */}
+          {singleVillage ? (
+            <div>
+              <div className="text-xs text-muted-fg uppercase tracking-wide mb-1">
+                {t('capture.form.village')}
+              </div>
+              <div className="inline-flex items-center gap-2 bg-card-hover border border-border rounded px-3 py-1.5 text-sm">
+                <span aria-hidden="true">📍</span>
+                <span className="font-medium">{villages[0]?.name}</span>
+              </div>
+            </div>
+          ) : (
+            <label className="block">
+              <span className="text-sm">{t('capture.form.village')}</span>
+              <select
+                className={FIELD}
+                value={villageId ?? ''}
+                onChange={(e) => setVillageId(Number(e.target.value))}
+              >
+                {villages.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="text-sm">{t('capture.form.tag')}</span>
             <select

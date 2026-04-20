@@ -1,11 +1,33 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserMenu } from '../components/UserMenu';
 import { useI18n } from '../i18n';
+import { useAuth } from '../auth';
+import { api, can, type StreakResponse } from '../api';
 
 export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { t } = useI18n();
+  const { user } = useAuth();
+  const [streak, setStreak] = useState<StreakResponse | null>(null);
+
+  // Streak chip is only meaningful for write-tier roles that run
+  // activities. Read-only district+ admins don't log sessions
+  // themselves, so there's nothing to streak on.
+  const canLog = can(user, 'attendance.write');
+
+  useEffect(() => {
+    if (!canLog) {
+      setStreak(null);
+      return;
+    }
+    let cancelled = false;
+    api.streaks()
+      .then((r) => { if (!cancelled) setStreak(r); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [canLog, pathname]);
+
   return (
     <div className="min-h-full flex flex-col bg-bg">
       <header className="bg-primary text-primary-fg shadow">
@@ -34,7 +56,10 @@ export function Shell({ children }: { children: ReactNode }) {
               {t('nav.dashboard')}
             </NavLink>
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            {streak && streak.current_streak_days > 0 && (
+              <StreakChip streak={streak} />
+            )}
             <UserMenu />
           </div>
         </div>
@@ -43,6 +68,28 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="max-w-5xl mx-auto p-3 sm:p-4">{children}</div>
       </main>
     </div>
+  );
+}
+
+function StreakChip({ streak }: { streak: StreakResponse }) {
+  const { t } = useI18n();
+  // Flame glyph sized relative to the text; the small digit tucked
+  // against it avoids a separate pill edge. Tooltip shows the best
+  // streak so the chip rewards without bragging.
+  const title = t('streak.tooltip', {
+    best: streak.best_streak_days,
+    thisWeek: streak.sessions_this_week,
+  });
+  return (
+    <span
+      title={title}
+      className="hidden sm:inline-flex items-center gap-1 rounded-full bg-white/15 text-primary-fg px-2.5 py-1 text-xs font-medium"
+    >
+      <span aria-hidden="true">🔥</span>
+      <span>
+        {t('streak.label', { days: streak.current_streak_days })}
+      </span>
+    </span>
   );
 }
 
