@@ -315,7 +315,9 @@ describe('children full profile (L2.1)', () => {
       };
     };
     expect(detailBody.child.father_name).toBe('Ravi');
-    expect(detailBody.child.father_phone).toBe('9876543210');
+    // Phone is canonicalised to `+91XXXXXXXXXX` on write so the
+    // same number written with and without prefix stores identically.
+    expect(detailBody.child.father_phone).toBe('+919876543210');
     expect(detailBody.child.alt_contact_relationship).toBe('neighbour');
   });
 
@@ -353,6 +355,76 @@ describe('children full profile (L2.1)', () => {
       body: JSON.stringify({ first_name: 'Hack' }),
     });
     expect(res.status).toBe(403);
+  });
+
+  it('PATCH with only core fields preserves the profile block', async () => {
+    // Regression: a previous implementation wiped parent + alt-contact
+    // columns to NULL whenever the PATCH body omitted them.
+    const token = await loginAs('vc-anandpur');
+
+    // Seed student 2 with a full profile (no-smartphone path so alt
+    // contact is also populated).
+    const put = await cookieFetch('/api/children/2', token, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        father_name: 'Mohan',
+        father_phone: '9876543210',
+        father_has_smartphone: false,
+        mother_name: 'Sita',
+        mother_phone: '9812345670',
+        mother_has_smartphone: false,
+        alt_contact_name: 'Raju',
+        alt_contact_phone: '9123456780',
+        alt_contact_relationship: 'uncle',
+      }),
+    });
+    expect(put.status).toBe(200);
+
+    // Now PATCH only a core field; profile block must survive.
+    const core = await cookieFetch('/api/children/2', token, {
+      method: 'PATCH',
+      body: JSON.stringify({ first_name: 'Renamed' }),
+    });
+    expect(core.status).toBe(200);
+
+    const detail = await cookieFetch('/api/children/2', token);
+    const body = (await detail.json()) as {
+      child: {
+        first_name: string;
+        father_name: string | null;
+        father_phone: string | null;
+        mother_name: string | null;
+        alt_contact_relationship: string | null;
+      };
+    };
+    expect(body.child.first_name).toBe('Renamed');
+    expect(body.child.father_name).toBe('Mohan');
+    expect(body.child.father_phone).toBe('+919876543210');
+    expect(body.child.mother_name).toBe('Sita');
+    expect(body.child.alt_contact_relationship).toBe('uncle');
+  });
+
+  it('PATCH with explicit null clears a single profile field', async () => {
+    // The inverse of the preservation test — a client passing
+    // `null` explicitly (vs. omitting the key) clears that field.
+    const token = await loginAs('vc-anandpur');
+    // Student 3 starts with a father + alt contact.
+    await cookieFetch('/api/children/3', token, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        father_name: 'Arun',
+        father_phone: '9876543210',
+        father_has_smartphone: true,
+      }),
+    });
+    // Clear alt_contact_relationship explicitly (which is already
+    // null, but we want to prove the `null` path is honoured and
+    // passes validation because an smartphone parent exists).
+    const res = await cookieFetch('/api/children/3', token, {
+      method: 'PATCH',
+      body: JSON.stringify({ alt_contact_relationship: null }),
+    });
+    expect(res.status).toBe(200);
   });
 
   it('graduate sets graduated_at + reason; a second attempt is rejected', async () => {

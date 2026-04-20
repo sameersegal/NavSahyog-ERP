@@ -73,7 +73,11 @@ function normalisePhone(raw: unknown): string | null | 'invalid' {
   if (typeof raw !== 'string') return 'invalid';
   const trimmed = raw.trim();
   if (trimmed === '') return null;
-  return isIndianPhone(trimmed) ? trimmed : 'invalid';
+  if (!isIndianPhone(trimmed)) return 'invalid';
+  // Canonicalise to `+91XXXXXXXXXX`. Without this, the same
+  // number submitted with and without prefix would store as two
+  // distinct strings and break any future parent-identity dedup.
+  return trimmed.startsWith('+91') ? trimmed : `+91${trimmed}`;
 }
 
 type ParsedProfile = {
@@ -181,6 +185,37 @@ async function loadStudent(
   return row ?? null;
 }
 
+// PATCH merge-with-existing. Distinguish "key absent" (preserve) from
+// "key present with null" (explicit clear) via the `in` operator —
+// JSON.parse never produces `undefined`, so a client wanting to clear
+// a field sends explicit `null`. The merged block is then passed
+// through parseProfile so the §3.3 alt-contact rule runs against the
+// final state, not the patch delta.
+function mergeProfile(body: ProfileBody, existing: Student): ProfileBody {
+  return {
+    father_name: 'father_name' in body ? body.father_name : existing.father_name,
+    father_phone: 'father_phone' in body ? body.father_phone : existing.father_phone,
+    father_has_smartphone:
+      'father_has_smartphone' in body
+        ? body.father_has_smartphone
+        : existing.father_has_smartphone,
+    mother_name: 'mother_name' in body ? body.mother_name : existing.mother_name,
+    mother_phone: 'mother_phone' in body ? body.mother_phone : existing.mother_phone,
+    mother_has_smartphone:
+      'mother_has_smartphone' in body
+        ? body.mother_has_smartphone
+        : existing.mother_has_smartphone,
+    alt_contact_name:
+      'alt_contact_name' in body ? body.alt_contact_name : existing.alt_contact_name,
+    alt_contact_phone:
+      'alt_contact_phone' in body ? body.alt_contact_phone : existing.alt_contact_phone,
+    alt_contact_relationship:
+      'alt_contact_relationship' in body
+        ? body.alt_contact_relationship
+        : existing.alt_contact_relationship,
+  };
+}
+
 // ---- routes -------------------------------------------------------
 
 children.get('/', requireCap('child.read'), async (c) => {
@@ -191,12 +226,17 @@ children.get('/', requireCap('child.read'), async (c) => {
     return err(c, 'forbidden', 403);
   }
   const includeGraduated = c.req.query('include_graduated') === '1';
+  // `graduated_at IS NULL DESC` puts active students (where the
+  // expression is 1/true) ahead of graduated ones. `COLLATE NOCASE`
+  // is an ASCII-only improvement; Devanagari/Kannada/Tamil names
+  // still byte-order here — revisit when D1 supports ICU collation.
   const sql = includeGraduated
     ? `SELECT ${STUDENT_COLUMNS} FROM student WHERE village_id = ?
-       ORDER BY graduated_at IS NULL DESC, first_name, last_name`
+       ORDER BY graduated_at IS NULL DESC,
+                first_name COLLATE NOCASE, last_name COLLATE NOCASE`
     : `SELECT ${STUDENT_COLUMNS} FROM student
        WHERE village_id = ? AND graduated_at IS NULL
-       ORDER BY first_name, last_name`;
+       ORDER BY first_name COLLATE NOCASE, last_name COLLATE NOCASE`;
   const rs = await c.env.DB.prepare(sql).bind(villageId).all<Student>();
   return c.json({ children: rs.results });
 });
@@ -326,11 +366,12 @@ children.patch('/:id', requireCap('child.write'), async (c) => {
     if (!school) return err(c, 'bad_request', 400, 'school not in village');
   }
 
-  // For the profile block PATCH is all-or-nothing: the body carries
-  // the desired new block. Partial-merge would require tracking which
-  // of the nine fields were omitted vs set-to-null, which the loose
-  // ProfileBody shape can't distinguish.
-  const profile = parseProfile(body, false);
+  // Profile block merges with existing values so a partial PATCH
+  // (e.g. `{ first_name: '…' }`) doesn't null out parent/alt-contact
+  // columns. Validation then runs against the merged state so the
+  // §3.3 alt-contact rule checks the final row, not the delta.
+  const merged = mergeProfile(body, existing);
+  const profile = parseProfile(merged, false);
   if ('message' in profile) return err(c, 'bad_request', 400, profile.message);
 
   const now = nowEpochSeconds();
@@ -397,13 +438,20 @@ children.post('/:id/graduate', requireCap('child.write'), async (c) => {
     return err(c, 'bad_request', 400, 'invalid graduation_reason');
   }
   const now = nowEpochSeconds();
-  await c.env.DB.prepare(
+  // `AND graduated_at IS NULL` closes the TOCTOU between the read
+  // above and this write: if two graduate requests race, only the
+  // first commits, and the second's `meta.changes === 0` falls
+  // through to the 400 below.
+  const rs = await c.env.DB.prepare(
     `UPDATE student
        SET graduated_at = ?, graduation_reason = ?, updated_at = ?, updated_by = ?
-       WHERE id = ?`,
+       WHERE id = ? AND graduated_at IS NULL`,
   )
     .bind(graduatedAt, reason, now, user.id, id)
     .run();
+  if (rs.meta.changes === 0) {
+    return err(c, 'bad_request', 400, 'already graduated');
+  }
   const fresh = await loadStudent(c.env.DB, id);
   return c.json({ child: fresh });
 });
