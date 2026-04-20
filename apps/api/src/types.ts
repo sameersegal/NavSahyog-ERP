@@ -1,5 +1,8 @@
-export type Role = 'vc' | 'af' | 'cluster_admin' | 'super_admin';
-export type ScopeLevel = 'village' | 'cluster' | 'global';
+import type { BaseUser, Role, ScopeLevel } from '@navsahyog/shared';
+
+// Re-export the shared literals so callers inside the API don't
+// need to know which package a name comes from. Single import site.
+export type { Role, ScopeLevel };
 
 export type Bindings = {
   DB: D1Database;
@@ -11,14 +14,11 @@ export type Bindings = {
   ENVIRONMENT?: string;
 };
 
-export type SessionUser = {
-  id: number;
-  user_id: string;
-  full_name: string;
-  role: Role;
-  scope_level: ScopeLevel;
-  scope_id: number | null;
-};
+// The session-bound user — DB row shape, no computed capabilities.
+// Routes read this from c.get('user'); serialisation (auth routes)
+// is responsible for attaching capabilities before returning to
+// the client.
+export type SessionUser = BaseUser;
 
 export type Variables = {
   user: SessionUser;

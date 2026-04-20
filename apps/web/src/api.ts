@@ -1,31 +1,12 @@
-export type Role = 'vc' | 'af' | 'cluster_admin' | 'super_admin';
-export type ScopeLevel = 'village' | 'cluster' | 'global';
+// Shapes that are part of the API contract (Role, Capability,
+// User) come from @navsahyog/shared — same source the server reads.
+// Shapes specific to a response body (Village, Child, etc.) live
+// here until we have a reason to share them.
 
-// Capabilities come from the server on /auth/login and /auth/me —
-// don't hardcode a matrix on the client. See apps/api/src/policy.ts.
-export type Capability =
-  | 'village.read'
-  | 'school.read'
-  | 'child.read'
-  | 'child.write'
-  | 'attendance.read'
-  | 'attendance.write'
-  | 'dashboard.read';
+export type { AuthUser as User, Capability, Role, ScopeLevel } from '@navsahyog/shared';
+export { can } from '@navsahyog/shared';
 
-export type User = {
-  id: number;
-  user_id: string;
-  full_name: string;
-  role: Role;
-  scope_level: ScopeLevel;
-  scope_id: number | null;
-  capabilities: readonly Capability[];
-};
-
-export function can(user: User | null, cap: Capability): boolean {
-  if (!user) return false;
-  return user.capabilities.includes(cap);
-}
+import type { AuthUser } from '@navsahyog/shared';
 
 export type Village = {
   id: number;
@@ -66,12 +47,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   login: (user_id: string, password: string) =>
-    req<{ user: User }>('/auth/login', {
+    req<{ user: AuthUser }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ user_id, password }),
     }),
   logout: () => req<{ ok: true }>('/auth/logout', { method: 'POST' }),
-  me: () => req<{ user: User }>('/auth/me'),
+  me: () => req<{ user: AuthUser }>('/auth/me'),
   villages: () => req<{ villages: Village[] }>('/api/villages'),
   schools: (villageId: number) =>
     req<{ schools: School[] }>(`/api/schools?village_id=${villageId}`),
