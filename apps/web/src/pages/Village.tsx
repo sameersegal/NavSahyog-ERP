@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, can, type Child, type School, type Village as VillageT } from '../api';
+import {
+  api,
+  can,
+  isIndianPhone,
+  type Child,
+  type ChildCoreCreate,
+  type ChildCorePatch,
+  type ChildProfile,
+  type GraduationReason,
+  type School,
+  type Village as VillageT,
+} from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
@@ -82,23 +93,35 @@ function TabButton({
   );
 }
 
+// Per-row panel state. Only one panel can be open at a time across
+// the entire list, including the top-level "Add child" panel.
+type Panel =
+  | { kind: 'none' }
+  | { kind: 'add' }
+  | { kind: 'edit'; childId: number }
+  | { kind: 'graduate'; childId: number };
+
 function ChildrenTab({ villageId }: { villageId: number }) {
   const { t, tPlural } = useI18n();
   const { user } = useAuth();
-  const canAdd = can(user, 'child.write');
+  const canWrite = can(user, 'child.write');
   const [children, setChildren] = useState<Child[] | null>(null);
   const [schools, setSchools] = useState<School[]>([]);
+  const [includeGraduated, setIncludeGraduated] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [show, setShow] = useState(false);
+  const [panel, setPanel] = useState<Panel>({ kind: 'none' });
 
   const load = useCallback(() => {
-    Promise.all([api.children(villageId), api.schools(villageId)])
+    Promise.all([
+      api.children(villageId, { includeGraduated }),
+      api.schools(villageId),
+    ])
       .then(([c, s]) => {
         setChildren(c.children);
         setSchools(s.schools);
       })
       .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
-  }, [villageId]);
+  }, [villageId, includeGraduated]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -107,41 +130,127 @@ function ChildrenTab({ villageId }: { villageId: number }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">
           {tPlural('children.count', children.length)}
         </h2>
-        {canAdd && (
-          <button
-            onClick={() => setShow((v) => !v)}
-            className="text-sm bg-primary hover:bg-primary-hover text-primary-fg rounded px-3 py-1.5"
-          >
-            {show ? t('common.cancel') : t('children.add')}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <label className="text-sm flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeGraduated}
+              onChange={(e) => {
+                setIncludeGraduated(e.target.checked);
+                setPanel({ kind: 'none' });
+              }}
+              className="w-4 h-4 accent-[hsl(var(--primary))]"
+            />
+            {includeGraduated ? t('children.hide_graduated') : t('children.show_graduated')}
+          </label>
+          {canWrite && (
+            <button
+              onClick={() =>
+                setPanel((p) => (p.kind === 'add' ? { kind: 'none' } : { kind: 'add' }))
+              }
+              className="text-sm bg-primary hover:bg-primary-hover text-primary-fg rounded px-3 py-1.5"
+            >
+              {panel.kind === 'add' ? t('common.cancel') : t('children.add')}
+            </button>
+          )}
+        </div>
       </div>
-      {canAdd && show && (
-        <AddChildForm
+      {canWrite && panel.kind === 'add' && (
+        <ChildForm
+          mode="add"
           villageId={villageId}
           schools={schools}
-          onAdded={() => {
-            setShow(false);
+          onSaved={() => {
+            setPanel({ kind: 'none' });
             load();
           }}
+          onCancel={() => setPanel({ kind: 'none' })}
         />
       )}
       <ul className="bg-card border border-border rounded divide-y divide-border">
-        {children.map((c) => (
-          <li
-            key={c.id}
-            className="p-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
-          >
-            <span className="font-medium">{c.first_name} {c.last_name}</span>
-            <span className="text-xs text-muted-fg">
-              {t(`children.form.gender.${c.gender}`)} · {t('children.form.dob')} {c.dob}
-            </span>
-          </li>
-        ))}
+        {children.map((c) => {
+          const isEditing = panel.kind === 'edit' && panel.childId === c.id;
+          const isGraduating = panel.kind === 'graduate' && panel.childId === c.id;
+          return (
+            <li key={c.id} className="p-3 space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="font-medium">{c.first_name} {c.last_name}</span>
+                  <span className="text-xs text-muted-fg">
+                    {t(`children.form.gender.${c.gender}`)} · {t('children.form.dob')} {c.dob}
+                  </span>
+                  {c.graduated_at && (
+                    <span
+                      title={
+                        c.graduation_reason
+                          ? t(`children.graduation_reason.${c.graduation_reason}`)
+                          : undefined
+                      }
+                      className="text-xs px-1.5 py-0.5 rounded bg-card-hover border border-border text-muted-fg"
+                    >
+                      {t('children.graduated_at', { date: c.graduated_at })}
+                    </span>
+                  )}
+                </div>
+                {canWrite && !c.graduated_at && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        setPanel((p) =>
+                          p.kind === 'edit' && p.childId === c.id
+                            ? { kind: 'none' }
+                            : { kind: 'edit', childId: c.id },
+                        )
+                      }
+                      className="text-xs bg-card hover:bg-card-hover border border-border rounded px-2 py-1"
+                    >
+                      {isEditing ? t('common.cancel') : t('children.edit')}
+                    </button>
+                    <button
+                      onClick={() =>
+                        setPanel((p) =>
+                          p.kind === 'graduate' && p.childId === c.id
+                            ? { kind: 'none' }
+                            : { kind: 'graduate', childId: c.id },
+                        )
+                      }
+                      className="text-xs bg-card hover:bg-card-hover border border-border rounded px-2 py-1"
+                    >
+                      {isGraduating ? t('common.cancel') : t('children.graduate')}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isEditing && (
+                <ChildForm
+                  mode="edit"
+                  villageId={villageId}
+                  schools={schools}
+                  child={c}
+                  onSaved={() => {
+                    setPanel({ kind: 'none' });
+                    load();
+                  }}
+                  onCancel={() => setPanel({ kind: 'none' })}
+                />
+              )}
+              {isGraduating && (
+                <GraduatePanel
+                  child={c}
+                  onSaved={() => {
+                    setPanel({ kind: 'none' });
+                    load();
+                  }}
+                  onCancel={() => setPanel({ kind: 'none' })}
+                />
+              )}
+            </li>
+          );
+        })}
         {children.length === 0 && (
           <li className="p-3 text-sm text-muted-fg">{t('children.empty')}</li>
         )}
@@ -150,39 +259,131 @@ function ChildrenTab({ villageId }: { villageId: number }) {
   );
 }
 
-function AddChildForm({
-  villageId,
-  schools,
-  onAdded,
-}: {
-  villageId: number;
-  schools: School[];
-  onAdded: () => void;
-}) {
+const FIELD =
+  'mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus';
+
+type ChildFormProps =
+  | {
+      mode: 'add';
+      villageId: number;
+      schools: School[];
+      onSaved: () => void;
+      onCancel: () => void;
+      child?: undefined;
+    }
+  | {
+      mode: 'edit';
+      villageId: number;
+      schools: School[];
+      child: Child;
+      onSaved: () => void;
+      onCancel: () => void;
+    };
+
+function ChildForm(props: ChildFormProps) {
+  const { mode, villageId, schools, child, onSaved, onCancel } = props;
   const { t } = useI18n();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [gender, setGender] = useState<'m' | 'f' | 'o'>('m');
-  const [dob, setDob] = useState('');
-  const [schoolId, setSchoolId] = useState(schools[0]?.id ?? 0);
+  const [firstName, setFirstName] = useState(child?.first_name ?? '');
+  const [lastName, setLastName] = useState(child?.last_name ?? '');
+  const [gender, setGender] = useState<'m' | 'f' | 'o'>(child?.gender ?? 'm');
+  const [dob, setDob] = useState(child?.dob ?? '');
+  const [joinedAt, setJoinedAt] = useState(child?.joined_at ?? '');
+  const [schoolId, setSchoolId] = useState<number>(
+    child?.school_id ?? schools[0]?.id ?? 0,
+  );
+  const [fatherName, setFatherName] = useState(child?.father_name ?? '');
+  const [fatherPhone, setFatherPhone] = useState(child?.father_phone ?? '');
+  const [fatherSmartphone, setFatherSmartphone] = useState(
+    child?.father_has_smartphone === 1,
+  );
+  const [motherName, setMotherName] = useState(child?.mother_name ?? '');
+  const [motherPhone, setMotherPhone] = useState(child?.mother_phone ?? '');
+  const [motherSmartphone, setMotherSmartphone] = useState(
+    child?.mother_has_smartphone === 1,
+  );
+  const [altName, setAltName] = useState(child?.alt_contact_name ?? '');
+  const [altPhone, setAltPhone] = useState(child?.alt_contact_phone ?? '');
+  const [altRelationship, setAltRelationship] = useState(
+    child?.alt_contact_relationship ?? '',
+  );
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // §3.3 alt-contact rule mirrored client-side: required when at least
+  // one parent has a phone but neither has a smartphone. Server is the
+  // source of truth — this is a UX hint only.
+  const anyParentPhone = fatherPhone.trim() !== '' || motherPhone.trim() !== '';
+  const anyParentSmartphone =
+    (fatherPhone.trim() !== '' && fatherSmartphone) ||
+    (motherPhone.trim() !== '' && motherSmartphone);
+  const altRequired = anyParentPhone && !anyParentSmartphone;
+
+  function profileBody(): ChildProfile {
+    const father = fatherName.trim() || fatherPhone.trim() ? {
+      father_name: fatherName.trim() || null,
+      father_phone: fatherPhone.trim() || null,
+      father_has_smartphone: fatherPhone.trim() ? fatherSmartphone : null,
+    } : { father_name: null, father_phone: null, father_has_smartphone: null };
+    const mother = motherName.trim() || motherPhone.trim() ? {
+      mother_name: motherName.trim() || null,
+      mother_phone: motherPhone.trim() || null,
+      mother_has_smartphone: motherPhone.trim() ? motherSmartphone : null,
+    } : { mother_name: null, mother_phone: null, mother_has_smartphone: null };
+    const alt = altName.trim() || altPhone.trim() || altRelationship.trim() ? {
+      alt_contact_name: altName.trim() || null,
+      alt_contact_phone: altPhone.trim() || null,
+      alt_contact_relationship: altRelationship.trim() || null,
+    } : { alt_contact_name: null, alt_contact_phone: null, alt_contact_relationship: null };
+    return { ...father, ...mother, ...alt };
+  }
+
+  function clientValidate(): string | null {
+    if (!fatherName.trim() && !motherName.trim()) {
+      return 'at least one parent name required';
+    }
+    for (const [label, phone] of [
+      ['father', fatherPhone],
+      ['mother', motherPhone],
+      ['alt', altPhone],
+    ] as const) {
+      const v = phone.trim();
+      if (v && !isIndianPhone(v)) return `${label} phone must be a valid Indian mobile number`;
+    }
+    return null;
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    const v = clientValidate();
+    if (v) { setErr(v); return; }
     setBusy(true);
     try {
-      // The native <input type="date"> already gives us YYYY-MM-DD.
-      await api.addChild({
-        village_id: villageId,
-        school_id: schoolId,
-        first_name: firstName,
-        last_name: lastName,
-        gender,
-        dob,
-      });
-      onAdded();
+      if (mode === 'add') {
+        const body: ChildCoreCreate & ChildProfile = {
+          village_id: villageId,
+          school_id: schoolId,
+          first_name: firstName,
+          last_name: lastName,
+          gender,
+          dob,
+          ...(joinedAt ? { joined_at: joinedAt } : {}),
+          ...profileBody(),
+        };
+        await api.addChild(body);
+      } else {
+        const body: ChildCorePatch & ChildProfile = {
+          school_id: schoolId,
+          first_name: firstName,
+          last_name: lastName,
+          gender,
+          dob,
+          ...(joinedAt ? { joined_at: joinedAt } : {}),
+          ...profileBody(),
+        };
+        await api.updateChild(child!.id, body);
+      }
+      onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'failed');
     } finally {
@@ -190,27 +391,27 @@ function AddChildForm({
     }
   }
 
-  const field =
-    'mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus';
-
   return (
     <form
       onSubmit={submit}
-      className="bg-card border border-border rounded p-4 space-y-3"
+      className="bg-card border border-border rounded p-4 space-y-4"
     >
+      {mode === 'edit' && (
+        <h3 className="text-sm font-semibold">{t('children.edit.title')}</h3>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm">{t('children.form.first_name')}</span>
-          <input className={field} value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+          <input className={FIELD} value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
         </label>
         <label className="block">
           <span className="text-sm">{t('children.form.last_name')}</span>
-          <input className={field} value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+          <input className={FIELD} value={lastName} onChange={(e) => setLastName(e.target.value)} required />
         </label>
         <label className="block">
           <span className="text-sm">{t('children.form.gender')}</span>
           <select
-            className={field}
+            className={FIELD}
             value={gender}
             onChange={(e) => setGender(e.target.value as 'm' | 'f' | 'o')}
           >
@@ -221,12 +422,16 @@ function AddChildForm({
         </label>
         <label className="block">
           <span className="text-sm">{t('children.form.dob')}</span>
-          <input type="date" className={field} value={dob} onChange={(e) => setDob(e.target.value)} required />
+          <input type="date" className={FIELD} value={dob} onChange={(e) => setDob(e.target.value)} required />
         </label>
-        <label className="block sm:col-span-2">
+        <label className="block">
+          <span className="text-sm">{t('children.form.joined_at')}</span>
+          <input type="date" className={FIELD} value={joinedAt} onChange={(e) => setJoinedAt(e.target.value)} />
+        </label>
+        <label className="block">
           <span className="text-sm">{t('children.form.school')}</span>
           <select
-            className={field}
+            className={FIELD}
             value={schoolId}
             onChange={(e) => setSchoolId(Number(e.target.value))}
             required
@@ -237,14 +442,203 @@ function AddChildForm({
           </select>
         </label>
       </div>
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-semibold">{t('children.form.parents')}</legend>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-sm">{t('children.form.father_name')}</span>
+            <input className={FIELD} value={fatherName} onChange={(e) => setFatherName(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="text-sm">{t('children.form.father_phone')}</span>
+            <input
+              className={FIELD}
+              value={fatherPhone}
+              onChange={(e) => setFatherPhone(e.target.value)}
+              type="tel"
+              autoComplete="off"
+              placeholder="+91"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={fatherSmartphone}
+              onChange={(e) => setFatherSmartphone(e.target.checked)}
+              disabled={fatherPhone.trim() === ''}
+              className="w-4 h-4 accent-[hsl(var(--primary))] disabled:opacity-50"
+            />
+            {t('children.form.father_smartphone')}
+          </label>
+          <span />
+          <label className="block">
+            <span className="text-sm">{t('children.form.mother_name')}</span>
+            <input className={FIELD} value={motherName} onChange={(e) => setMotherName(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="text-sm">{t('children.form.mother_phone')}</span>
+            <input
+              className={FIELD}
+              value={motherPhone}
+              onChange={(e) => setMotherPhone(e.target.value)}
+              type="tel"
+              autoComplete="off"
+              placeholder="+91"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={motherSmartphone}
+              onChange={(e) => setMotherSmartphone(e.target.checked)}
+              disabled={motherPhone.trim() === ''}
+              className="w-4 h-4 accent-[hsl(var(--primary))] disabled:opacity-50"
+            />
+            {t('children.form.mother_smartphone')}
+          </label>
+        </div>
+        <p className="text-xs text-muted-fg">{t('children.form.phone_hint')}</p>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-semibold">{t('children.form.alt_contact')}</legend>
+        {altRequired && (
+          <p className="text-xs text-danger">
+            {t('children.form.alt_contact.required_hint')}
+          </p>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="block">
+            <span className="text-sm">{t('children.form.alt_contact_name')}</span>
+            <input className={FIELD} value={altName} onChange={(e) => setAltName(e.target.value)} required={altRequired} />
+          </label>
+          <label className="block">
+            <span className="text-sm">{t('children.form.alt_contact_phone')}</span>
+            <input
+              className={FIELD}
+              value={altPhone}
+              onChange={(e) => setAltPhone(e.target.value)}
+              type="tel"
+              autoComplete="off"
+              placeholder="+91"
+              required={altRequired}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm">{t('children.form.alt_contact_relationship')}</span>
+            <input className={FIELD} value={altRelationship} onChange={(e) => setAltRelationship(e.target.value)} required={altRequired} />
+          </label>
+        </div>
+      </fieldset>
+
       {err && <p className="text-sm text-danger">{err}</p>}
-      <button
-        type="submit"
-        disabled={busy}
-        className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-3 py-2 text-sm"
-      >
-        {busy ? t('children.saving') : t('children.save')}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={busy}
+          className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-3 py-2 text-sm"
+        >
+          {busy
+            ? t('children.saving')
+            : mode === 'add'
+              ? t('children.save')
+              : t('children.update')}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="bg-card hover:bg-card-hover border border-border rounded px-3 py-2 text-sm"
+        >
+          {t('common.cancel')}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function GraduatePanel({
+  child,
+  onSaved,
+  onCancel,
+}: {
+  child: Child;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  const [graduatedAt, setGraduatedAt] = useState(todayIstDate());
+  const [reason, setReason] = useState<GraduationReason>('pass_out');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      await api.graduateChild(child.id, {
+        graduated_at: graduatedAt,
+        graduation_reason: reason,
+      });
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="bg-card border border-border rounded p-3 space-y-3"
+    >
+      <h4 className="text-sm font-semibold">
+        {t('children.graduate.title', { name: `${child.first_name} ${child.last_name}` })}
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-sm">{t('children.graduate.date')}</span>
+          <input
+            type="date"
+            className={FIELD}
+            value={graduatedAt}
+            min={child.joined_at}
+            max={todayIstDate()}
+            onChange={(e) => setGraduatedAt(e.target.value)}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm">{t('children.graduate.reason')}</span>
+          <select
+            className={FIELD}
+            value={reason}
+            onChange={(e) => setReason(e.target.value as GraduationReason)}
+          >
+            <option value="pass_out">{t('children.graduate.reason.pass_out')}</option>
+            <option value="other">{t('children.graduate.reason.other')}</option>
+          </select>
+        </label>
+      </div>
+      {err && <p className="text-sm text-danger">{err}</p>}
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={busy}
+          className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-3 py-2 text-sm"
+        >
+          {busy ? t('children.saving') : t('children.graduate.confirm')}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="bg-card hover:bg-card-hover border border-border rounded px-3 py-2 text-sm"
+        >
+          {t('children.graduate.cancel')}
+        </button>
+      </div>
     </form>
   );
 }
