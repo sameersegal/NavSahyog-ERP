@@ -27,6 +27,7 @@ type AddBody = ProfileBody & {
   gender?: 'm' | 'f' | 'o';
   dob?: string;
   joined_at?: string;
+  photo_media_id?: number | null;
 };
 
 type PatchBody = ProfileBody & {
@@ -36,6 +37,7 @@ type PatchBody = ProfileBody & {
   gender?: 'm' | 'f' | 'o';
   dob?: string;
   joined_at?: string;
+  photo_media_id?: number | null;
 };
 
 type GraduateBody = {
@@ -52,7 +54,8 @@ const STUDENT_COLUMNS = `
   joined_at, graduated_at, graduation_reason,
   father_name, father_phone, father_has_smartphone,
   mother_name, mother_phone, mother_has_smartphone,
-  alt_contact_name, alt_contact_phone, alt_contact_relationship
+  alt_contact_name, alt_contact_phone, alt_contact_relationship,
+  photo_media_id
 `;
 
 const children = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -174,6 +177,42 @@ function parseProfile(
   };
 }
 
+// Resolve `photo_media_id` against the DB:
+//   * undefined  → keep the existing / no-op
+//   * null       → detach (set column to NULL)
+//   * integer    → verify the media row exists, isn't deleted, and
+//                  belongs to `villageId` (same scope as the student)
+// Returns the numeric id, explicit null, or an error string.
+async function resolvePhotoMediaId(
+  db: D1Database,
+  raw: number | null | undefined,
+  villageId: number,
+): Promise<{ value: number | null } | { error: string }> {
+  if (raw === undefined) return { value: null };
+  if (raw === null) return { value: null };
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    return { error: 'photo_media_id must be a positive integer or null' };
+  }
+  const row = await db
+    .prepare(
+      `SELECT id, village_id, kind, deleted_at
+       FROM media WHERE id = ?`,
+    )
+    .bind(id)
+    .first<{ id: number; village_id: number; kind: string; deleted_at: number | null }>();
+  if (!row || row.deleted_at) {
+    return { error: 'unknown photo_media_id' };
+  }
+  if (row.kind !== 'image') {
+    return { error: 'photo_media_id must reference an image' };
+  }
+  if (row.village_id !== villageId) {
+    return { error: 'photo_media_id from a different village' };
+  }
+  return { value: id };
+}
+
 async function loadStudent(
   db: D1Database,
   id: number,
@@ -283,6 +322,9 @@ children.post('/', requireCap('child.write'), async (c) => {
   const profile = parseProfile(body, true);
   if ('message' in profile) return err(c, 'bad_request', 400, profile.message);
 
+  const photo = await resolvePhotoMediaId(c.env.DB, body.photo_media_id, village_id);
+  if ('error' in photo) return err(c, 'bad_request', 400, photo.error);
+
   const now = nowEpochSeconds();
   const rs = await c.env.DB.prepare(
     `INSERT INTO student
@@ -290,11 +332,13 @@ children.post('/', requireCap('child.write'), async (c) => {
         father_name, father_phone, father_has_smartphone,
         mother_name, mother_phone, mother_has_smartphone,
         alt_contact_name, alt_contact_phone, alt_contact_relationship,
+        photo_media_id,
         created_at, created_by, updated_at, updated_by)
      VALUES (?, ?, ?, ?, ?, ?, ?,
              ?, ?, ?,
              ?, ?, ?,
              ?, ?, ?,
+             ?,
              ?, ?, ?, ?)
      RETURNING id`,
   )
@@ -315,6 +359,7 @@ children.post('/', requireCap('child.write'), async (c) => {
       profile.alt_contact_name,
       profile.alt_contact_phone,
       profile.alt_contact_relationship,
+      photo.value,
       now,
       user.id,
       now,
@@ -374,6 +419,20 @@ children.patch('/:id', requireCap('child.write'), async (c) => {
   const profile = parseProfile(merged, false);
   if ('message' in profile) return err(c, 'bad_request', 400, profile.message);
 
+  // photo_media_id follows the same key-present / key-absent rule as
+  // the profile block: only touch the column when the client sends
+  // the key. null explicitly detaches; undefined preserves.
+  let photoValue: number | null = existing.photo_media_id;
+  if ('photo_media_id' in body) {
+    const resolved = await resolvePhotoMediaId(
+      c.env.DB,
+      body.photo_media_id,
+      existing.village_id,
+    );
+    if ('error' in resolved) return err(c, 'bad_request', 400, resolved.error);
+    photoValue = resolved.value;
+  }
+
   const now = nowEpochSeconds();
   await c.env.DB.prepare(
     `UPDATE student SET
@@ -382,6 +441,7 @@ children.patch('/:id', requireCap('child.write'), async (c) => {
        father_name = ?, father_phone = ?, father_has_smartphone = ?,
        mother_name = ?, mother_phone = ?, mother_has_smartphone = ?,
        alt_contact_name = ?, alt_contact_phone = ?, alt_contact_relationship = ?,
+       photo_media_id = ?,
        updated_at = ?, updated_by = ?
      WHERE id = ?`,
   )
@@ -401,6 +461,7 @@ children.patch('/:id', requireCap('child.write'), async (c) => {
       profile.alt_contact_name,
       profile.alt_contact_phone,
       profile.alt_contact_relationship,
+      photoValue,
       now,
       user.id,
       id,

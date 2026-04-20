@@ -7,6 +7,7 @@ import children from './routes/children';
 import events from './routes/events';
 import attendance from './routes/attendance';
 import achievements from './routes/achievements';
+import media from './routes/media';
 import dashboard from './routes/dashboard';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
@@ -27,7 +28,7 @@ app.use('*', async (c, next) => {
     origin: (origin) => (allowed.includes(origin) ? origin : null),
     credentials: true,
     allowHeaders: ['Content-Type'],
-    allowMethods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })(c, next);
 });
 
@@ -40,6 +41,7 @@ app.route('/api/children', children);
 app.route('/api/events', events);
 app.route('/api/attendance', attendance);
 app.route('/api/achievements', achievements);
+app.route('/api/media', media);
 app.route('/api/dashboard', dashboard);
 
 app.onError((e, c) => {

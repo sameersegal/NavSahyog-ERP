@@ -1220,3 +1220,361 @@ describe('dashboard drill-down (L2.3)', () => {
     expect(body).toMatch(/Anandpur,\d+/);
   });
 });
+
+describe('media pipeline (L2.4)', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  // crypto.randomUUID is exposed on workerd; tests use the same
+  // generator the web client will.
+  function newUuid(): string {
+    return crypto.randomUUID();
+  }
+
+  // Minimal 1x1 PNG (10 bytes). Real enough for the R2 PUT + HEAD
+  // verify round-trip without shipping a fixture file.
+  const PNG_BYTES = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+  ]);
+
+  async function presign(
+    token: string,
+    body: Record<string, unknown>,
+  ): Promise<{ status: number; data: Record<string, unknown> }> {
+    const res = await cookieFetch('/api/media/presign', token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, data: await res.json() as Record<string, unknown> };
+  }
+
+  // Full presign → PUT → commit round-trip, returning the committed
+  // media row. Used by the attachment tests below.
+  async function uploadAndCommit(
+    token: string,
+    opts: {
+      kind: 'image' | 'video' | 'audio';
+      mime: string;
+      bytes: Uint8Array;
+      village_id: number;
+      tag_event_id?: number | null;
+    },
+  ): Promise<{ id: number; uuid: string; r2_key: string }> {
+    const uuid = newUuid();
+    const capturedAt = Math.floor(Date.now() / 1000);
+    const p = await presign(token, {
+      uuid, kind: opts.kind, mime: opts.mime,
+      bytes: opts.bytes.byteLength,
+      village_id: opts.village_id, captured_at: capturedAt,
+    });
+    expect(p.status).toBe(200);
+    const uploadUrl = p.data.upload_url as string;
+    const putRes = await SELF.fetch(`http://api.test${uploadUrl}`, {
+      method: 'PUT',
+      body: opts.bytes,
+    });
+    expect(putRes.status).toBe(200);
+    const commit = await cookieFetch('/api/media', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        uuid,
+        kind: opts.kind,
+        r2_key: p.data.r2_key,
+        mime: opts.mime,
+        bytes: opts.bytes.byteLength,
+        captured_at: capturedAt,
+        latitude: 12.97,
+        longitude: 77.59,
+        village_id: opts.village_id,
+        tag_event_id: opts.tag_event_id ?? null,
+      }),
+    });
+    expect(commit.status).toBe(201);
+    const body = await commit.json() as { media: { id: number; uuid: string; r2_key: string } };
+    return body.media;
+  }
+
+  it('presign returns an upload_url and an HMAC-signed token', async () => {
+    const token = await loginAs('vc-anandpur');
+    const { status, data } = await presign(token, {
+      uuid: newUuid(), kind: 'image', mime: 'image/png',
+      bytes: 1024, village_id: 1, captured_at: 1_700_000_000,
+    });
+    expect(status).toBe(200);
+    expect(data.upload_method).toBe('PUT');
+    expect(data.upload_url).toMatch(/^\/api\/media\/upload\/[0-9a-f-]+\?token=/);
+    expect(typeof data.expires_at).toBe('number');
+    expect(data.r2_key).toMatch(/^image\/\d{4}\/\d{2}\/\d{2}\/1\/[0-9a-f-]+\.png$/);
+  });
+
+  it('presign rejects unknown kinds + disallowed MIMEs', async () => {
+    const token = await loginAs('vc-anandpur');
+    const bad1 = await presign(token, {
+      uuid: newUuid(), kind: 'doc', mime: 'application/pdf',
+      bytes: 10, village_id: 1, captured_at: 1_700_000_000,
+    });
+    expect(bad1.status).toBe(400);
+    const bad2 = await presign(token, {
+      uuid: newUuid(), kind: 'image', mime: 'application/pdf',
+      bytes: 10, village_id: 1, captured_at: 1_700_000_000,
+    });
+    expect(bad2.status).toBe(400);
+  });
+
+  it('presign rejects bytes above the 50 MiB cap', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await presign(token, {
+      uuid: newUuid(), kind: 'video', mime: 'video/mp4',
+      bytes: 60 * 1024 * 1024, village_id: 1, captured_at: 1_700_000_000,
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it('presign against a sibling village returns 403', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await presign(token, {
+      uuid: newUuid(), kind: 'image', mime: 'image/jpeg',
+      bytes: 100, village_id: 2, captured_at: 1_700_000_000,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('PUT /upload/:uuid with a bad token is rejected', async () => {
+    const uuid = newUuid();
+    const res = await SELF.fetch(
+      `http://api.test/api/media/upload/${uuid}?token=not-a-valid-token`,
+      { method: 'PUT', body: new Uint8Array([1, 2, 3]) },
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('PUT with a uuid path mismatching the token returns 400', async () => {
+    const token = await loginAs('vc-anandpur');
+    const { data } = await presign(token, {
+      uuid: newUuid(), kind: 'image', mime: 'image/png',
+      bytes: 10, village_id: 1, captured_at: 1_700_000_000,
+    });
+    const uploadUrl = data.upload_url as string;
+    // Swap the uuid in the path but keep the same token — signed
+    // payload has the original uuid.
+    const tampered = uploadUrl.replace(/upload\/[0-9a-f-]+/, `upload/${newUuid()}`);
+    const res = await SELF.fetch(`http://api.test${tampered}`, {
+      method: 'PUT', body: PNG_BYTES,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('full round-trip: presign → PUT → commit → GET returns bytes', async () => {
+    const token = await loginAs('vc-anandpur');
+    const media = await uploadAndCommit(token, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    // Raw stream endpoint serves what we PUT.
+    const raw = await cookieFetch(`/api/media/raw/${media.uuid}`, token);
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get('content-type')).toMatch(/image\/png/);
+    const buf = new Uint8Array(await raw.arrayBuffer());
+    expect(buf.length).toBe(PNG_BYTES.length);
+  });
+
+  it('commit rejects when R2 object is missing (no prior PUT)', async () => {
+    const token = await loginAs('vc-anandpur');
+    const uuid = newUuid();
+    // Presign so we have a valid r2_key, but never PUT anything.
+    const p = await presign(token, {
+      uuid, kind: 'image', mime: 'image/jpeg',
+      bytes: 500, village_id: 1, captured_at: 1_700_000_000,
+    });
+    const res = await cookieFetch('/api/media', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        uuid, kind: 'image',
+        r2_key: (p.data as { r2_key: string }).r2_key,
+        mime: 'image/jpeg', bytes: 500,
+        captured_at: 1_700_000_000, village_id: 1,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message?: string } };
+    expect(body.error.message).toMatch(/R2/i);
+  });
+
+  it('commit rejects when claimed bytes mismatch the R2 object', async () => {
+    const token = await loginAs('vc-anandpur');
+    const uuid = newUuid();
+    const p = await presign(token, {
+      uuid, kind: 'image', mime: 'image/png',
+      bytes: PNG_BYTES.length, village_id: 1, captured_at: 1_700_000_000,
+    });
+    const data = p.data as { upload_url: string; r2_key: string };
+    await SELF.fetch(`http://api.test${data.upload_url}`, {
+      method: 'PUT', body: PNG_BYTES,
+    });
+    const res = await cookieFetch('/api/media', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        uuid, kind: 'image', r2_key: data.r2_key, mime: 'image/png',
+        bytes: PNG_BYTES.length + 100,             // lie about size
+        captured_at: 1_700_000_000, village_id: 1,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message?: string } };
+    expect(body.error.message).toMatch(/byte count mismatch/i);
+  });
+
+  it('commit is idempotent on retry (same uuid returns the same row)', async () => {
+    const token = await loginAs('vc-anandpur');
+    const media = await uploadAndCommit(token, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    // Second commit with the same uuid should return the same id.
+    const res = await cookieFetch('/api/media', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        uuid: media.uuid, kind: 'image', r2_key: media.r2_key,
+        mime: 'image/png', bytes: PNG_BYTES.length,
+        captured_at: 1_700_000_000, village_id: 1,
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { media: { id: number } };
+    expect(body.media.id).toBe(media.id);
+  });
+
+  it('list scopes to the caller and filters by kind', async () => {
+    const vcToken = await loginAs('vc-anandpur');
+    await uploadAndCommit(vcToken, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    await uploadAndCommit(vcToken, {
+      kind: 'audio', mime: 'audio/mp4', bytes: PNG_BYTES, village_id: 1,
+    });
+    const all = await cookieFetch('/api/media', vcToken);
+    const allBody = await all.json() as { media: unknown[] };
+    expect(allBody.media.length).toBe(2);
+
+    const onlyAudio = await cookieFetch('/api/media?kind=audio', vcToken);
+    const audioBody = await onlyAudio.json() as { media: { kind: string }[] };
+    expect(audioBody.media.every((m) => m.kind === 'audio')).toBe(true);
+
+    // Sibling VC can't see either row.
+    const sibling = await loginAs('vc-belur');
+    const res = await cookieFetch('/api/media?village_id=1', sibling);
+    expect(res.status).toBe(403);
+  });
+
+  it('DELETE soft-deletes (row becomes invisible to list + get)', async () => {
+    const token = await loginAs('vc-anandpur');
+    const media = await uploadAndCommit(token, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    const del = await cookieFetch(`/api/media/${media.id}`, token, { method: 'DELETE' });
+    expect(del.status).toBe(200);
+    const get = await cookieFetch(`/api/media/${media.id}`, token);
+    expect(get.status).toBe(404);
+    const list = await cookieFetch('/api/media?village_id=1', token);
+    const body = await list.json() as { media: unknown[] };
+    expect(body.media.length).toBe(0);
+  });
+
+  it('a read-only geo admin can list but cannot presign', async () => {
+    const adminToken = await loginAs('district-bid');
+    const list = await cookieFetch('/api/media?village_id=1', adminToken);
+    expect(list.status).toBe(200);
+    const res = await presign(adminToken, {
+      uuid: newUuid(), kind: 'image', mime: 'image/png',
+      bytes: 100, village_id: 1, captured_at: 1_700_000_000,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('photo attaches to a child via POST /api/children', async () => {
+    const token = await loginAs('vc-anandpur');
+    const photo = await uploadAndCommit(token, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    const addRes = await cookieFetch('/api/children', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        village_id: 1, school_id: 1,
+        first_name: 'Asha', last_name: 'Rao',
+        gender: 'f', dob: '2015-06-01',
+        father_name: 'Rao', father_phone: '9000000001',
+        father_has_smartphone: 1,
+        photo_media_id: photo.id,
+      }),
+    });
+    expect(addRes.status).toBe(201);
+    const { id } = await addRes.json() as { id: number };
+    const get = await cookieFetch(`/api/children/${id}`, token);
+    const body = await get.json() as { child: { photo_media_id: number | null } };
+    expect(body.child.photo_media_id).toBe(photo.id);
+  });
+
+  it('photo from a different village is rejected when attaching', async () => {
+    const v1 = await loginAs('vc-anandpur');
+    const v1photo = await uploadAndCommit(v1, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    // Cluster admin can write in both villages — use that to try to
+    // attach v1's photo to a v2 student and make sure it's blocked.
+    const af = await loginAs('af-bid01');
+    const res = await cookieFetch('/api/children', af, {
+      method: 'POST',
+      body: JSON.stringify({
+        village_id: 2, school_id: 2,
+        first_name: 'X', last_name: 'Y', gender: 'm', dob: '2015-01-01',
+        father_name: 'p', father_phone: '9000000002',
+        father_has_smartphone: 1,
+        photo_media_id: v1photo.id,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message?: string } };
+    expect(body.error.message).toMatch(/different village/i);
+  });
+
+  it('voice note attaches to an attendance session', async () => {
+    const token = await loginAs('vc-anandpur');
+    const audio = await uploadAndCommit(token, {
+      kind: 'audio', mime: 'audio/mp4', bytes: PNG_BYTES, village_id: 1,
+    });
+    const today = todayIst();
+    const post = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        village_id: 1, event_id: 3, date: today,
+        start_time: '10:00', end_time: '11:00',
+        marks: [{ student_id: 1, present: true }],
+        voice_note_media_id: audio.id,
+      }),
+    });
+    expect(post.status).toBe(200);
+    const get = await cookieFetch(`/api/attendance?village_id=1&date=${today}`, token);
+    const body = await get.json() as {
+      sessions: { voice_note_media_id: number | null }[];
+    };
+    expect(body.sessions[0]?.voice_note_media_id).toBe(audio.id);
+  });
+
+  it('attendance rejects a voice note of the wrong kind (image)', async () => {
+    const token = await loginAs('vc-anandpur');
+    const wrong = await uploadAndCommit(token, {
+      kind: 'image', mime: 'image/png', bytes: PNG_BYTES, village_id: 1,
+    });
+    const res = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        village_id: 1, event_id: 3, date: todayIst(),
+        start_time: '10:00', end_time: '11:00',
+        marks: [{ student_id: 1, present: true }],
+        voice_note_media_id: wrong.id,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message?: string } };
+    expect(body.error.message).toMatch(/audio/i);
+  });
+});

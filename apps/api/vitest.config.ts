@@ -17,9 +17,11 @@ export default defineWorkersConfig({
           compatibilityDate: '2024-12-01',
           compatibilityFlags: ['nodejs_compat'],
           d1Databases: ['DB'],
+          r2Buckets: ['MEDIA'],
           bindings: {
             ENVIRONMENT: 'test',
             ALLOWED_ORIGINS: 'http://localhost:5173',
+            MEDIA_PRESIGN_SECRET: 'test-secret',
           },
         },
       },

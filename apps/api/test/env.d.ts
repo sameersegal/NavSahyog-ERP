@@ -5,8 +5,10 @@
 declare module 'cloudflare:test' {
   interface ProvidedEnv {
     DB: D1Database;
+    MEDIA: R2Bucket;
     ENVIRONMENT: string;
     ALLOWED_ORIGINS: string;
+    MEDIA_PRESIGN_SECRET: string;
   }
 }
 

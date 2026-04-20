@@ -12,6 +12,14 @@ export type {
   AttendanceSessionWithMarks,
 } from './event';
 export type { AchievementType, Achievement, AchievementWithStudent } from './achievement';
+export type {
+  MediaKind,
+  Media,
+  MediaWithUrls,
+  MediaPresignRequest,
+  MediaPresignResponse,
+  MediaCommitRequest,
+} from './media';
 export type { GeoLevel, DashboardMetric } from './dashboard';
 export {
   GEO_LEVELS,

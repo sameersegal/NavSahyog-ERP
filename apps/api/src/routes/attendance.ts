@@ -19,6 +19,7 @@ type PostBody = {
   start_time?: string;
   end_time?: string;
   marks?: Mark[];
+  voice_note_media_id?: number | null;
 };
 
 type SessionRow = {
@@ -30,6 +31,7 @@ type SessionRow = {
   date: string;
   start_time: string;
   end_time: string;
+  voice_note_media_id: number | null;
 };
 
 const attendance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -66,6 +68,7 @@ attendance.get('/', requireCap('attendance.read'), async (c) => {
   }
   const sessions = await c.env.DB.prepare(
     `SELECT s.id, s.village_id, s.event_id, s.date, s.start_time, s.end_time,
+            s.voice_note_media_id,
             e.name AS event_name, e.kind AS event_kind
      FROM attendance_session s
      JOIN event e ON e.id = s.event_id
@@ -101,6 +104,7 @@ attendance.get('/', requireCap('attendance.read'), async (c) => {
     date: s.date,
     start_time: s.start_time,
     end_time: s.end_time,
+    voice_note_media_id: s.voice_note_media_id,
     marks: marksBySession.get(s.id) ?? [],
   }));
   return c.json({ date, sessions: payload });
@@ -161,6 +165,34 @@ attendance.post('/', requireCap('attendance.write'), async (c) => {
   if (validIds.size !== studentIds.length) {
     return err(c, 'bad_request', 400, 'some students not in village or graduated');
   }
+
+  // Optional voice note: must reference a live audio media row in the
+  // same village (scope). No backfill or sidecar handling — the row is
+  // committed via /api/media before this POST.
+  let voiceNoteMediaId: number | null = null;
+  if (body.voice_note_media_id !== undefined && body.voice_note_media_id !== null) {
+    const vnId = Number(body.voice_note_media_id);
+    if (!Number.isInteger(vnId) || vnId <= 0) {
+      return err(c, 'bad_request', 400, 'voice_note_media_id must be a positive integer');
+    }
+    const vnRow = await c.env.DB
+      .prepare(
+        `SELECT id, village_id, kind, deleted_at FROM media WHERE id = ?`,
+      )
+      .bind(vnId)
+      .first<{ id: number; village_id: number; kind: string; deleted_at: number | null }>();
+    if (!vnRow || vnRow.deleted_at) {
+      return err(c, 'bad_request', 400, 'unknown voice_note_media_id');
+    }
+    if (vnRow.kind !== 'audio') {
+      return err(c, 'bad_request', 400, 'voice_note_media_id must reference an audio file');
+    }
+    if (vnRow.village_id !== villageId) {
+      return err(c, 'bad_request', 400, 'voice_note_media_id from a different village');
+    }
+    voiceNoteMediaId = vnId;
+  }
+
   const now = nowEpochSeconds();
   // UPSERT on (village_id, date, event_id). On first insert
   // updated_at/by stay NULL so "never updated" is distinguishable
@@ -168,17 +200,22 @@ attendance.post('/', requireCap('attendance.write'), async (c) => {
   // start_time / end_time may be edited — spec §3.3.3.
   const session = await c.env.DB.prepare(
     `INSERT INTO attendance_session
-       (village_id, event_id, date, start_time, end_time,
+       (village_id, event_id, date, start_time, end_time, voice_note_media_id,
         created_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(village_id, date, event_id) DO UPDATE SET
        start_time = excluded.start_time,
        end_time = excluded.end_time,
+       voice_note_media_id = excluded.voice_note_media_id,
        updated_at = ?,
        updated_by = ?
      RETURNING id`,
   )
-    .bind(villageId, eventId, date, startTime, endTime, now, user.id, now, user.id)
+    .bind(
+      villageId, eventId, date, startTime, endTime, voiceNoteMediaId,
+      now, user.id,
+      now, user.id,
+    )
     .first<{ id: number }>();
   if (!session) return err(c, 'internal_error', 500, 'session not created');
   const sessionId = session.id;

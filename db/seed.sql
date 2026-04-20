@@ -3,11 +3,17 @@
 --
 -- Date columns use IST 'YYYY-MM-DD' (see schema.sql header).
 
+-- Delete order matches FK topology: children before parents. The
+-- L2.4 `media` table is a child of village/event/user and a parent
+-- of student (photo_media_id) + attendance_session (voice_note_media_id),
+-- so students and sessions drop before media, and media drops before
+-- its own parents.
 DELETE FROM achievement;
 DELETE FROM attendance_mark;
 DELETE FROM attendance_session;
-DELETE FROM event;
 DELETE FROM student;
+DELETE FROM media;
+DELETE FROM event;
 DELETE FROM school;
 DELETE FROM session;
 DELETE FROM user;
