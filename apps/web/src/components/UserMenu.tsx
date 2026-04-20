@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth';
-import { THEME_LABELS, THEME_ORDER, useTheme, type Theme } from '../theme';
+import { LANGS, useI18n, type Lang } from '../i18n';
+import { THEME_ORDER, useTheme } from '../theme';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -9,16 +10,10 @@ function initials(name: string): string {
   return (first + last).toUpperCase();
 }
 
-const roleLabels: Record<string, string> = {
-  vc: 'Village Coordinator',
-  af: 'Area Facilitator',
-  cluster_admin: 'Cluster Admin',
-  super_admin: 'Super Admin',
-};
-
 export function UserMenu() {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { lang, setLang, t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -71,23 +66,40 @@ export function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-64 bg-card text-fg border border-border rounded-lg shadow-lg overflow-hidden z-20"
+          className="absolute right-0 mt-2 w-72 bg-card text-fg border border-border rounded-lg shadow-lg overflow-hidden z-20"
         >
           <div className="px-4 py-3 border-b border-border">
             <div className="font-semibold">{user.full_name}</div>
             <div className="text-xs text-muted-fg">
-              {roleLabels[user.role] ?? user.role} · {user.user_id}
+              {t(`role.${user.role}`)} · {user.user_id}
             </div>
           </div>
           <div className="px-4 py-3 border-b border-border">
-            <div className="text-xs font-medium text-muted-fg mb-2">Theme</div>
+            <div className="text-xs font-medium text-muted-fg mb-2">
+              {t('common.theme')}
+            </div>
             <div className="grid grid-cols-3 gap-1">
-              {THEME_ORDER.map((t) => (
-                <ThemeButton
-                  key={t}
-                  value={t}
-                  active={theme === t}
-                  onSelect={setTheme}
+              {THEME_ORDER.map((th) => (
+                <Pill
+                  key={th}
+                  label={t(`theme.${th}`)}
+                  active={theme === th}
+                  onClick={() => setTheme(th)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="px-4 py-3 border-b border-border">
+            <div className="text-xs font-medium text-muted-fg mb-2">
+              {t('common.language')}
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {LANGS.map((l) => (
+                <Pill
+                  key={l}
+                  label={t(`lang.${l}`)}
+                  active={lang === l}
+                  onClick={() => setLang(l)}
                 />
               ))}
             </div>
@@ -97,7 +109,7 @@ export function UserMenu() {
             onClick={() => { setOpen(false); void logout(); }}
             className="w-full text-left px-4 py-2.5 text-sm hover:bg-card-hover"
           >
-            Sign out
+            {t('auth.logout')}
           </button>
         </div>
       )}
@@ -105,19 +117,19 @@ export function UserMenu() {
   );
 }
 
-function ThemeButton({
-  value,
+function Pill({
+  label,
   active,
-  onSelect,
+  onClick,
 }: {
-  value: Theme;
+  label: string;
   active: boolean;
-  onSelect: (t: Theme) => void;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(value)}
+      onClick={onClick}
       aria-pressed={active}
       className={
         'rounded px-2 py-1.5 text-xs border ' +
@@ -126,7 +138,7 @@ function ThemeButton({
           : 'bg-card text-fg border-border hover:bg-card-hover')
       }
     >
-      {THEME_LABELS[value]}
+      {label}
     </button>
   );
 }

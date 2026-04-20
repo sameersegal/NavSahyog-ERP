@@ -1,0 +1,72 @@
+{
+  "app.name": "NavSahyog ERP",
+
+  "nav.home": "होम",
+  "nav.dashboard": "डैशबोर्ड",
+
+  "auth.login.hint": "लैब बिल्ड — L1। आज़माएँ {creds}।",
+  "auth.login.user_id": "यूज़र आईडी",
+  "auth.login.password": "पासवर्ड",
+  "auth.login.submit": "साइन इन करें",
+  "auth.login.submitting": "साइन इन हो रहा है…",
+  "auth.logout": "साइन आउट",
+
+  "common.cancel": "रद्द करें",
+  "common.loading": "लोड हो रहा है…",
+  "common.saved": "सहेजा गया।",
+  "common.theme": "थीम",
+  "common.language": "भाषा",
+
+  "theme.light": "सामान्य",
+  "theme.dark": "डार्क",
+  "theme.sunlight": "धूप",
+
+  "lang.en": "English",
+  "lang.hi": "हिन्दी",
+
+  "role.vc": "ग्राम समन्वयक",
+  "role.af": "क्षेत्र संचालक",
+  "role.cluster_admin": "क्लस्टर एडमिन",
+  "role.super_admin": "सुपर एडमिन",
+
+  "home.your_villages": "आपके गाँव",
+  "home.empty": "दायरे में कोई गाँव नहीं।",
+
+  "village.back": "← सभी गाँव",
+  "village.tab.children": "बच्चे",
+  "village.tab.attendance": "उपस्थिति (आज)",
+
+  "children.count_one": "{n} बच्चा",
+  "children.count_other": "{n} बच्चे",
+  "children.add": "बच्चा जोड़ें",
+  "children.empty": "अभी कोई बच्चा नहीं।",
+  "children.save": "बच्चा सहेजें",
+  "children.saving": "सहेजा जा रहा है…",
+  "children.form.first_name": "पहला नाम",
+  "children.form.last_name": "अंतिम नाम",
+  "children.form.gender": "लिंग",
+  "children.form.gender.m": "पुरुष",
+  "children.form.gender.f": "महिला",
+  "children.form.gender.o": "अन्य",
+  "children.form.dob": "जन्म तिथि",
+  "children.form.school": "विद्यालय",
+
+  "attendance.mark_all_present": "सभी उपस्थित",
+  "attendance.mark_all_absent": "सभी अनुपस्थित",
+  "attendance.counts": "{present} उपस्थित · {absent} अनुपस्थित · {total} कुल",
+  "attendance.present": "उपस्थित",
+  "attendance.absent": "अनुपस्थित",
+  "attendance.save": "उपस्थिति सहेजें",
+  "attendance.saving": "सहेजा जा रहा है…",
+
+  "dashboard.title": "विस्तृत डैशबोर्ड",
+  "dashboard.tile.children": "बच्चे",
+  "dashboard.tile.attendance": "उपस्थिति (आज)",
+  "dashboard.total_children": "दायरे में कुल बच्चे:",
+  "dashboard.summary_present": "{date} — उपस्थित:",
+  "dashboard.summary_marked": "/ {count} चिह्नित",
+  "dashboard.col.village": "गाँव",
+  "dashboard.col.children": "बच्चे",
+  "dashboard.col.present": "उपस्थित",
+  "dashboard.col.marked": "चिह्नित"
+}

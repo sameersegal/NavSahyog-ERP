@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type AttendanceMark, type Child, type School, type Village as VillageT } from '../api';
+import { api, type Child, type School, type Village as VillageT } from '../api';
+import { useI18n } from '../i18n';
 
 type Tab = 'children' | 'attendance';
 
@@ -14,6 +15,7 @@ function todayUtc() {
 }
 
 export function Village() {
+  const { t } = useI18n();
   const { id } = useParams();
   const villageId = Number(id);
   const [tab, setTab] = useState<Tab>('children');
@@ -31,7 +33,7 @@ export function Village() {
   return (
     <div className="space-y-4">
       <Link to="/" className="text-sm text-primary hover:underline">
-        ← All villages
+        {t('village.back')}
       </Link>
       <div>
         <h1 className="text-xl font-semibold">{village?.name ?? ''}</h1>
@@ -43,10 +45,10 @@ export function Village() {
       </div>
       <div className="flex gap-4 border-b border-border">
         <TabButton active={tab === 'children'} onClick={() => setTab('children')}>
-          Children
+          {t('village.tab.children')}
         </TabButton>
         <TabButton active={tab === 'attendance'} onClick={() => setTab('attendance')}>
-          Attendance (today)
+          {t('village.tab.attendance')}
         </TabButton>
       </div>
       {tab === 'children' ? (
@@ -82,6 +84,7 @@ function TabButton({
 }
 
 function ChildrenTab({ villageId }: { villageId: number }) {
+  const { t, tPlural } = useI18n();
   const [children, setChildren] = useState<Child[] | null>(null);
   const [schools, setSchools] = useState<School[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -99,19 +102,19 @@ function ChildrenTab({ villageId }: { villageId: number }) {
   useEffect(() => { load(); }, [load]);
 
   if (err) return <p className="text-danger">{err}</p>;
-  if (!children) return <p className="text-muted-fg">Loading…</p>;
+  if (!children) return <p className="text-muted-fg">{t('common.loading')}</p>;
 
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center gap-2">
         <h2 className="text-lg font-semibold">
-          {children.length} child{children.length === 1 ? '' : 'ren'}
+          {tPlural('children.count', children.length)}
         </h2>
         <button
           onClick={() => setShow((v) => !v)}
           className="text-sm bg-primary hover:bg-primary-hover text-primary-fg rounded px-3 py-1.5"
         >
-          {show ? 'Cancel' : 'Add child'}
+          {show ? t('common.cancel') : t('children.add')}
         </button>
       </div>
       {show && (
@@ -132,12 +135,12 @@ function ChildrenTab({ villageId }: { villageId: number }) {
           >
             <span className="font-medium">{c.first_name} {c.last_name}</span>
             <span className="text-xs text-muted-fg">
-              {c.gender === 'm' ? 'M' : c.gender === 'f' ? 'F' : 'O'} · DOB {fmtDob(c.dob)}
+              {t(`children.form.gender.${c.gender}`)} · {t('children.form.dob')} {fmtDob(c.dob)}
             </span>
           </li>
         ))}
         {children.length === 0 && (
-          <li className="p-3 text-sm text-muted-fg">No children yet.</li>
+          <li className="p-3 text-sm text-muted-fg">{t('children.empty')}</li>
         )}
       </ul>
     </div>
@@ -153,6 +156,7 @@ function AddChildForm({
   schools: School[];
   onAdded: () => void;
 }) {
+  const { t } = useI18n();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [gender, setGender] = useState<'m' | 'f' | 'o'>('m');
@@ -193,31 +197,31 @@ function AddChildForm({
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
-          <span className="text-sm">First name</span>
+          <span className="text-sm">{t('children.form.first_name')}</span>
           <input className={field} value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
         </label>
         <label className="block">
-          <span className="text-sm">Last name</span>
+          <span className="text-sm">{t('children.form.last_name')}</span>
           <input className={field} value={lastName} onChange={(e) => setLastName(e.target.value)} required />
         </label>
         <label className="block">
-          <span className="text-sm">Gender</span>
+          <span className="text-sm">{t('children.form.gender')}</span>
           <select
             className={field}
             value={gender}
             onChange={(e) => setGender(e.target.value as 'm' | 'f' | 'o')}
           >
-            <option value="m">Male</option>
-            <option value="f">Female</option>
-            <option value="o">Other</option>
+            <option value="m">{t('children.form.gender.m')}</option>
+            <option value="f">{t('children.form.gender.f')}</option>
+            <option value="o">{t('children.form.gender.o')}</option>
           </select>
         </label>
         <label className="block">
-          <span className="text-sm">DOB</span>
+          <span className="text-sm">{t('children.form.dob')}</span>
           <input type="date" className={field} value={dob} onChange={(e) => setDob(e.target.value)} required />
         </label>
         <label className="block sm:col-span-2">
-          <span className="text-sm">School</span>
+          <span className="text-sm">{t('children.form.school')}</span>
           <select
             className={field}
             value={schoolId}
@@ -236,13 +240,14 @@ function AddChildForm({
         disabled={busy}
         className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-3 py-2 text-sm"
       >
-        {busy ? 'Saving…' : 'Save child'}
+        {busy ? t('children.saving') : t('children.save')}
       </button>
     </form>
   );
 }
 
 function AttendanceTab({ villageId }: { villageId: number }) {
+  const { t } = useI18n();
   const [children, setChildren] = useState<Child[] | null>(null);
   const [marks, setMarks] = useState<Record<number, boolean>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -255,7 +260,6 @@ function AttendanceTab({ villageId }: { villageId: number }) {
     Promise.all([api.children(villageId), api.attendance(villageId, date)])
       .then(([c, a]) => {
         setChildren(c.children);
-        // Default: everyone present. Override with any existing marks.
         const byStudent: Record<number, boolean> = {};
         for (const child of c.children) byStudent[child.id] = true;
         for (const m of a.marks) byStudent[m.student_id] = m.present;
@@ -303,7 +307,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
   }, [children, marks]);
 
   if (err) return <p className="text-danger">{err}</p>;
-  if (!children) return <p className="text-muted-fg">Loading…</p>;
+  if (!children) return <p className="text-muted-fg">{t('common.loading')}</p>;
 
   return (
     <div className="space-y-3">
@@ -313,8 +317,11 @@ function AttendanceTab({ villageId }: { villageId: number }) {
             {new Date(date * 1000).toISOString().slice(0, 10)}
           </h2>
           <p className="text-sm text-muted-fg">
-            {counts.present} present · {counts.total - counts.present} absent ·{' '}
-            {counts.total} total
+            {t('attendance.counts', {
+              present: counts.present,
+              absent: counts.total - counts.present,
+              total: counts.total,
+            })}
           </p>
         </div>
         <div className="flex gap-2">
@@ -322,13 +329,13 @@ function AttendanceTab({ villageId }: { villageId: number }) {
             onClick={() => setAll(true)}
             className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
           >
-            Mark all present
+            {t('attendance.mark_all_present')}
           </button>
           <button
             onClick={() => setAll(false)}
             className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
           >
-            Mark all absent
+            {t('attendance.mark_all_absent')}
           </button>
         </div>
       </div>
@@ -341,7 +348,7 @@ function AttendanceTab({ villageId }: { villageId: number }) {
                 <span className="font-medium">{c.first_name} {c.last_name}</span>
                 <span className="inline-flex items-center gap-2 text-sm">
                   <span className={present ? 'text-primary' : 'text-muted-fg'}>
-                    {present ? 'Present' : 'Absent'}
+                    {present ? t('attendance.present') : t('attendance.absent')}
                   </span>
                   <input
                     type="checkbox"
@@ -361,9 +368,9 @@ function AttendanceTab({ villageId }: { villageId: number }) {
           disabled={busy || children.length === 0}
           className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm"
         >
-          {busy ? 'Saving…' : 'Save attendance'}
+          {busy ? t('attendance.saving') : t('attendance.save')}
         </button>
-        {saved && <span className="text-primary text-sm">Saved.</span>}
+        {saved && <span className="text-primary text-sm">{t('common.saved')}</span>}
       </div>
     </div>
   );

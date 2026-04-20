@@ -260,8 +260,11 @@ Parity with the vendor app; keep them minimal.
 
 #### 3.8.6 Language switcher
 - In the side menu. Persists per user (both in KV session and in
-  `localStorage` for offline). Default set: en + kn + ta (confirm
-  §9.6).
+  `localStorage` for offline). **Default set: en + hi** — stakeholder
+  decision, April 2026 (supersedes the earlier "en + kn + ta"
+  placeholder). Additional languages (kn, ta, …) can be added by
+  dropping a `locales/<code>.json` catalog and registering it in
+  the client i18n module; no other code changes required.
 
 #### 3.8.7 Master Creations (Super Admin only)
 - Consolidated CRUD for each master (villages, schools, events,

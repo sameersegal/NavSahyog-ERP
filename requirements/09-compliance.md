@@ -45,7 +45,9 @@
 - No third-party analytics; use Cloudflare Web Analytics.
 
 ### 9.6 Open items for stakeholder confirmation
-- [ ] Which languages are actually in field use?
+- [x] Which languages are actually in field use? **Resolved April
+      2026: en + hi for launch; additional languages added on
+      demand via the i18n catalogs. See §3.8.6.**
 - [ ] Are `Territory` and `Taluk` geo levels populated in production
       data?
 - [ ] Audit-log retention period.

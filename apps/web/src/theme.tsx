@@ -49,10 +49,5 @@ export function useTheme(): Ctx {
   return v;
 }
 
-export const THEME_LABELS: Record<Theme, string> = {
-  light: 'Light',
-  dark: 'Dark',
-  sunlight: 'Sunlight',
-};
-
+// Labels live in the i18n catalogs under `theme.<key>`; use useI18n().t.
 export const THEME_ORDER: readonly Theme[] = ['light', 'dark', 'sunlight'];

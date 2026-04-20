@@ -1,0 +1,72 @@
+{
+  "app.name": "NavSahyog ERP",
+
+  "nav.home": "Home",
+  "nav.dashboard": "Dashboard",
+
+  "auth.login.hint": "Lab build — L1. Try {creds}.",
+  "auth.login.user_id": "User ID",
+  "auth.login.password": "Password",
+  "auth.login.submit": "Sign in",
+  "auth.login.submitting": "Signing in…",
+  "auth.logout": "Sign out",
+
+  "common.cancel": "Cancel",
+  "common.loading": "Loading…",
+  "common.saved": "Saved.",
+  "common.theme": "Theme",
+  "common.language": "Language",
+
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "theme.sunlight": "Sunlight",
+
+  "lang.en": "English",
+  "lang.hi": "हिन्दी",
+
+  "role.vc": "Village Coordinator",
+  "role.af": "Area Facilitator",
+  "role.cluster_admin": "Cluster Admin",
+  "role.super_admin": "Super Admin",
+
+  "home.your_villages": "Your villages",
+  "home.empty": "No villages in scope.",
+
+  "village.back": "← All villages",
+  "village.tab.children": "Children",
+  "village.tab.attendance": "Attendance (today)",
+
+  "children.count_one": "{n} child",
+  "children.count_other": "{n} children",
+  "children.add": "Add child",
+  "children.empty": "No children yet.",
+  "children.save": "Save child",
+  "children.saving": "Saving…",
+  "children.form.first_name": "First name",
+  "children.form.last_name": "Last name",
+  "children.form.gender": "Gender",
+  "children.form.gender.m": "Male",
+  "children.form.gender.f": "Female",
+  "children.form.gender.o": "Other",
+  "children.form.dob": "DOB",
+  "children.form.school": "School",
+
+  "attendance.mark_all_present": "Mark all present",
+  "attendance.mark_all_absent": "Mark all absent",
+  "attendance.counts": "{present} present · {absent} absent · {total} total",
+  "attendance.present": "Present",
+  "attendance.absent": "Absent",
+  "attendance.save": "Save attendance",
+  "attendance.saving": "Saving…",
+
+  "dashboard.title": "Drill-down dashboard",
+  "dashboard.tile.children": "Children",
+  "dashboard.tile.attendance": "Attendance (today)",
+  "dashboard.total_children": "Total children in scope:",
+  "dashboard.summary_present": "{date} — present:",
+  "dashboard.summary_marked": "/ {count} marked",
+  "dashboard.col.village": "Village",
+  "dashboard.col.children": "Children",
+  "dashboard.col.present": "Present",
+  "dashboard.col.marked": "Marked"
+}

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Village } from '../api';
+import { useI18n } from '../i18n';
 
 export function Home() {
+  const { t } = useI18n();
   const [villages, setVillages] = useState<Village[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,13 +16,13 @@ export function Home() {
   }, []);
 
   if (error) return <p className="text-danger">{error}</p>;
-  if (!villages) return <p className="text-muted-fg">Loading…</p>;
+  if (!villages) return <p className="text-muted-fg">{t('common.loading')}</p>;
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Your villages</h2>
+      <h2 className="text-lg font-semibold">{t('home.your_villages')}</h2>
       {villages.length === 0 ? (
-        <p className="text-muted-fg">No villages in scope.</p>
+        <p className="text-muted-fg">{t('home.empty')}</p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {villages.map((v) => (
