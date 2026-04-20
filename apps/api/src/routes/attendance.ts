@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { requireAuth, requireRole } from '../auth';
+import { requireAuth } from '../auth';
+import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
@@ -12,7 +13,7 @@ const attendance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 attendance.use('*', requireAuth);
 
-attendance.get('/', async (c) => {
+attendance.get('/', requireCap('attendance.read'), async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
   const dateParam = c.req.query('date');
@@ -44,9 +45,7 @@ attendance.get('/', async (c) => {
   });
 });
 
-attendance.post('/', async (c) => {
-  const denied = requireRole(c, ['vc', 'af', 'cluster_admin', 'super_admin']);
-  if (denied) return denied;
+attendance.post('/', requireCap('attendance.write'), async (c) => {
   const user = c.get('user');
   const body = await c.req.json<PostBody>().catch(() => ({}) as PostBody);
   const villageId = body.village_id;

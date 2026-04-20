@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../auth';
+import { requireCap } from '../policy';
 import { villageIdsInScope } from '../scope';
 import type { Bindings, Variables } from '../types';
-// villages route only lists what the user can already see; no
-// error-helper paths needed here yet.
 
 type VillageRow = {
   id: number;
@@ -17,7 +16,7 @@ const villages = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 villages.use('*', requireAuth);
 
-villages.get('/', async (c) => {
+villages.get('/', requireCap('village.read'), async (c) => {
   const user = c.get('user');
   const ids = await villageIdsInScope(c.env.DB, user);
   if (ids.length === 0) return c.json({ villages: [] });

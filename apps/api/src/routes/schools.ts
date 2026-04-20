@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../auth';
+import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
@@ -10,7 +11,7 @@ const schools = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 schools.use('*', requireAuth);
 
-schools.get('/', async (c) => {
+schools.get('/', requireCap('school.read'), async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
   if (!villageId) return err(c, 'bad_request', 400, 'village_id required');

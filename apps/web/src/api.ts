@@ -1,6 +1,17 @@
 export type Role = 'vc' | 'af' | 'cluster_admin' | 'super_admin';
 export type ScopeLevel = 'village' | 'cluster' | 'global';
 
+// Capabilities come from the server on /auth/login and /auth/me —
+// don't hardcode a matrix on the client. See apps/api/src/policy.ts.
+export type Capability =
+  | 'village.read'
+  | 'school.read'
+  | 'child.read'
+  | 'child.write'
+  | 'attendance.read'
+  | 'attendance.write'
+  | 'dashboard.read';
+
 export type User = {
   id: number;
   user_id: string;
@@ -8,7 +19,13 @@ export type User = {
   role: Role;
   scope_level: ScopeLevel;
   scope_id: number | null;
+  capabilities: readonly Capability[];
 };
+
+export function can(user: User | null, cap: Capability): boolean {
+  if (!user) return false;
+  return user.capabilities.includes(cap);
+}
 
 export type Village = {
   id: number;

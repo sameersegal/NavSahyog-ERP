@@ -80,15 +80,3 @@ export function sessionCookieOptions(
     secure: c.env.ENVIRONMENT === 'production',
   };
 }
-
-// Explicit allow-list. Returns a 403 response if the current user's
-// role is not in `roles`, otherwise null. Replaces the dead
-// `if (role === ... || ...) {}` blocks the L1 routes used to carry.
-export function requireRole(
-  c: Context<{ Bindings: Bindings; Variables: Variables }>,
-  roles: ReadonlyArray<SessionUser['role']>,
-): Response | null {
-  const user = c.get('user');
-  if (!roles.includes(user.role)) return err(c, 'forbidden', 403);
-  return null;
-}

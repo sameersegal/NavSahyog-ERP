@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type Child, type School, type Village as VillageT } from '../api';
+import { api, can, type Child, type School, type Village as VillageT } from '../api';
+import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
 type Tab = 'children' | 'attendance';
@@ -83,6 +84,8 @@ function TabButton({
 
 function ChildrenTab({ villageId }: { villageId: number }) {
   const { t, tPlural } = useI18n();
+  const { user } = useAuth();
+  const canAdd = can(user, 'child.write');
   const [children, setChildren] = useState<Child[] | null>(null);
   const [schools, setSchools] = useState<School[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -108,14 +111,16 @@ function ChildrenTab({ villageId }: { villageId: number }) {
         <h2 className="text-lg font-semibold">
           {tPlural('children.count', children.length)}
         </h2>
-        <button
-          onClick={() => setShow((v) => !v)}
-          className="text-sm bg-primary hover:bg-primary-hover text-primary-fg rounded px-3 py-1.5"
-        >
-          {show ? t('common.cancel') : t('children.add')}
-        </button>
+        {canAdd && (
+          <button
+            onClick={() => setShow((v) => !v)}
+            className="text-sm bg-primary hover:bg-primary-hover text-primary-fg rounded px-3 py-1.5"
+          >
+            {show ? t('common.cancel') : t('children.add')}
+          </button>
+        )}
       </div>
-      {show && (
+      {canAdd && show && (
         <AddChildForm
           villageId={villageId}
           schools={schools}
@@ -246,6 +251,8 @@ function AddChildForm({
 
 function AttendanceTab({ villageId }: { villageId: number }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const canWrite = can(user, 'attendance.write');
   const [children, setChildren] = useState<Child[] | null>(null);
   const [marks, setMarks] = useState<Record<number, boolean>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -320,20 +327,22 @@ function AttendanceTab({ villageId }: { villageId: number }) {
             })}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setAll(true)}
-            className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
-          >
-            {t('attendance.mark_all_present')}
-          </button>
-          <button
-            onClick={() => setAll(false)}
-            className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
-          >
-            {t('attendance.mark_all_absent')}
-          </button>
-        </div>
+        {canWrite && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setAll(true)}
+              className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
+            >
+              {t('attendance.mark_all_present')}
+            </button>
+            <button
+              onClick={() => setAll(false)}
+              className="text-sm bg-card hover:bg-card-hover border border-border rounded px-3 py-1.5"
+            >
+              {t('attendance.mark_all_absent')}
+            </button>
+          </div>
+        )}
       </div>
       <ul className="bg-card border border-border rounded divide-y divide-border">
         {children.map((c) => {
@@ -349,8 +358,9 @@ function AttendanceTab({ villageId }: { villageId: number }) {
                   <input
                     type="checkbox"
                     checked={present}
+                    disabled={!canWrite}
                     onChange={(e) => toggleOne(c.id, e.target.checked)}
-                    className="w-5 h-5 accent-[hsl(var(--primary))]"
+                    className="w-5 h-5 accent-[hsl(var(--primary))] disabled:opacity-50"
                   />
                 </span>
               </label>
@@ -358,16 +368,18 @@ function AttendanceTab({ villageId }: { villageId: number }) {
           );
         })}
       </ul>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={submit}
-          disabled={busy || children.length === 0}
-          className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm"
-        >
-          {busy ? t('attendance.saving') : t('attendance.save')}
-        </button>
-        {saved && <span className="text-primary text-sm">{t('common.saved')}</span>}
-      </div>
+      {canWrite && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={submit}
+            disabled={busy || children.length === 0}
+            className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm"
+          >
+            {busy ? t('attendance.saving') : t('attendance.save')}
+          </button>
+          {saved && <span className="text-primary text-sm">{t('common.saved')}</span>}
+        </div>
+      )}
     </div>
   );
 }

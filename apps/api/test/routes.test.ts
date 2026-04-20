@@ -32,13 +32,19 @@ describe('auth', () => {
     });
   });
 
-  it('/auth/me after login returns the session user', async () => {
+  it('/auth/me after login returns the session user with capabilities', async () => {
     const token = await loginAs('vc-anandpur');
     const res = await cookieFetch('/auth/me', token);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { user: { user_id: string; role: string } };
+    const body = (await res.json()) as {
+      user: { user_id: string; role: string; capabilities: string[] };
+    };
     expect(body.user.user_id).toBe('vc-anandpur');
     expect(body.user.role).toBe('vc');
+    // Capabilities come from policy.ts; assert a few key ones so a
+    // regression in the server→client contract surfaces here.
+    expect(body.user.capabilities).toContain('child.write');
+    expect(body.user.capabilities).toContain('attendance.read');
   });
 });
 

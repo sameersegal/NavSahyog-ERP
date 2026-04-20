@@ -13,8 +13,12 @@ This doc is **not** part of the spec — it's a working list. As each
 item lands, mark it `fixed in <commit/PR>`.
 
 **Status:** B1, B2, B3, B4, H3, H4 (CI + tests — linter still open),
-H5, H6, H7, M1, M2, M3, M4, M5 are fixed on
-`claude/review-mvp-foundation-OGA8L`. H1 (PWA), H2 (migrations),
+H5, H6, H7, M1, M2, M3, M4, M5 fixed on
+`claude/review-mvp-foundation-OGA8L`. Blocker B3 from
+`requirements/review-findings-v1.md` was closed *structurally* by
+the policy layer on `claude/policy-layer-OGA8L` — every route now
+gates on a capability that lists the allowed roles, so adding a
+read-only tier is a one-line edit. H1 (PWA), H2 (migrations),
 M6 (scope_id FK), and the LOW items remain open and are tagged
 inline.
 
