@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../auth';
+import { requireCap } from '../policy';
 import { villageIdsInScope } from '../scope';
 import { isIsoDate, todayIstDate } from '../lib/time';
 import { err } from '../lib/errors';
@@ -35,7 +36,7 @@ async function scopeVillages(
   return rs.results;
 }
 
-dashboard.get('/children', async (c) => {
+dashboard.get('/children', requireCap('dashboard.read'), async (c) => {
   const user = c.get('user');
   const ids = await villageIdsInScope(c.env.DB, user);
   const villages = await scopeVillages(c.env.DB, ids);
@@ -52,7 +53,7 @@ dashboard.get('/children', async (c) => {
   return c.json({ villages: villages.map((v) => ({ ...v, count: byVillage.get(v.village_id) ?? 0 })) });
 });
 
-dashboard.get('/attendance', async (c) => {
+dashboard.get('/attendance', requireCap('dashboard.read'), async (c) => {
   const user = c.get('user');
   const dateParam = c.req.query('date');
   if (dateParam !== undefined && !isIsoDate(dateParam)) {

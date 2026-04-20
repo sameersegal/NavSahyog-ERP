@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { requireAuth, requireRole } from '../auth';
+import { requireAuth } from '../auth';
+import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
@@ -30,7 +31,7 @@ const children = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 children.use('*', requireAuth);
 
-children.get('/', async (c) => {
+children.get('/', requireCap('child.read'), async (c) => {
   const user = c.get('user');
   const villageId = Number(c.req.query('village_id'));
   if (!villageId) return err(c, 'bad_request', 400, 'village_id required');
@@ -48,9 +49,7 @@ children.get('/', async (c) => {
   return c.json({ children: rs.results });
 });
 
-children.post('/', async (c) => {
-  const denied = requireRole(c, ['vc', 'af', 'cluster_admin', 'super_admin']);
-  if (denied) return denied;
+children.post('/', requireCap('child.write'), async (c) => {
   const user = c.get('user');
   const body = await c.req.json<AddBody>().catch(() => ({}) as AddBody);
   const { village_id, school_id, first_name, last_name, gender, dob } = body;

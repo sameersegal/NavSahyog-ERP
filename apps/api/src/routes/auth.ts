@@ -8,12 +8,21 @@ import {
   requireAuth,
   sessionCookieOptions,
 } from '../auth';
+import { capabilitiesFor } from '../policy';
 import { err } from '../lib/errors';
 import type { Bindings, SessionUser, Variables } from '../types';
 
 type LoginBody = { user_id?: string; password?: string };
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Send the user's capability list alongside their profile. The web
+// client hides UI for actions a role can't do; the server still
+// enforces, so this is UX-only. Single source of truth is
+// policy.ts — client never maintains its own role matrix.
+function serialiseUser(user: SessionUser) {
+  return { ...user, capabilities: capabilitiesFor(user.role) };
+}
 
 auth.post('/login', async (c) => {
   const body = await c.req.json<LoginBody>().catch(() => ({}) as LoginBody);
@@ -31,7 +40,7 @@ auth.post('/login', async (c) => {
   if (!user) return err(c, 'unauthenticated', 401, 'invalid credentials');
   const { token } = await createSession(c.env.DB, user.id);
   setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c, SESSION_TTL_SECONDS));
-  return c.json({ user });
+  return c.json({ user: serialiseUser(user) });
 });
 
 auth.post('/logout', async (c) => {
@@ -42,7 +51,7 @@ auth.post('/logout', async (c) => {
 });
 
 auth.get('/me', requireAuth, async (c) => {
-  return c.json({ user: c.get('user') });
+  return c.json({ user: serialiseUser(c.get('user')) });
 });
 
 export default auth;

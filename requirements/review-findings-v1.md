@@ -81,15 +81,19 @@ follow-up addendum PR — don't edit the spec during the meeting.
   the outbox placeholder-ref machinery in §6.3 — no achievements
   will ever reference a client-only student ID.
 
-### B3 — District+ write access is not consistent
+### B3 — District+ write access is not consistent *(structurally closed by the policy layer)*
 - §2.3 matrix shows District / Region / State / Zone admins are
   **read-only** for all operational writes.
-- §5.6 and §5.9 describe gates as "`cluster_admin` or higher" —
-  which includes District+ by rank. Endpoints currently let them
+- §5.6 and §5.9 described gates as "`cluster_admin` or higher" —
+  which included District+ by rank. Endpoints used to let them
   write.
-- **Fix.** Replace every "role ≥ threshold" phrasing in §5 with an
-  explicit allow-list (`vc | af | cluster_admin | super_admin`).
-  Update §5.17 to close the open item.
+- **Fix.** Replaced by `apps/api/src/policy.ts`, which mirrors the
+  §2.3 matrix as data: each role lists the capabilities it carries,
+  and every route gates on a capability via the `requireCap(...)`
+  middleware. When District+ admins are added, they'll be listed
+  only with `.read` capabilities — no endpoint change needed to
+  enforce read-only. §5 still needs its prose updated to remove the
+  "role ≥ threshold" phrasing, but the wire is correct.
 
 ---
 
