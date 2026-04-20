@@ -6,6 +6,7 @@ import schools from './routes/schools';
 import children from './routes/children';
 import events from './routes/events';
 import attendance from './routes/attendance';
+import achievements from './routes/achievements';
 import dashboard from './routes/dashboard';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
@@ -38,6 +39,7 @@ app.route('/api/schools', schools);
 app.route('/api/children', children);
 app.route('/api/events', events);
 app.route('/api/attendance', attendance);
+app.route('/api/achievements', achievements);
 app.route('/api/dashboard', dashboard);
 
 app.onError((e, c) => {

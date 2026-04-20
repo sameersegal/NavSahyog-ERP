@@ -16,14 +16,30 @@ export type {
   AttendanceMark,
   AttendanceSession,
   AttendanceSessionWithMarks,
+  Achievement,
+  AchievementWithStudent,
+  AchievementType,
+  DashboardMetric,
+  GeoLevel,
 } from '@navsahyog/shared';
-export { can, isIndianPhone, isIsoDate, isClockTime } from '@navsahyog/shared';
+export {
+  can,
+  isIndianPhone,
+  isIsoDate,
+  isClockTime,
+  DASHBOARD_METRICS,
+  GEO_LEVELS,
+} from '@navsahyog/shared';
 
 import type {
+  AchievementType,
+  AchievementWithStudent,
   AttendanceMark,
   AttendanceSessionWithMarks,
   AuthUser,
+  DashboardMetric,
   Event,
+  GeoLevel,
   GraduationReason,
   Student,
 } from '@navsahyog/shared';
@@ -144,28 +160,84 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  dashboardChildren: () =>
-    req<{
-      villages: Array<{
-        village_id: number;
-        village_name: string;
-        cluster_id: number;
-        cluster_name: string;
-        count: number;
-      }>;
-    }>('/api/dashboard/children'),
-  dashboardAttendance: (date?: string) =>
-    req<{
-      date: string;
-      villages: Array<{
-        village_id: number;
-        village_name: string;
-        cluster_id: number;
-        cluster_name: string;
-        present: number;
-        total: number;
-        sessions: number;
-        marked: boolean;
-      }>;
-    }>(`/api/dashboard/attendance${date ? `?date=${date}` : ''}`),
+  achievements: (opts: {
+    village_id?: number;
+    from?: string;
+    to?: string;
+    type?: AchievementType;
+  } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.village_id) qs.set('village_id', String(opts.village_id));
+    if (opts.from) qs.set('from', opts.from);
+    if (opts.to) qs.set('to', opts.to);
+    if (opts.type) qs.set('type', opts.type);
+    const suffix = qs.toString();
+    return req<{ achievements: AchievementWithStudent[] }>(
+      `/api/achievements${suffix ? `?${suffix}` : ''}`,
+    );
+  },
+  addAchievement: (body: {
+    student_id: number;
+    description: string;
+    date: string;
+    type: AchievementType;
+    gold_count?: number;
+    silver_count?: number;
+  }) =>
+    req<{ achievement: AchievementWithStudent }>('/api/achievements', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAchievement: (
+    id: number,
+    body: {
+      description?: string;
+      date?: string;
+      gold_count?: number | null;
+      silver_count?: number | null;
+    },
+  ) =>
+    req<{ achievement: AchievementWithStudent }>(`/api/achievements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteAchievement: (id: number) =>
+    req<{ ok: true }>(`/api/achievements/${id}`, { method: 'DELETE' }),
+  dashboardDrilldown: (opts: DrilldownQuery) =>
+    req<DrilldownResponse>(
+      `/api/dashboard/drilldown?${drilldownQs(opts)}`,
+    ),
+  // CSV URL builder (browsers download via <a href=…> so we never
+  // need the response body on the client).
+  dashboardDrilldownCsvUrl: (opts: DrilldownQuery) =>
+    `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
 };
+
+export type DrilldownQuery = {
+  metric: DashboardMetric;
+  level: GeoLevel;
+  id?: number | null;
+  from?: string;
+  to?: string;
+};
+export type DrilldownResponse = {
+  metric: DashboardMetric;
+  level: GeoLevel;
+  id: number | null;
+  crumbs: Array<{ level: GeoLevel; id: number | null; name: string }>;
+  child_level: GeoLevel | 'detail' | null;
+  headers: string[];
+  rows: Array<Array<string | number | null>>;
+  drill_ids: Array<number | null>;
+  period: { from: string; to: string } | null;
+};
+
+function drilldownQs(opts: DrilldownQuery): string {
+  const qs = new URLSearchParams();
+  qs.set('metric', opts.metric);
+  qs.set('level', opts.level);
+  if (opts.id !== undefined && opts.id !== null) qs.set('id', String(opts.id));
+  if (opts.from) qs.set('from', opts.from);
+  if (opts.to) qs.set('to', opts.to);
+  return qs.toString();
+}

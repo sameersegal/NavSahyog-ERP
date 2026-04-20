@@ -216,24 +216,28 @@ describe('attendance', () => {
     });
     expect(post.status).toBe(200);
 
-    const dash = await cookieFetch('/api/dashboard/attendance', token);
+    // Drill to cluster level (metric=attendance) — one row per village
+    // under the cluster. VC scope narrows it to just Anandpur.
+    const dash = await cookieFetch(
+      '/api/dashboard/drilldown?metric=attendance&level=cluster&id=1',
+      token,
+    );
     expect(dash.status).toBe(200);
     const payload = (await dash.json()) as {
-      date: string;
-      villages: Array<{
-        village_id: number;
-        present: number;
-        total: number;
-        sessions: number;
-        marked: boolean;
-      }>;
+      child_level: string;
+      headers: string[];
+      rows: Array<Array<string | number>>;
+      period: { from: string; to: string };
     };
-    expect(payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const anandpur = payload.villages.find((v) => v.village_id === 1);
-    expect(anandpur?.present).toBe(presentCount);
-    expect(anandpur?.total).toBe(marks.length);
-    expect(anandpur?.sessions).toBe(1);
-    expect(anandpur?.marked).toBe(true);
+    expect(payload.child_level).toBe('village');
+    expect(payload.period.from).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(payload.period.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const anandpur = payload.rows.find((r) => r[0] === 'Anandpur');
+    expect(anandpur).toBeDefined();
+    const [, pct, fraction] = anandpur!;
+    // pct is present_days / marked_days * 100. Only one date in window.
+    expect(pct).toBe(Math.round((presentCount / marks.length) * 100));
+    expect(fraction).toBe(`${presentCount}/${marks.length}`);
   });
 
   it('two sessions in the same day coexist and re-submission replaces marks', async () => {
@@ -340,16 +344,18 @@ describe('attendance', () => {
         ],
       })),
     });
-    const dash = await cookieFetch('/api/dashboard/attendance', token);
+    const dash = await cookieFetch(
+      '/api/dashboard/drilldown?metric=attendance&level=cluster&id=1',
+      token,
+    );
     const b = (await dash.json()) as {
-      villages: Array<{ village_id: number; present: number; total: number; sessions: number }>;
+      rows: Array<Array<string | number>>;
     };
-    const anandpur = b.villages.find((v) => v.village_id === 1);
-    // student 1 present in both sessions → 1 distinct present.
-    // student 2 present somewhere in the day → 1 distinct present.
-    expect(anandpur?.present).toBe(2);
-    expect(anandpur?.total).toBe(2);
-    expect(anandpur?.sessions).toBe(2);
+    const anandpur = b.rows.find((r) => r[0] === 'Anandpur');
+    // Distinct student-days: student 1 present in both sessions → 1
+    // distinct present-day. Student 2 present somewhere that day → 1
+    // distinct present-day. Both marked → 2 distinct marked-days.
+    expect(anandpur).toEqual(['Anandpur', 100, '2/2']);
   });
 });
 
@@ -789,14 +795,428 @@ describe('geo-admin tiers (read-only by construction)', () => {
 
       it('sees all in-scope villages on the drill-down dashboard', async () => {
         const token = await loginAs(tier.user);
-        const res = await cookieFetch('/api/dashboard/children', token);
+        // Drill at cluster=1 — the single seeded cluster holds all 3
+        // villages. Every read-only geo tier has the whole tree in
+        // scope for the L1 seed, so the row set is complete.
+        const res = await cookieFetch(
+          '/api/dashboard/drilldown?metric=children&level=cluster&id=1',
+          token,
+        );
         expect(res.status).toBe(200);
         const body = (await res.json()) as {
-          villages: Array<{ village_id: number }>;
+          rows: Array<Array<string | number>>;
+          drill_ids: (number | null)[];
         };
-        const ids = body.villages.map((v) => v.village_id).sort();
-        expect(ids).toEqual([1, 2, 3]);
+        const names = body.rows.map((r) => r[0]).sort();
+        expect(names).toEqual(['Anandpur', 'Belur', 'Chandragiri']);
+        // All three have non-null village ids to drill into.
+        expect(body.drill_ids.filter((x) => x !== null)).toHaveLength(3);
       });
     });
   }
+});
+
+describe('achievements (L2.3)', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  function thisMonthDay(day: number): string {
+    const d = String(day).padStart(2, '0');
+    return `${todayIst().slice(0, 7)}-${d}`;
+  }
+
+  it('VC creates a gold with a medal count', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 1,
+        description: 'Math olympiad',
+        date: thisMonthDay(10),
+        type: 'gold',
+        gold_count: 2,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      achievement: { id: number; type: string; gold_count: number; silver_count: number | null };
+    };
+    expect(body.achievement.type).toBe('gold');
+    expect(body.achievement.gold_count).toBe(2);
+    expect(body.achievement.silver_count).toBeNull();
+  });
+
+  it('POST rejects gold without gold_count', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 1,
+        description: 'Bad',
+        date: thisMonthDay(10),
+        type: 'gold',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toMatch(/gold_count required/);
+  });
+
+  it('POST rejects mismatched medal counts (silver on type=gold)', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 1,
+        description: 'Bad',
+        date: thisMonthDay(10),
+        type: 'gold',
+        gold_count: 1,
+        silver_count: 1,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('second SoM in the same month replaces the first', async () => {
+    const token = await loginAs('vc-anandpur');
+    // Student 2 has no seeded SoM this month (seed gives student 2 a
+    // gold). First POST goes through the INSERT branch — 201. Second
+    // POST, same student, same month, hits the DO UPDATE branch — 200.
+    const first = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 2,
+        description: 'Initial description',
+        date: thisMonthDay(5),
+        type: 'som',
+      }),
+    });
+    expect(first.status).toBe(201);
+    const firstId = ((await first.json()) as { achievement: { id: number } }).achievement.id;
+
+    const second = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 2,
+        description: 'Updated description',
+        date: thisMonthDay(12),
+        type: 'som',
+      }),
+    });
+    // A replace isn't a creation: the route returns 200 (not 201)
+    // whenever the UPSERT took the DO UPDATE path.
+    expect(second.status).toBe(200);
+    const secondId = ((await second.json()) as { achievement: { id: number } }).achievement.id;
+    // Same underlying row — the partial unique index collided and we
+    // performed an UPDATE via UPSERT rather than an INSERT.
+    expect(secondId).toBe(firstId);
+
+    const list = await cookieFetch(
+      `/api/achievements?village_id=1&from=${thisMonthDay(1)}&to=${thisMonthDay(28)}&type=som`,
+      token,
+    );
+    const body = (await list.json()) as {
+      achievements: Array<{ id: number; description: string; date: string }>;
+    };
+    const mine = body.achievements.filter((a) => a.id === firstId);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.description).toBe('Updated description');
+  });
+
+  it('rejects achievement on a graduated student', async () => {
+    const adminToken = await loginAs('super');
+    // Graduate student 1 via the dedicated graduate endpoint.
+    const grad = await cookieFetch('/api/children/1/graduate', adminToken, {
+      method: 'POST',
+      body: JSON.stringify({
+        graduated_at: thisMonthDay(1),
+        graduation_reason: 'pass_out',
+      }),
+    });
+    expect(grad.status).toBe(200);
+
+    const vcToken = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/achievements', vcToken, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 1,
+        description: 'Post-grad award',
+        date: thisMonthDay(15),
+        type: 'som',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toMatch(/graduated/);
+  });
+
+  it('VC cannot create achievement in sibling village (403)', async () => {
+    const token = await loginAs('vc-anandpur');
+    // Student 8 is in Belur (village 2).
+    const res = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 8,
+        description: 'Should fail',
+        date: thisMonthDay(10),
+        type: 'som',
+      }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('PATCH allows editing description/date but not type', async () => {
+    const token = await loginAs('vc-anandpur');
+    const create = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 1,
+        description: 'Original',
+        date: thisMonthDay(10),
+        type: 'gold',
+        gold_count: 1,
+      }),
+    });
+    const id = ((await create.json()) as { achievement: { id: number } }).achievement.id;
+
+    const patch = await cookieFetch(`/api/achievements/${id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        description: 'Edited',
+        gold_count: 3,
+      }),
+    });
+    expect(patch.status).toBe(200);
+    const body = (await patch.json()) as {
+      achievement: { description: string; gold_count: number; type: string };
+    };
+    expect(body.achievement.description).toBe('Edited');
+    expect(body.achievement.gold_count).toBe(3);
+    expect(body.achievement.type).toBe('gold');
+  });
+
+  it('GET defaults to scope-wide list ordered by date desc', async () => {
+    const token = await loginAs('af-bid01');
+    const res = await cookieFetch('/api/achievements', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      achievements: Array<{ date: string; village_id: number }>;
+    };
+    // Seed contains 7 achievements across all three villages in the cluster.
+    expect(body.achievements.length).toBeGreaterThanOrEqual(7);
+    // Ordered date desc.
+    for (let i = 1; i < body.achievements.length; i++) {
+      expect(body.achievements[i - 1]!.date >= body.achievements[i]!.date).toBe(true);
+    }
+  });
+
+  it('district_admin (read-only) cannot POST', async () => {
+    const token = await loginAs('district-bid');
+    const res = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 1,
+        description: 'Should fail',
+        date: thisMonthDay(10),
+        type: 'som',
+      }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  // Review #24 blocker: previously surfaced as a raw 500 from the
+  // partial unique index. Now pre-checked in the route so callers
+  // see a structured 409.
+  it('PATCH of a SoM date into a month that already has one returns 409', async () => {
+    const token = await loginAs('vc-anandpur');
+    // Seed has student 1 SoM this month. Create a second SoM for
+    // student 1 in the _previous_ month via super_admin direct insert
+    // — simpler path: create one next month's SoM on student 2 (no
+    // collision), then PATCH its date into this month where student 2
+    // already has no SoM. Actually: cleaner to stage two SoM rows for
+    // the same student in different months, then move one onto the
+    // other's month.
+    const nextMonth = thisMonthDay(15);
+    // Month 1 SoM for student 2.
+    const a = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 2,
+        description: 'Month 1 SoM',
+        date: thisMonthDay(5),
+        type: 'som',
+      }),
+    });
+    expect(a.status).toBe(201);
+    const firstId = ((await a.json()) as { achievement: { id: number } }).achievement.id;
+
+    // Different YYYY-MM for the second SoM row: pick a January date
+    // in the same year as `nextMonth` to guarantee it's a distinct
+    // month regardless of when the test runs.
+    const otherMonth = nextMonth.slice(0, 4) + '-01-15';
+    const b = await cookieFetch('/api/achievements', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        student_id: 2,
+        description: 'Other month SoM',
+        date: otherMonth,
+        type: 'som',
+      }),
+    });
+    expect(b.status).toBe(201);
+    const secondId = ((await b.json()) as { achievement: { id: number } }).achievement.id;
+    expect(secondId).not.toBe(firstId);
+
+    // Now PATCH the January row's date into the current month — same
+    // student, same target YYYY-MM as `firstId`. Should 409, not 500.
+    const patch = await cookieFetch(`/api/achievements/${secondId}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({ date: thisMonthDay(20) }),
+    });
+    expect(patch.status).toBe(409);
+    const body = (await patch.json()) as { error: { code: string; message?: string } };
+    expect(body.error.code).toBe('conflict');
+  });
+});
+
+describe('dashboard drill-down (L2.3)', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it('india level: children rolls up to a single zone row', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      level: string;
+      child_level: string;
+      crumbs: Array<{ level: string; name: string }>;
+      headers: string[];
+      rows: Array<Array<string | number>>;
+    };
+    expect(body.level).toBe('india');
+    expect(body.child_level).toBe('zone');
+    expect(body.crumbs).toEqual([{ level: 'india', id: null, name: 'India' }]);
+    expect(body.headers).toEqual(['Zone', 'Children']);
+    // One zone (South Zone) with 20 seeded active students.
+    expect(body.rows).toHaveLength(1);
+    expect(body.rows[0]).toEqual(['South Zone', 20]);
+  });
+
+  it('cluster level: achievements tallies seeded SoM / gold / silver', async () => {
+    const token = await loginAs('super');
+    const today = todayIst();
+    const monthStart = today.slice(0, 7) + '-01';
+    const res = await cookieFetch(
+      `/api/dashboard/drilldown?metric=achievements&level=cluster&id=1&from=${monthStart}&to=${today}`,
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      child_level: string;
+      headers: string[];
+      rows: Array<Array<string | number>>;
+      period: { from: string; to: string };
+    };
+    expect(body.child_level).toBe('village');
+    expect(body.headers).toEqual(['Village', 'Total', 'SoM', 'Gold', 'Silver']);
+    expect(body.period.from).toBe(monthStart);
+    // Seed: 3 SoM + 2 gold + 2 silver = 7 total in the current month.
+    const totals = body.rows.reduce((acc, r) => acc + (r[1] as number), 0);
+    expect(totals).toBe(7);
+  });
+
+  it('village level: children shows per-student detail and no drill', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=village&id=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      child_level: string;
+      headers: string[];
+      rows: Array<Array<string | number>>;
+      drill_ids: (number | null)[];
+    };
+    expect(body.child_level).toBe('detail');
+    expect(body.headers[0]).toBe('First name');
+    expect(body.drill_ids.every((x) => x === null)).toBe(true);
+    expect(body.rows.length).toBeGreaterThan(0);
+  });
+
+  it('rejects out-of-scope level/id combination (403)', async () => {
+    const token = await loginAs('vc-anandpur');
+    // VC for Anandpur (village 1) asking for Belur (village 2).
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=village&id=2',
+      token,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('unknown id returns 404', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=zone&id=9999',
+      token,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects bad metric with 400', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=bogus&level=india',
+      token,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('crumbs drop India for non-global users (cosmetic, review #24)', async () => {
+    const clusterAdmin = await loginAs('cluster-bid01');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=cluster&id=1',
+      clusterAdmin,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { crumbs: Array<{ level: string; name: string }> };
+    expect(body.crumbs.map((c) => c.level)).toEqual(['cluster']);
+    expect(body.crumbs[0]!.name).toBe('Bidar Cluster 1');
+
+    // Super admin still sees India at the root of the same drill.
+    const admin = await loginAs('super');
+    const res2 = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=cluster&id=1',
+      admin,
+    );
+    const body2 = (await res2.json()) as { crumbs: Array<{ level: string }> };
+    expect(body2.crumbs.map((c) => c.level)).toEqual([
+      'india', 'zone', 'state', 'region', 'district', 'cluster',
+    ]);
+  });
+
+  it('CSV export returns text/csv with attachment disposition', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown.csv?metric=children&level=cluster&id=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/text\/csv/);
+    const disposition = res.headers.get('content-disposition') ?? '';
+    expect(disposition).toMatch(/attachment; filename=/);
+    expect(disposition).toMatch(/children_cluster_Bidar_Cluster_1/);
+    const body = await res.text();
+    // Headers + rows only. Per decisions.md D5 the CSV mirrors the
+    // on-screen table; context lives in the filename, not inline.
+    expect(body.split(/\r\n/)[0]).toBe('Village,Children');
+    expect(body).toMatch(/Anandpur,\d+/);
+  });
 });

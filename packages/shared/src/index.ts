@@ -11,4 +11,12 @@ export type {
   AttendanceSession,
   AttendanceSessionWithMarks,
 } from './event';
+export type { AchievementType, Achievement, AchievementWithStudent } from './achievement';
+export type { GeoLevel, DashboardMetric } from './dashboard';
+export {
+  GEO_LEVELS,
+  DASHBOARD_METRICS,
+  isGeoLevel,
+  isDashboardMetric,
+} from './dashboard';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';
