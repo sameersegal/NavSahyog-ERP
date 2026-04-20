@@ -27,4 +27,11 @@ export {
   isGeoLevel,
   isDashboardMetric,
 } from './dashboard';
+export type {
+  InsightKpi,
+  InsightsResponse,
+  StreakResponse,
+  VillageActivity,
+} from './insights';
+export { AT_RISK_THRESHOLD_DAYS } from './insights';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';
