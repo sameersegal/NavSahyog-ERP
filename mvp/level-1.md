@@ -1,10 +1,10 @@
 # Level 1 — Multi-role skeleton, one cluster
 
 **Status:** scaffold landed, plus a UI polish pass (logo, three
-themes, user menu, responsive layout, attendance mass-ops).
-Typechecks pass, dev smoke tests green, screenshots in
-`mvp/screenshots/l1/` (desktop + mobile + per-theme). Open
-questions below remain unresolved.
+themes, user menu, responsive layout, attendance mass-ops,
+en + hi i18n). Typechecks pass, dev smoke tests green,
+screenshots in `mvp/screenshots/l1/` (desktop + mobile +
+per-theme + i18n). Open questions below remain unresolved.
 
 ## Goal
 
@@ -37,6 +37,11 @@ role / scope model on the smallest possible feature surface.
   only. Cluster → village drill. No Excel export.
 - **PWA shell (§11.2).** React + Vite on Cloudflare Pages. Install
   prompt out of scope.
+- **Language switcher (§3.8.6).** en + hi catalogs shipped, exposed
+  on Login and in the user menu. Pulled into L1 early because the
+  cost was low and the field-staff UI is Hindi-first. Adding more
+  languages is a two-step change (drop a `locales/<code>.json` and
+  register it in `apps/web/src/i18n.tsx`).
 
 ## Explicitly deferred
 
@@ -44,8 +49,8 @@ role / scope model on the smallest possible feature surface.
 - Achievements (§3.5).
 - Consolidated dashboard (§3.6.2).
 - Master Creations (§3.8.7).
-- Notices, Reference links, Quick links, About Us, Profile, language
-  switcher (§3.8.1–§3.8.6).
+- Notices, Reference links, Quick links, About Us, Profile
+  (§3.8.1–§3.8.5).
 - Offline mode, IndexedDB outbox (§3.7, §6).
 - Password hashing, lockout, OTP, forced change (§3.1.2–§3.1.4).
 - Excel export (§3.6.3).
@@ -68,6 +73,9 @@ role / scope model on the smallest possible feature surface.
    attempt is logged to server logs (audit log proper is L5).
 7. Drill-down dashboard renders the correct counts; numbers match
    a direct SQL query against D1.
+8. Language toggle (en ↔ hi) flips every page including nav,
+   forms, roles, theme labels, and plural counters; `<html lang>`
+   updates; choice persists across reload.
 
 ## Stack choices for this level
 
