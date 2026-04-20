@@ -87,35 +87,115 @@ describe('attendance', () => {
     await resetDb();
   });
 
-  it('rejects dates other than today with the canonical bad_request', async () => {
+  // IST date offset by `days`, matching the client helper.
+  function dateOffset(days: number): string {
+    const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+    const ms = Date.now() + IST_OFFSET_MS - days * 24 * 60 * 60 * 1000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+
+  // Default payload used by the positive-path tests. Pulled out so
+  // we don't repeat the HH:MM / event_id plumbing in every case.
+  function body(overrides: Record<string, unknown> = {}) {
+    return {
+      village_id: 1,
+      event_id: 3, // Board Games — activity
+      start_time: '10:00',
+      end_time: '11:00',
+      marks: [{ student_id: 1, present: true }],
+      ...overrides,
+    };
+  }
+
+  it('rejects dates outside the today/-1/-2 window', async () => {
     const token = await loginAs('vc-anandpur');
     const res = await cookieFetch('/api/attendance', token, {
       method: 'POST',
-      body: JSON.stringify({
-        village_id: 1,
-        date: '2020-01-01',
-        marks: [{ student_id: 1, present: true }],
-      }),
+      body: JSON.stringify(body({ date: '2020-01-01' })),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: { code: string; message?: string } };
-    expect(body.error.code).toBe('bad_request');
-    expect(body.error.message).toMatch(/today/i);
+    const b = (await res.json()) as { error: { code: string; message?: string } };
+    expect(b.error.code).toBe('bad_request');
+    expect(b.error.message).toMatch(/3 days|window|today-2/i);
+  });
+
+  it('rejects a future date', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({ date: '2099-01-01' })),
+    });
+    expect(res.status).toBe(400);
+    const b = (await res.json()) as { error: { message?: string } };
+    expect(b.error.message).toMatch(/future/i);
+  });
+
+  it('accepts today-1 (yesterday) and today-2', async () => {
+    const token = await loginAs('vc-anandpur');
+    for (const offset of [0, 1, 2]) {
+      const res = await cookieFetch('/api/attendance', token, {
+        method: 'POST',
+        body: JSON.stringify(body({ date: dateOffset(offset), event_id: 3 + offset })),
+      });
+      expect(res.status).toBe(200);
+    }
   });
 
   it('rejects a malformed date', async () => {
     const token = await loginAs('vc-anandpur');
     const res = await cookieFetch('/api/attendance', token, {
       method: 'POST',
-      body: JSON.stringify({
-        village_id: 1,
-        date: 'not-a-date',
-        marks: [{ student_id: 1, present: true }],
-      }),
+      body: JSON.stringify(body({ date: 'not-a-date' })),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: { code: string; message?: string } };
-    expect(body.error.message).toMatch(/yyyy-mm-dd/i);
+    const b = (await res.json()) as { error: { message?: string } };
+    expect(b.error.message).toMatch(/yyyy-mm-dd/i);
+  });
+
+  it('requires event_id', async () => {
+    const token = await loginAs('vc-anandpur');
+    const { event_id, ...rest } = body();
+    void event_id;
+    const res = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(rest),
+    });
+    expect(res.status).toBe(400);
+    const b = (await res.json()) as { error: { message?: string } };
+    expect(b.error.message).toMatch(/event_id/);
+  });
+
+  it('rejects an unknown event_id', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({ event_id: 9999 })),
+    });
+    expect(res.status).toBe(400);
+    const b = (await res.json()) as { error: { message?: string } };
+    expect(b.error.message).toMatch(/event/);
+  });
+
+  it('rejects malformed start_time / end_time', async () => {
+    const token = await loginAs('vc-anandpur');
+    const bad = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({ start_time: '10am' })),
+    });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: { message?: string } }).error.message)
+      .toMatch(/start_time/);
+  });
+
+  it('rejects end_time < start_time', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({ start_time: '11:00', end_time: '10:00' })),
+    });
+    expect(res.status).toBe(400);
+    const b = (await res.json()) as { error: { message?: string } };
+    expect(b.error.message).toMatch(/end_time/);
   });
 
   it('happy path: VC submits today and dashboard reflects it', async () => {
@@ -132,20 +212,127 @@ describe('attendance', () => {
 
     const post = await cookieFetch('/api/attendance', token, {
       method: 'POST',
-      body: JSON.stringify({ village_id: 1, marks }),
+      body: JSON.stringify(body({ marks })),
     });
     expect(post.status).toBe(200);
 
     const dash = await cookieFetch('/api/dashboard/attendance', token);
     expect(dash.status).toBe(200);
-    const body = (await dash.json()) as {
+    const payload = (await dash.json()) as {
       date: string;
-      villages: Array<{ village_id: number; present: number; total: number }>;
+      villages: Array<{
+        village_id: number;
+        present: number;
+        total: number;
+        sessions: number;
+        marked: boolean;
+      }>;
     };
-    expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const anandpur = body.villages.find((v) => v.village_id === 1);
+    expect(payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const anandpur = payload.villages.find((v) => v.village_id === 1);
     expect(anandpur?.present).toBe(presentCount);
     expect(anandpur?.total).toBe(marks.length);
+    expect(anandpur?.sessions).toBe(1);
+    expect(anandpur?.marked).toBe(true);
+  });
+
+  it('two sessions in the same day coexist and re-submission replaces marks', async () => {
+    const token = await loginAs('vc-anandpur');
+    const first = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        event_id: 3,
+        marks: [{ student_id: 1, present: true }, { student_id: 2, present: false }],
+      })),
+    });
+    expect(first.status).toBe(200);
+    const second = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        event_id: 4,
+        start_time: '14:00',
+        end_time: '15:00',
+        marks: [{ student_id: 1, present: false }],
+      })),
+    });
+    expect(second.status).toBe(200);
+
+    const get = await cookieFetch('/api/attendance?village_id=1', token);
+    const g = (await get.json()) as {
+      sessions: Array<{ event_id: number; marks: { student_id: number; present: boolean }[] }>;
+    };
+    expect(g.sessions).toHaveLength(2);
+
+    // Re-submit the first (same village, date, event_id) with new
+    // marks — the session row is reused (UPSERT) and marks replace.
+    const replay = await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        event_id: 3,
+        marks: [{ student_id: 1, present: false }, { student_id: 2, present: true }],
+      })),
+    });
+    expect(replay.status).toBe(200);
+
+    const get2 = await cookieFetch('/api/attendance?village_id=1', token);
+    const g2 = (await get2.json()) as {
+      sessions: Array<{ event_id: number; marks: { student_id: number; present: boolean }[] }>;
+    };
+    expect(g2.sessions).toHaveLength(2);
+    const replayed = g2.sessions.find((s) => s.event_id === 3);
+    expect(replayed?.marks.find((m) => m.student_id === 1)?.present).toBe(false);
+    expect(replayed?.marks.find((m) => m.student_id === 2)?.present).toBe(true);
+  });
+
+  it('dashboard counts a student once across multiple sessions', async () => {
+    const token = await loginAs('vc-anandpur');
+    // Two sessions; student 1 present in both, student 2 present only in first.
+    await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        event_id: 3,
+        marks: [
+          { student_id: 1, present: true },
+          { student_id: 2, present: true },
+        ],
+      })),
+    });
+    await cookieFetch('/api/attendance', token, {
+      method: 'POST',
+      body: JSON.stringify(body({
+        event_id: 4,
+        start_time: '14:00',
+        end_time: '15:00',
+        marks: [
+          { student_id: 1, present: true },
+          { student_id: 2, present: false },
+        ],
+      })),
+    });
+    const dash = await cookieFetch('/api/dashboard/attendance', token);
+    const b = (await dash.json()) as {
+      villages: Array<{ village_id: number; present: number; total: number; sessions: number }>;
+    };
+    const anandpur = b.villages.find((v) => v.village_id === 1);
+    // student 1 present in both sessions → 1 distinct present.
+    // student 2 present somewhere in the day → 1 distinct present.
+    expect(anandpur?.present).toBe(2);
+    expect(anandpur?.total).toBe(2);
+    expect(anandpur?.sessions).toBe(2);
+  });
+});
+
+describe('events', () => {
+  it('lists seeded events grouped by kind', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/events', token);
+    expect(res.status).toBe(200);
+    const { events } = (await res.json()) as {
+      events: Array<{ id: number; name: string; kind: 'event' | 'activity' }>;
+    };
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.some((e) => e.kind === 'event')).toBe(true);
+    expect(events.some((e) => e.kind === 'activity')).toBe(true);
   });
 });
 
@@ -474,10 +661,15 @@ describe('children full profile (L2.1)', () => {
       method: 'POST',
       body: JSON.stringify({
         village_id: 1,
+        event_id: 3,
+        start_time: '10:00',
+        end_time: '11:00',
         marks: [{ student_id: 1, present: true }],
       }),
     });
     expect(postRes.status).toBe(400);
+    const graduatedBody = (await postRes.json()) as { error: { message?: string } };
+    expect(graduatedBody.error.message).toMatch(/graduated/);
   });
 
   it('graduate rejects a future date and pre-join date', async () => {

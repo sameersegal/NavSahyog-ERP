@@ -4,6 +4,7 @@ import auth from './routes/auth';
 import villages from './routes/villages';
 import schools from './routes/schools';
 import children from './routes/children';
+import events from './routes/events';
 import attendance from './routes/attendance';
 import dashboard from './routes/dashboard';
 import { err } from './lib/errors';
@@ -25,7 +26,7 @@ app.use('*', async (c, next) => {
     origin: (origin) => (allowed.includes(origin) ? origin : null),
     credentials: true,
     allowHeaders: ['Content-Type'],
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
   })(c, next);
 });
 
@@ -35,6 +36,7 @@ app.route('/auth', auth);
 app.route('/api/villages', villages);
 app.route('/api/schools', schools);
 app.route('/api/children', children);
+app.route('/api/events', events);
 app.route('/api/attendance', attendance);
 app.route('/api/dashboard', dashboard);
 

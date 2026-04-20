@@ -38,7 +38,7 @@
 
   "village.back": "← All villages",
   "village.tab.children": "Children",
-  "village.tab.attendance": "Attendance (today)",
+  "village.tab.attendance": "Attendance",
 
   "children.count_one": "{n} child",
   "children.count_other": "{n} children",
@@ -93,6 +93,24 @@
   "attendance.absent": "Absent",
   "attendance.save": "Save attendance",
   "attendance.saving": "Saving…",
+  "attendance.date.label": "Date",
+  "attendance.date.today": "Today",
+  "attendance.date.yesterday": "Yesterday",
+  "attendance.date.day_before": "Day before",
+  "attendance.new_session": "New session",
+  "attendance.edit_session": "Edit",
+  "attendance.new.title": "New attendance session",
+  "attendance.edit.title": "Edit attendance session",
+  "attendance.none_for_date": "No sessions captured for this date yet.",
+  "attendance.session.summary": "{present}/{total} present",
+  "attendance.form.event": "Event / activity",
+  "attendance.form.start_time": "Start time",
+  "attendance.form.end_time": "End time",
+  "attendance.error.event_required": "Pick an event or activity.",
+  "attendance.error.end_before_start": "End time must be at or after start time.",
+
+  "event.kind.event": "Event",
+  "event.kind.activity": "Activity",
 
   "dashboard.title": "Drill-down dashboard",
   "dashboard.tile.children": "Children",

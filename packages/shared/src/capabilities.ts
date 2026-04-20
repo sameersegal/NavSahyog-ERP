@@ -14,6 +14,7 @@ export type Capability =
   | 'school.read'
   | 'child.read'
   | 'child.write'
+  | 'event.read'
   | 'attendance.read'
   | 'attendance.write'
   | 'dashboard.read';
@@ -24,6 +25,7 @@ const READ_ONLY: readonly Capability[] = [
   'village.read',
   'school.read',
   'child.read',
+  'event.read',
   'attendance.read',
   'dashboard.read',
 ];

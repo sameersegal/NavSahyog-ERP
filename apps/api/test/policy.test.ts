@@ -21,6 +21,7 @@ describe('can()', () => {
       'school.read',
       'child.read',
       'child.write',
+      'event.read',
       'attendance.read',
       'attendance.write',
       'dashboard.read',

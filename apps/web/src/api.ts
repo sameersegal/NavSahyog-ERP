@@ -11,10 +11,22 @@ export type {
   Student as Child,
   Gender,
   GraduationReason,
+  Event,
+  EventKind,
+  AttendanceMark,
+  AttendanceSession,
+  AttendanceSessionWithMarks,
 } from '@navsahyog/shared';
-export { can, isIndianPhone, isIsoDate } from '@navsahyog/shared';
+export { can, isIndianPhone, isIsoDate, isClockTime } from '@navsahyog/shared';
 
-import type { AuthUser, GraduationReason, Student } from '@navsahyog/shared';
+import type {
+  AttendanceMark,
+  AttendanceSessionWithMarks,
+  AuthUser,
+  Event,
+  GraduationReason,
+  Student,
+} from '@navsahyog/shared';
 
 export type Village = {
   id: number;
@@ -25,8 +37,6 @@ export type Village = {
 };
 
 export type School = { id: number; village_id: number; name: string };
-
-export type AttendanceMark = { student_id: number; present: boolean };
 
 // Wire shape accepted by POST / PATCH /api/children for the
 // parent + alt-contact block. Null omits; server treats all fields
@@ -114,16 +124,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  events: () => req<{ events: Event[] }>('/api/events'),
   attendance: (villageId: number, date?: string) =>
     req<{
-      session: { id: number; village_id: number; date: string } | null;
-      marks: AttendanceMark[];
+      date: string;
+      sessions: AttendanceSessionWithMarks[];
     }>(
       `/api/attendance?village_id=${villageId}${date ? `&date=${date}` : ''}`,
     ),
   submitAttendance: (body: {
     village_id: number;
-    date?: string;        // IST 'YYYY-MM-DD'
+    event_id: number;
+    date?: string;          // IST 'YYYY-MM-DD'
+    start_time: string;     // IST 'HH:MM'
+    end_time: string;       // IST 'HH:MM'
     marks: AttendanceMark[];
   }) =>
     req<{ session_id: number; count: number }>('/api/attendance', {
@@ -150,6 +164,7 @@ export const api = {
         cluster_name: string;
         present: number;
         total: number;
+        sessions: number;
         marked: boolean;
       }>;
     }>(`/api/dashboard/attendance${date ? `?date=${date}` : ''}`),
