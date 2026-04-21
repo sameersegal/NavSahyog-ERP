@@ -11,6 +11,7 @@ import media from './routes/media';
 import dashboard from './routes/dashboard';
 import insights from './routes/insights';
 import streaks from './routes/streaks';
+import geo from './routes/geo';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
 
@@ -100,6 +101,7 @@ app.route('/api/media', media);
 app.route('/api/dashboard', dashboard);
 app.route('/api/insights', insights);
 app.route('/api/streaks', streaks);
+app.route('/api/geo', geo);
 
 app.onError((e, c) => {
   console.error(e);

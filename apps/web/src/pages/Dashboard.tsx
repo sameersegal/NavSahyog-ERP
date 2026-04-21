@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   api,
@@ -10,11 +10,13 @@ import {
   type DrilldownQuery,
   type DrilldownResponse,
   type GeoLevel,
+  type GeoSearchHit,
   type InsightsResponse,
   type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
+import { ScopePicker } from '../components/ScopePicker';
 
 // Where the user lands when they first open the dashboard (or when
 // they switch metrics). Super admins and anyone without a scope
@@ -252,6 +254,10 @@ export function Dashboard() {
     }
   }
 
+  function onScopePick(hit: GeoSearchHit) {
+    updateUrl({ level: hit.level, id: hit.id });
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
@@ -259,6 +265,8 @@ export function Dashboard() {
       {insights && pos.level === fallbackPos.level && pos.id === fallbackPos.id && (
         <InsightRail insights={insights} />
       )}
+
+      <ScopePicker onPick={onScopePick} />
 
       <div className="flex flex-wrap gap-2">
         {DASHBOARD_METRICS.map((m) => (
@@ -283,7 +291,7 @@ export function Dashboard() {
               }}
               aria-pressed={preset === k}
               className={
-                'rounded-full px-3 py-1 text-xs border ' +
+                'rounded-full px-4 py-2 text-sm border min-h-[44px] ' +
                 (preset === k
                   ? 'bg-primary text-primary-fg border-primary'
                   : 'bg-card text-fg border-border hover:bg-card-hover')
@@ -294,12 +302,12 @@ export function Dashboard() {
           ))}
           {preset === 'custom' && (
             <div className="w-full sm:ml-1 sm:w-auto flex flex-col gap-2 sm:flex-row sm:items-center">
-              <label className="flex items-center gap-1.5 text-xs text-muted-fg select-none">
+              <label className="flex items-center gap-2 text-sm text-fg select-none min-h-[44px]">
                 <input
                   type="checkbox"
                   checked={rangeMode === 'single'}
                   onChange={toggleRangeMode}
-                  className="h-4 w-4 accent-primary"
+                  className="h-5 w-5 accent-primary"
                 />
                 {t('dashboard.single_day')}
               </label>
@@ -309,7 +317,7 @@ export function Dashboard() {
                   aria-label={t('dashboard.date.from')}
                   value={from}
                   onChange={(e) => onFromChange(e.target.value)}
-                  className="bg-card text-fg border border-border rounded px-2 py-1 w-full sm:w-auto"
+                  className="bg-card text-fg border border-border rounded px-3 py-2 min-h-[44px] w-full sm:w-auto"
                 />
                 {rangeMode === 'range' && (
                   <>
@@ -319,7 +327,7 @@ export function Dashboard() {
                       aria-label={t('dashboard.date.to')}
                       value={to}
                       onChange={(e) => onToChange(e.target.value)}
-                      className="bg-card text-fg border border-border rounded px-2 py-1 w-full sm:w-auto"
+                      className="bg-card text-fg border border-border rounded px-3 py-2 min-h-[44px] w-full sm:w-auto"
                     />
                   </>
                 )}
@@ -330,21 +338,29 @@ export function Dashboard() {
       )}
 
       {data && (
-        <nav className="flex flex-wrap items-center gap-1 text-sm">
+        <nav className="flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
           {data.crumbs.map((c, i) => {
             const isLast = i === data.crumbs.length - 1;
             return (
               <span key={`${c.level}-${c.id ?? 'root'}`} className="flex items-center gap-1">
                 {i > 0 && <span className="text-muted-fg">/</span>}
                 {isLast ? (
-                  <span className="font-medium">{c.name}</span>
+                  <span className="font-medium px-1 py-2">{c.name}</span>
                 ) : (
                   <button
                     onClick={() => onCrumbClick(i)}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:underline px-1 py-2 min-h-[44px]"
                   >
                     {c.name}
                   </button>
+                )}
+                {!isLast && c.level !== 'india' && c.id !== null && (
+                  <SiblingJump
+                    level={c.level}
+                    id={c.id}
+                    currentName={c.name}
+                    onJump={(hit) => updateUrl({ level: hit.level, id: hit.id })}
+                  />
                 )}
               </span>
             );
@@ -604,7 +620,7 @@ function TileButton({
     <button
       onClick={onClick}
       className={
-        'rounded px-3 py-2 text-sm border ' +
+        'rounded px-3 py-2 text-sm border min-h-[44px] ' +
         (active
           ? 'bg-primary text-primary-fg border-primary'
           : 'bg-card text-fg border-border hover:bg-card-hover')
@@ -632,9 +648,13 @@ function DrillDownTable({
   // which reads wrong. The glyph swap happens here so backend-side
   // CSV stays numeric.
   const pctCols = data.headers.map((h) => h.trim().endsWith('%'));
+  const displayCell = (cell: string | number | null, col: number): string => {
+    if (pctCols[col] && typeof cell === 'number') return `${cell}%`;
+    return cell === null || cell === undefined ? '' : String(cell);
+  };
   return (
     <div className="bg-card border border-border rounded overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-border text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b border-border text-sm">
         <span className="text-muted-fg">
           {data.period
             ? t('dashboard.period.range', { from: data.period.from, to: data.period.to })
@@ -643,12 +663,66 @@ function DrillDownTable({
         <a
           href={csvHref}
           download
-          className="bg-card hover:bg-card-hover border border-border rounded px-3 py-1 text-xs"
+          className="bg-card hover:bg-card-hover border border-border rounded px-3 py-2 text-sm min-h-[44px] inline-flex items-center"
         >
           {t('dashboard.csv_download')}
         </a>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* Mobile card view (below sm). Each row → one card; label +
+          value lines below the headline. Screen-reader order matches
+          the table columns. */}
+      <ul className="sm:hidden divide-y divide-border">
+        {data.rows.length === 0 && (
+          <li className="px-4 py-6 text-center text-muted-fg text-sm">
+            {t('dashboard.empty')}
+          </li>
+        )}
+        {data.rows.map((row, rowIndex) => {
+          const canDrill = drillable && data.drill_ids[rowIndex] !== null;
+          const headline = displayCell(row[0] ?? '', 0);
+          const card = (
+            <>
+              <div className={
+                'text-base font-medium ' + (canDrill ? 'text-primary' : '')
+              }>
+                {headline}
+              </div>
+              {data.headers.length > 1 && (
+                <dl className="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
+                  {row.slice(1).map((cell, i) => (
+                    <div key={i + 1} className="contents">
+                      <dt className="text-muted-fg">{data.headers[i + 1]}</dt>
+                      <dd className="text-right tabular-nums">
+                        {displayCell(cell, i + 1)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </>
+          );
+          return (
+            <li key={rowIndex}>
+              {canDrill ? (
+                <button
+                  type="button"
+                  onClick={() => onRowClick(rowIndex)}
+                  className="w-full text-left px-4 py-3 min-h-[44px] hover:bg-card-hover"
+                >
+                  {card}
+                </button>
+              ) : (
+                <div className="px-4 py-3">{card}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Desktop / tablet table view (sm+). overflow-x-auto remains a
+          fallback for very wide metric sets. */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-muted-fg">
@@ -686,23 +760,19 @@ function DrillDownTable({
                     (canDrill ? 'cursor-pointer hover:bg-card-hover' : '')
                   }
                 >
-                  {row.map((cell, i) => {
-                    const display =
-                      pctCols[i] && typeof cell === 'number' ? `${cell}%` : cell ?? '';
-                    return (
-                      <td
-                        key={i}
-                        className={
-                          'px-4 py-2 ' +
-                          (i === 0
-                            ? (canDrill ? 'text-primary' : '')
-                            : 'text-right tabular-nums')
-                        }
-                      >
-                        {display}
-                      </td>
-                    );
-                  })}
+                  {row.map((cell, i) => (
+                    <td
+                      key={i}
+                      className={
+                        'px-4 py-2 ' +
+                        (i === 0
+                          ? (canDrill ? 'text-primary' : '')
+                          : 'text-right tabular-nums')
+                      }
+                    >
+                      {displayCell(cell, i)}
+                    </td>
+                  ))}
                 </tr>
               );
             })}
@@ -710,5 +780,102 @@ function DrillDownTable({
         </table>
       </div>
     </div>
+  );
+}
+
+// SiblingJump — chevron next to a breadcrumb that opens a dropdown
+// of scope-filtered siblings at the same level. Fetch is deferred
+// to first-open so closed crumbs don't spawn N round-trips.
+function SiblingJump({
+  level,
+  id,
+  currentName,
+  onJump,
+}: {
+  level: GeoLevel;
+  id: number;
+  currentName: string;
+  onJump: (hit: { level: GeoLevel; id: number; name: string }) => void;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [siblings, setSiblings] = useState<Array<{ id: number; name: string }> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (siblings !== null) return;
+    setLoading(true);
+    let cancelled = false;
+    api
+      .geoSiblings(level, id)
+      .then((r) => { if (!cancelled) setSiblings(r.siblings); })
+      .catch(() => { if (!cancelled) setSiblings([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, level, id, siblings]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  return (
+    <span ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={t('dashboard.siblings.open', { name: currentName })}
+        aria-expanded={open}
+        className="px-1.5 py-2 min-h-[44px] text-muted-fg hover:text-fg"
+      >
+        <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 top-full z-20 mt-1 w-max min-w-[9rem] max-w-[calc(100vw-2rem)] bg-card border border-border rounded shadow-lg max-h-[320px] overflow-auto"
+        >
+          {loading && (
+            <div className="px-3 py-2 text-xs text-muted-fg">
+              {t('common.loading')}
+            </div>
+          )}
+          {!loading && siblings !== null && siblings.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted-fg">
+              {t('dashboard.siblings.empty')}
+            </div>
+          )}
+          {!loading && siblings !== null && siblings.length > 0 && (
+            <ul className="divide-y divide-border">
+              {siblings.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onJump({ level, id: s.id, name: s.name });
+                    }}
+                    aria-current={s.id === id ? 'true' : undefined}
+                    className={
+                      'w-full text-left px-3 py-2 min-h-[44px] text-sm hover:bg-card-hover ' +
+                      (s.id === id ? 'bg-card-hover font-medium' : '')
+                    }
+                  >
+                    {s.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </span>
   );
 }

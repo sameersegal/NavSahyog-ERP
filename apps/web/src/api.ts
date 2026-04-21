@@ -253,6 +253,26 @@ export const api = {
     `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
   insights: () => req<InsightsResponse>('/api/insights'),
   streaks: () => req<StreakResponse>('/api/streaks/me'),
+  // L2.5.2 — dashboard scope navigation. Both endpoints are already
+  // scope-filtered server-side via villageIdsInScope(), so the
+  // client just renders whatever comes back.
+  geoSearch: (q: string, limit = 20) => {
+    const qs = new URLSearchParams({ q, limit: String(limit) });
+    return req<{ results: GeoSearchHit[] }>(`/api/geo/search?${qs.toString()}`);
+  },
+  geoSiblings: (level: GeoLevel, id: number) => {
+    const qs = new URLSearchParams({ level, id: String(id) });
+    return req<{ siblings: Array<{ id: number; name: string }> }>(
+      `/api/geo/siblings?${qs.toString()}`,
+    );
+  },
+};
+
+export type GeoSearchHit = {
+  level: GeoLevel;
+  id: number;
+  name: string;
+  path: string;
 };
 
 export type DrilldownQuery = {
