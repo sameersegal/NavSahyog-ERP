@@ -56,13 +56,12 @@ export type StarOfTheMonth = {
   description: string;
 };
 
-// One data point on the rolling attendance trend. Three entries in
-// chronological order (prev-prev, prev, current) drive the home
-// trend line. `pct` is null when the month had zero marks.
-export type AttendanceTrendPoint = {
-  month: string;                   // 'YYYY-MM'
+// One day on the rolling 90-day attendance sparkline. `pct` is null
+// when the day had zero marks in the user's scope (so the sparkline
+// can render gaps instead of pretending zero).
+export type AttendanceSparkPoint = {
+  date: string;                    // IST 'YYYY-MM-DD'
   pct: number | null;
-  sessions: number;
 };
 
 // Drives the "at-risk" chip and the insight card. 4 days means "no
@@ -87,10 +86,14 @@ export type InsightsResponse = {
   // Every village in scope, ordered alphabetically. Powers the home
   // village grid (replaces the old /api/villages call there).
   all_villages: VillageActivity[];
-  // Rolling 3-month attendance trend for the whole scope. Ordered
-  // oldest → newest, always exactly 3 entries (missing months return
-  // `{ month, pct: null, sessions: 0 }`).
-  attendance_trend: AttendanceTrendPoint[];
+  // Rolling 90-day attendance sparkline for the whole scope. Ordered
+  // oldest → newest, always exactly 90 entries (missing days return
+  // `{ date, pct: null }`).
+  attendance_90d: AttendanceSparkPoint[];
+  // True when at least one Star of the Month has been declared in
+  // the current IST calendar month across the user's scope. Drives
+  // the yes/no KPI tile on the home dashboard.
+  som_declared_this_month: boolean;
   // Stars of the Month — current and previous calendar months.
   // Empty arrays when the month has no SoMs yet.
   stars_current_month: StarOfTheMonth[];

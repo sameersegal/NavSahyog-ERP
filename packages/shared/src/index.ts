@@ -28,7 +28,7 @@ export {
   isDashboardMetric,
 } from './dashboard';
 export type {
-  AttendanceTrendPoint,
+  AttendanceSparkPoint,
   InsightKpi,
   InsightsResponse,
   StarOfTheMonth,

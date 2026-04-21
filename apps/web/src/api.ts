@@ -26,7 +26,7 @@ export type {
   GeoLevel,
 } from '@navsahyog/shared';
 export type {
-  AttendanceTrendPoint,
+  AttendanceSparkPoint,
   InsightKpi,
   InsightsResponse,
   StarOfTheMonth,

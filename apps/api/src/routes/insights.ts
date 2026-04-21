@@ -20,7 +20,7 @@ import { villageIdsInScope } from '../scope';
 import { todayIstDate } from '../lib/time';
 import {
   AT_RISK_THRESHOLD_DAYS,
-  type AttendanceTrendPoint,
+  type AttendanceSparkPoint,
   type InsightKpi,
   type InsightsResponse,
   type StarOfTheMonth,
@@ -247,39 +247,37 @@ async function mediaInMonth(
   return row?.n ?? 0;
 }
 
-// Attendance % across a whole calendar month, for the trend card.
-// Returns null when the month had no marks (so the trend line can
-// show a gap rather than pretend zero).
-type TrendRaw = {
-  pct: number | null;
-  sessions: number;
-};
-async function attendanceForMonth(
+// Daily attendance % across a date range. Returns a dense array of
+// 'YYYY-MM-DD' → pct, with pct=null for days that had zero marks,
+// so the sparkline can render gaps rather than a flat-zero floor.
+async function dailyAttendance(
   db: D1Database,
   ids: number[],
-  monthPrefix: string,
-): Promise<TrendRaw> {
-  if (ids.length === 0) return { pct: null, sessions: 0 };
+  from: string,
+  to: string,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
   const placeholders = ids.map(() => '?').join(',');
-  const row = await db
+  const rs = await db
     .prepare(
-      `SELECT COUNT(DISTINCT s.id) AS sessions,
+      `SELECT s.date AS date,
               SUM(CASE WHEN m.present = 1 THEN 1 ELSE 0 END) AS present,
               COUNT(m.id) AS total
          FROM attendance_session s
          LEFT JOIN attendance_mark m ON m.session_id = s.id
         WHERE s.village_id IN (${placeholders})
-          AND s.date LIKE ? || '%'`,
+          AND s.date BETWEEN ? AND ?
+        GROUP BY s.date`,
     )
-    .bind(...ids, monthPrefix)
-    .first<{ sessions: number; present: number | null; total: number | null }>();
-  const sessions = row?.sessions ?? 0;
-  const total = row?.total ?? 0;
-  if (total === 0) return { pct: null, sessions };
-  return {
-    pct: Math.round(((row?.present ?? 0) / total) * 100),
-    sessions,
-  };
+    .bind(...ids, from, to)
+    .all<{ date: string; present: number | null; total: number | null }>();
+  for (const r of rs.results) {
+    const total = r.total ?? 0;
+    if (total === 0) continue;
+    out.set(r.date, Math.round(((r.present ?? 0) / total) * 100));
+  }
+  return out;
 }
 
 // Stars of the Month for a given calendar month. Returns at most
@@ -338,6 +336,31 @@ function addMonths(fromIso: string, months: number): string {
   return `${ny}-${String(nm).padStart(2, '0')}-01`;
 }
 
+// Has the user's scope declared at least one Star of the Month in
+// the given calendar month? Boolean, cheap (indexed EXISTS), drives
+// the yes/no KPI tile on the home dashboard.
+async function somDeclaredInMonth(
+  db: D1Database,
+  ids: number[],
+  monthPrefix: string,
+): Promise<boolean> {
+  if (ids.length === 0) return false;
+  const placeholders = ids.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT 1 AS hit
+         FROM achievement a
+         JOIN student st ON st.id = a.student_id
+        WHERE st.village_id IN (${placeholders})
+          AND a.type = 'som'
+          AND a.date LIKE ? || '%'
+        LIMIT 1`,
+    )
+    .bind(...ids, monthPrefix)
+    .first<{ hit: number }>();
+  return row !== null;
+}
+
 insights.get('/', requireCap('dashboard.read'), async (c) => {
   const user = c.get('user');
   const ids = await villageIdsInScope(c.env.DB, user);
@@ -347,7 +370,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
   const prevWeekEnd = addDays(today, -7);
   const monthPrefix = today.slice(0, 7);
   const prevMonthPrefix = addMonths(today, -1).slice(0, 7);
-  const prevPrevMonthPrefix = addMonths(today, -2).slice(0, 7);
+  const spark90Start = addDays(today, -89); // 90-day window inclusive
 
   const [scopeLabel, cores, weekly] = await Promise.all([
     scopeLabelFor(c.env.DB, user),
@@ -357,7 +380,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
 
   const allVillages = cores.map((v) => buildActivity(today, v, weekly.get(v.id)));
 
-  // KPI + trend + stars all fan out in parallel — D1 queries are
+  // KPI + sparkline + stars all fan out in parallel — D1 queries are
   // cheap individually but serialising them adds up on slow links.
   const [
     attThisWeek,
@@ -368,9 +391,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     imagesPrevMonth,
     videosThisMonth,
     videosPrevMonth,
-    trendThis,
-    trendPrev,
-    trendPrevPrev,
+    dailyAtt,
+    somDeclared,
     starsCurrent,
     starsPrev,
   ] = await Promise.all([
@@ -382,9 +404,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     mediaInMonth(c.env.DB, ids, 'image', prevMonthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', monthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', prevMonthPrefix),
-    attendanceForMonth(c.env.DB, ids, monthPrefix),
-    attendanceForMonth(c.env.DB, ids, prevMonthPrefix),
-    attendanceForMonth(c.env.DB, ids, prevPrevMonthPrefix),
+    dailyAttendance(c.env.DB, ids, spark90Start, today),
+    somDeclaredInMonth(c.env.DB, ids, monthPrefix),
     starsForMonth(c.env.DB, ids, monthPrefix),
     starsForMonth(c.env.DB, ids, prevMonthPrefix),
   ]);
@@ -467,13 +488,14 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       return bd - ad;
     });
 
-  // Trend entries arrive oldest-first so the UI can render left-to-
-  // right without re-sorting.
-  const attendanceTrend: AttendanceTrendPoint[] = [
-    { month: prevPrevMonthPrefix, pct: trendPrevPrev.pct, sessions: trendPrevPrev.sessions },
-    { month: prevMonthPrefix,     pct: trendPrev.pct,     sessions: trendPrev.sessions },
-    { month: monthPrefix,         pct: trendThis.pct,     sessions: trendThis.sessions },
-  ];
+  // Sparkline entries arrive oldest-first so the UI renders left-to-
+  // right without re-sorting. Dense 90-day window: every calendar
+  // day gets an entry, `pct: null` on days with no marks.
+  const attendance90d: AttendanceSparkPoint[] = [];
+  for (let i = 89; i >= 0; i--) {
+    const day = addDays(today, -i);
+    attendance90d.push({ date: day, pct: dailyAtt.get(day) ?? null });
+  }
 
   const body: InsightsResponse = {
     scope_label: scopeLabel,
@@ -481,7 +503,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     top_villages: topVillages,
     at_risk_villages: atRiskVillages,
     all_villages: allVillages,
-    attendance_trend: attendanceTrend,
+    attendance_90d: attendance90d,
+    som_declared_this_month: somDeclared,
     stars_current_month: starsCurrent,
     stars_prev_month: starsPrev,
   };

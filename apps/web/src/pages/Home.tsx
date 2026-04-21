@@ -5,21 +5,22 @@
 //     and redirect to that village. Saves a wasted tap every time
 //     they log in (VCs are the most frequent users, in the field,
 //     one-handed).
-//   * Everyone else → KPI strip + 3-month attendance trend + insight
-//     cards (at-risk / top-this-week / stars-of-the-month) + a
-//     village grid annotated with coordinator name + activity chip.
+//   * Everyone else → KPI strip (includes Star-of-the-Month yes/no)
+//     + 90-day attendance sparkline + insight cards (at-risk /
+//     top-this-week / stars-of-the-month) + a village grid
+//     annotated with coordinator name + activity chip.
 //
 // Data comes from /api/insights (scope-filtered). That single call
 // replaces the old /api/villages fetch and carries everything the
-// page needs — trend points, KPI deltas, stars, village activity —
-// so the home screen renders with one round-trip.
+// page needs — sparkline points, KPI deltas, stars, village
+// activity — so the home screen renders with one round-trip.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AT_RISK_THRESHOLD_DAYS,
   api,
-  type AttendanceTrendPoint,
+  type AttendanceSparkPoint,
   type InsightKpi,
   type InsightsResponse,
   type StarOfTheMonth,
@@ -79,9 +80,12 @@ export function Home() {
         </p>
       </header>
 
-      <KpiStrip kpis={data.kpis} />
+      <KpiStrip
+        kpis={data.kpis}
+        somDeclared={data.som_declared_this_month}
+      />
 
-      <AttendanceTrend trend={data.attendance_trend} />
+      <AttendanceSparkline points={data.attendance_90d} />
 
       {(data.at_risk_villages.length > 0 || data.top_villages.length > 1) && (
         <div className="grid gap-3 md:grid-cols-2">
@@ -121,15 +125,22 @@ export function Home() {
   );
 }
 
-// KPI strip grows to 6 tiles (children, attendance 7d, images-month,
-// videos-month, achievements-month, at-risk). The 3-col grid breakpoint
-// at sm + 6-col at lg keeps two rows on phones, one on desktop.
-function KpiStrip({ kpis }: { kpis: InsightKpi[] }) {
+// KPI strip. On mobile the tiles stack in a single column so each
+// metric reads as its own line; desktop packs the same seven tiles
+// (six numeric + SOM yes/no) into a single row.
+function KpiStrip({
+  kpis,
+  somDeclared,
+}: {
+  kpis: InsightKpi[];
+  somDeclared: boolean;
+}) {
   return (
-    <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+    <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
       {kpis.map((k) => (
         <KpiTile key={k.label} k={k} />
       ))}
+      <SomDeclaredTile declared={somDeclared} />
     </section>
   );
 }
@@ -164,64 +175,148 @@ function KpiTile({ k }: { k: InsightKpi }) {
   );
 }
 
-// Three-month attendance trend. Rendered as three inline month
-// labels + bars so non-graphing browsers (and sunlight theme) still
-// read it. Bar height is proportional to pct; a null month shows a
-// muted "—" so an empty month reads as "no data", not "0%".
-function AttendanceTrend({ trend }: { trend: AttendanceTrendPoint[] }) {
+// Star-of-the-Month declaration tile — a yes/no signal rather than
+// a count. Ops uses this to confirm at a glance that the monthly
+// recognition ritual has been run for the current calendar month.
+function SomDeclaredTile({ declared }: { declared: boolean }) {
   const { t } = useI18n();
-  if (trend.every((p) => p.pct === null)) return null;
-  const max = Math.max(...trend.map((p) => p.pct ?? 0), 1);
+  const tone = declared ? 'text-primary' : 'text-danger';
+  return (
+    <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-1">
+      <div className="text-xs text-muted-fg uppercase tracking-wide">
+        {t('home.kpi.som_declared')}
+      </div>
+      <div className={`text-2xl font-semibold ${tone}`}>
+        {declared ? t('home.kpi.som_declared.yes') : t('home.kpi.som_declared.no')}
+      </div>
+      <div className="text-xs text-muted-fg">
+        {t('home.kpi.som_declared.hint')}
+      </div>
+    </div>
+  );
+}
+
+// 90-day attendance sparkline. Renders as an SVG polyline so it
+// survives sunlight theme and low-power devices. Days with no marks
+// are drawn as a gap (null break) rather than a zero floor, so an
+// empty day reads as "no session" not "0% attendance".
+function AttendanceSparkline({ points }: { points: AttendanceSparkPoint[] }) {
+  const { t } = useI18n();
+  if (points.every((p) => p.pct === null)) return null;
+
+  const W = 600;
+  const H = 80;
+  const padX = 4;
+  const padY = 6;
+  const n = points.length;
+  // y maps 0..100 → bottom..top of the drawable area. Max is pinned
+  // at 100 so attendance is comparable across sparkline renders
+  // across scopes and days; a partial-scope 80% shouldn't look like
+  // a "peak" just because the local max happened to be 82%.
+  const xFor = (i: number) =>
+    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
+  const yFor = (pct: number) => padY + ((100 - pct) * (H - 2 * padY)) / 100;
+
+  // Build the polyline with gaps. An 'M' starts a new subpath after
+  // any run of null days so the line never falsely bridges missing
+  // sessions.
+  let d = '';
+  let penDown = false;
+  for (let i = 0; i < n; i++) {
+    const p = points[i]!;
+    if (p.pct === null) {
+      penDown = false;
+      continue;
+    }
+    const cmd = penDown ? 'L' : 'M';
+    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p.pct).toFixed(1)} `;
+    penDown = true;
+  }
+
+  // Dots on days with marks — visually anchors the line and helps on
+  // scopes that run infrequently (one session every few days).
+  const dots = points
+    .map((p, i) => (p.pct === null ? null : { i, pct: p.pct }))
+    .filter((x): x is { i: number; pct: number } => x !== null);
+
+  const observed = points
+    .map((p) => p.pct)
+    .filter((v): v is number => v !== null);
+  const latest = observed[observed.length - 1];
+  const avg = observed.length === 0
+    ? null
+    : Math.round(observed.reduce((a, b) => a + b, 0) / observed.length);
+
+  const startLabel = formatDayMonth(points[0]!.date);
+  const endLabel = formatDayMonth(points[n - 1]!.date);
+
   return (
     <div className="bg-card border border-border rounded-lg p-4 space-y-3">
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{t('home.trend.title')}</h3>
-        <span className="text-xs text-muted-fg">{t('home.trend.hint')}</span>
+        <h3 className="text-sm font-semibold">{t('home.spark.title')}</h3>
+        <span className="text-xs text-muted-fg">
+          {avg === null
+            ? t('home.spark.hint')
+            : t('home.spark.hint_avg', { avg })}
+        </span>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        {trend.map((p) => (
-          <TrendBar key={p.month} point={p} max={max} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TrendBar({ point, max }: { point: AttendanceTrendPoint; max: number }) {
-  const { t } = useI18n();
-  const height = point.pct === null ? 0 : Math.max(8, Math.round((point.pct / max) * 72));
-  const monthLabel = formatMonth(point.month);
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className="h-20 w-full flex items-end justify-center">
-        {point.pct === null ? (
-          <span className="text-muted-fg text-sm">—</span>
-        ) : (
-          <div
-            className="w-10 rounded-t bg-primary/70"
-            style={{ height: `${height}px` }}
-            aria-hidden="true"
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label={t('home.spark.aria', { n })}
+        preserveAspectRatio="none"
+        className="w-full h-20"
+      >
+        {/* 50% reference line — a visual guide without a full axis. */}
+        <line
+          x1={padX}
+          x2={W - padX}
+          y1={yFor(50)}
+          y2={yFor(50)}
+          className="stroke-border"
+          strokeDasharray="3 4"
+          strokeWidth={1}
+        />
+        <path
+          d={d.trim()}
+          fill="none"
+          className="stroke-primary"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {dots.map(({ i, pct }) => (
+          <circle
+            key={i}
+            cx={xFor(i)}
+            cy={yFor(pct)}
+            r={1.8}
+            className="fill-primary"
           />
-        )}
-      </div>
-      <div className="text-lg font-semibold">
-        {point.pct === null ? '—' : `${point.pct}%`}
-      </div>
-      <div className="text-xs text-muted-fg">{monthLabel}</div>
-      <div className="text-xs text-muted-fg">
-        {t('home.trend.sessions', { n: point.sessions })}
+        ))}
+      </svg>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-fg">
+        <span>{startLabel}</span>
+        <span>
+          {latest !== undefined && (
+            <span className="text-fg font-medium">{latest}%</span>
+          )}
+          {latest !== undefined ? ' · ' : ''}
+          {t('home.spark.today')}
+        </span>
+        <span>{endLabel}</span>
       </div>
     </div>
   );
 }
 
-// Short month name for the trend axis label. Parses the 'YYYY-MM'
-// string locally (no Intl timezone pitfalls) so the same three
-// letters render identically regardless of client locale.
-function formatMonth(yyyyMm: string): string {
-  const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
+// Short day-month label for the sparkline axis endpoints. Parses the
+// ISO date locally (no Intl timezone pitfalls) so "21 Apr" renders
+// identically regardless of client locale.
+function formatDayMonth(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number) as [number, number, number];
   const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${names[(m - 1) % 12]} ${String(y).slice(2)}`;
+  return `${d} ${names[(m - 1) % 12]}`;
 }
 
 function AtRiskCard({ villages }: { villages: VillageActivity[] }) {
