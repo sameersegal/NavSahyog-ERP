@@ -86,13 +86,38 @@ function expandIf(tmpl, data) {
   return out;
 }
 
-// Simple {{path}} substitution. Missing paths render as empty string
-// (safer than leaving the marker visible in the PDF).
+// HTML-escape a value so stray `&`, `<`, `>`, `"`, `'` in a caption
+// or village name can't corrupt the render. Attribute and text
+// contexts both need all five; there's no audience where leaving
+// these raw is desirable.
+const HTML_ENTITIES = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => HTML_ENTITIES[c]);
+}
+
+// Simple substitution. {{path}} is HTML-escaped (the default — safe
+// for every string the templates actually use). {{{path}}} is raw;
+// reserve it for values that are deliberately pre-built HTML and
+// are never operator-editable.
+// Missing paths render as empty string (safer than leaving the
+// marker visible in the PDF).
 function expandSimple(tmpl, data) {
-  return tmpl.replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
+  // Triple-stache first so the {{…}} pass below doesn't half-eat it.
+  let out = tmpl.replace(/\{\{\{([\w.]+)\}\}\}/g, (_, key) => {
     const v = lookup(data, key);
     return v == null ? '' : String(v);
   });
+  out = out.replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
+    const v = lookup(data, key);
+    return v == null ? '' : esc(v);
+  });
+  return out;
 }
 
 // Walk the data tree and absolutise any `url` property on an object.
@@ -130,7 +155,7 @@ async function main() {
   const args = parseArgs(process.argv);
   const dataPath = args.positional[0];
   if (!dataPath) {
-    console.error('Usage: render-donor-pdf.mjs <data.json> [--out=<dir>]');
+    console.error('Usage: render.mjs <data.json> [--theme=<name>] [--out=<dir>] [--keep-html]');
     process.exit(1);
   }
   const dataAbs = path.resolve(dataPath);

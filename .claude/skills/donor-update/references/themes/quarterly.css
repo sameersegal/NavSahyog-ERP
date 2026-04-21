@@ -131,6 +131,10 @@
   line-height: 1.6;
   color: var(--ink);
   margin: 0 0 5mm 0;
+  /* `pre-line` preserves the `\n\n` paragraph breaks the skill writes
+     into story.body while still collapsing runs of spaces. Don't
+     change to `normal` — newlines would collapse and the page would
+     render as one wall of text. */
   white-space: pre-line;
   flex: 0 1 auto;
   overflow: hidden;

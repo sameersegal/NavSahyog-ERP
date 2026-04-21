@@ -246,15 +246,18 @@ don't assemble a `quarterly`-shaped JSON for a `milestone` render.
 4. **Write the JSON** to
    `.claude/skills/donor-update/references/examples/<slug>.json`.
 
-5. **Invoke the renderer** (Playwright must find Chromium — set
-   `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` when the default
-   cache is missing):
+5. **Invoke the renderer.** On most machines Playwright auto-finds
+   its Chromium in `~/.cache/ms-playwright/` — just run:
    ```
-   PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers \
-     node .claude/skills/donor-update/references/render.mjs \
+   node .claude/skills/donor-update/references/render.mjs \
      .claude/skills/donor-update/references/examples/<slug>.json \
      [--theme=<name>]
    ```
+   Only if Playwright can't find Chromium (e.g. a sandboxed
+   environment where browsers live in a non-default path), prepend
+   `PLAYWRIGHT_BROWSERS_PATH=<path>`; in the Claude Code web
+   harness that path is `/opt/pw-browsers`.
+
    The renderer picks `references/themes/<theme>.html` based on the
    JSON's `theme` (or `--theme`) and writes `<slug>.pdf` +
    `<slug>.preview.png` next to the JSON. Add `--keep-html` if a

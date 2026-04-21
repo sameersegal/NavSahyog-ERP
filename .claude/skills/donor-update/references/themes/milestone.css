@@ -158,6 +158,8 @@
   font-size: 11pt;
   line-height: 1.6;
   color: var(--ink);
+  /* See quarterly.css — `pre-line` preserves `\n\n` paragraph breaks
+     the skill writes into story.body. */
   white-space: pre-line;
   overflow: hidden;
   flex: 0 1 auto;

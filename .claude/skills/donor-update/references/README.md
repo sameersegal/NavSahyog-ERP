@@ -82,9 +82,19 @@ anywhere joy beats data.
 
 ## Usage
 
-Requires Playwright with Chromium. If Chromium is pre-installed
-elsewhere, point Playwright at it with the `PLAYWRIGHT_BROWSERS_PATH`
-env var:
+Requires Playwright with Chromium. On most machines the default
+cache (`~/.cache/ms-playwright/` on Linux, `~/Library/Caches/…` on
+macOS) is auto-discovered; just run:
+
+```bash
+node .claude/skills/donor-update/references/render.mjs \
+  .claude/skills/donor-update/references/examples/belur-q1-2026.quarterly.json
+```
+
+If Playwright can't find Chromium (e.g. browsers were installed to
+a custom path, or you're in a sandboxed environment like the
+Claude Code web harness where they live at `/opt/pw-browsers`),
+prepend `PLAYWRIGHT_BROWSERS_PATH=<path>`:
 
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers \
