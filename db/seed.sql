@@ -386,6 +386,67 @@ INSERT INTO achievement (student_id, description, date, type, gold_count, silver
   (10, 'District inter-school running',           strftime('%Y-%m', date('now','-1 month')) || '-20', 'gold', 1, NULL, unixepoch(), 6),
   (16, 'Story-writing competition',               strftime('%Y-%m', date('now','-2 months')) || '-22', 'silver', NULL, 1, unixepoch(), 6);
 
+-- Additional achievements for the 16 new villages (v4..v19). The
+-- cluster=1 seed above stays at exactly 7 current-month rows (3 SoM
+-- + 2 gold + 2 silver, preserved for the test fixture). Rows below
+-- all reference students 21..96, so the cluster=1 tally doesn't
+-- move. Distribution maps to each village's narrative:
+--   * Star villages (v4 Hallare, v8 Tiruvallur, v19 Longsa) carry
+--     2 SoM + a medal or two in the current month — they dominate
+--     the "best this month" lists.
+--   * Mid villages get 1 current-month SoM and a trailing one.
+--   * At-risk villages (v7, v10, v14, v18) have nothing in the
+--     current month — only a faded prev / prev-prev entry — so the
+--     "no recent achievements" chip lights up in drill-downs.
+INSERT INTO achievement (student_id, description, date, type, gold_count, silver_count, created_at, created_by) VALUES
+  -- Current-month SoM (one row per SoM; unique on (student, month)).
+  (21, 'Led the Hallare reading circle',            strftime('%Y-%m', 'now') || '-06', 'som', NULL, NULL, unixepoch(), 11),
+  (22, 'Best attendance in Hallare',                strftime('%Y-%m', 'now') || '-08', 'som', NULL, NULL, unixepoch(), 11),
+  (26, 'Helped juniors with Kannada reading',       strftime('%Y-%m', 'now') || '-09', 'som', NULL, NULL, unixepoch(), 12),
+  (31, 'Cleanliness drive lead — Aland',            strftime('%Y-%m', 'now') || '-07', 'som', NULL, NULL, unixepoch(), 13),
+  (40, 'Star of the month — Tiruvallur',            strftime('%Y-%m', 'now') || '-05', 'som', NULL, NULL, unixepoch(), 15),
+  (41, 'Peer mentoring — Tamil reading',            strftime('%Y-%m', 'now') || '-11', 'som', NULL, NULL, unixepoch(), 15),
+  (45, 'Perfect attendance — Poonamallee',          strftime('%Y-%m', 'now') || '-10', 'som', NULL, NULL, unixepoch(), 16),
+  (54, 'Led the Arcot drawing competition',         strftime('%Y-%m', 'now') || '-12', 'som', NULL, NULL, unixepoch(), 18),
+  (58, 'Helped set up the Ambur reading corner',    strftime('%Y-%m', 'now') || '-13', 'som', NULL, NULL, unixepoch(), 19),
+  (59, 'Peer mentoring — Ambur',                    strftime('%Y-%m', 'now') || '-14', 'som', NULL, NULL, unixepoch(), 19),
+  (63, 'Organised the Vaniyambadi story-circle',    strftime('%Y-%m', 'now') || '-08', 'som', NULL, NULL, unixepoch(), 20),
+  (73, 'Attendance streak — Usilampatti',           strftime('%Y-%m', 'now') || '-15', 'som', NULL, NULL, unixepoch(), 22),
+  (78, 'Led the Sechu community song',              strftime('%Y-%m', 'now') || '-06', 'som', NULL, NULL, unixepoch(), 23),
+  (83, 'Star of the month — Jakhama',               strftime('%Y-%m', 'now') || '-09', 'som', NULL, NULL, unixepoch(), 24),
+  (92, 'Led the Longsa handicraft workshop',        strftime('%Y-%m', 'now') || '-10', 'som', NULL, NULL, unixepoch(), 26),
+  (93, 'Perfect attendance — Longsa',               strftime('%Y-%m', 'now') || '-11', 'som', NULL, NULL, unixepoch(), 26),
+  -- Current-month Gold / Silver medals.
+  (23, 'District chess championship',               strftime('%Y-%m', 'now') || '-14', 'gold',   1, NULL, unixepoch(), 11),
+  (27, 'Inter-village drawing contest',             strftime('%Y-%m', 'now') || '-16', 'silver', NULL, 1, unixepoch(), 12),
+  (32, 'Kabaddi — district under-12',               strftime('%Y-%m', 'now') || '-17', 'gold',   1, NULL, unixepoch(), 13),
+  (42, 'Running race — state under-10',             strftime('%Y-%m', 'now') || '-18', 'gold',   2, NULL, unixepoch(), 15),
+  (43, 'Board games — state finals',                strftime('%Y-%m', 'now') || '-19', 'silver', NULL, 1, unixepoch(), 15),
+  (55, 'Storytelling — district second place',      strftime('%Y-%m', 'now') || '-20', 'gold',   1, NULL, unixepoch(), 18),
+  (74, 'Kho-Kho — district winner',                 strftime('%Y-%m', 'now') || '-21', 'silver', NULL, 1, unixepoch(), 22),
+  (79, 'Athletics — state meet',                    strftime('%Y-%m', 'now') || '-13', 'gold',   1, NULL, unixepoch(), 23),
+  (94, 'Naga folk dance competition',               strftime('%Y-%m', 'now') || '-16', 'gold',   2, NULL, unixepoch(), 26),
+  -- Previous-month SoM.
+  (24, 'Led the Hallare drawing class',             strftime('%Y-%m', date('now','-1 month')) || '-12', 'som', NULL, NULL, unixepoch(), 11),
+  (28, 'Helped organise parent meeting',            strftime('%Y-%m', date('now','-1 month')) || '-14', 'som', NULL, NULL, unixepoch(), 12),
+  (36, 'Mentored junior — Afzalpur',                strftime('%Y-%m', date('now','-1 month')) || '-09', 'som', NULL, NULL, unixepoch(), 14),
+  (46, 'Attendance streak — Poonamallee',           strftime('%Y-%m', date('now','-1 month')) || '-15', 'som', NULL, NULL, unixepoch(), 16),
+  (60, 'Led Ambur cleanliness drive',               strftime('%Y-%m', date('now','-1 month')) || '-11', 'som', NULL, NULL, unixepoch(), 19),
+  (64, 'Peer teaching — Vaniyambadi',               strftime('%Y-%m', date('now','-1 month')) || '-13', 'som', NULL, NULL, unixepoch(), 20),
+  (80, 'Organised the Sechu sports day',            strftime('%Y-%m', date('now','-1 month')) || '-10', 'som', NULL, NULL, unixepoch(), 23),
+  (95, 'Star of the month — Longsa',                strftime('%Y-%m', date('now','-1 month')) || '-12', 'som', NULL, NULL, unixepoch(), 26),
+  -- Previous-month Gold / Silver.
+  (25, 'Inter-school quiz — prev month',            strftime('%Y-%m', date('now','-1 month')) || '-17', 'silver', NULL, 1, unixepoch(), 11),
+  (61, 'District chess — prev month',               strftime('%Y-%m', date('now','-1 month')) || '-18', 'gold',   1, NULL, unixepoch(), 19),
+  (84, 'Drawing competition — prev month',          strftime('%Y-%m', date('now','-1 month')) || '-19', 'silver', NULL, 1, unixepoch(), 24),
+  -- Prev-prev-month SoM (keeps the 3-month trend non-empty).
+  (33, 'Aland Jal Vriddhi leader',                  strftime('%Y-%m', date('now','-2 months')) || '-08', 'som', NULL, NULL, unixepoch(), 13),
+  (44, 'Tiruvallur story-writing',                  strftime('%Y-%m', date('now','-2 months')) || '-10', 'som', NULL, NULL, unixepoch(), 15),
+  (50, 'Gudiyatham — held together through monsoon',strftime('%Y-%m', date('now','-2 months')) || '-14', 'som', NULL, NULL, unixepoch(), 17),
+  (68, 'Melur — prev-prev attendance',              strftime('%Y-%m', date('now','-2 months')) || '-09', 'som', NULL, NULL, unixepoch(), 21),
+  (88, 'Ungma handicraft class',                    strftime('%Y-%m', date('now','-2 months')) || '-11', 'som', NULL, NULL, unixepoch(), 25),
+  (96, 'Longsa folk-music recital',                 strftime('%Y-%m', date('now','-2 months')) || '-13', 'silver', NULL, 1, unixepoch(), 26);
+
 -- Attendance sessions. Three months (90 days) of synthetic fixture
 -- data so the home "3-month trend" and drill-down "last month" /
 -- "this month" views both have meaningful denominators. Profiles:
@@ -412,16 +473,105 @@ WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
 SELECT 3, 3 + (n % 6), date('now', '-' || n || ' days'), '10:00', '11:00', unixepoch(), 3
 FROM days WHERE n >= 5 AND n % 2 = 1 AND n <= 89;
 
+-- Sessions for the 16 new villages (v4..v19). A `prof` table drives
+-- a cross-join with the 90-day `days` CTE: a row lands whenever
+-- `n % density = d_off` AND `n >= silent`. The pattern gives every
+-- village a distinguishable session cadence without 16 separate
+-- INSERTs. `silent` simulates an at-risk village that went quiet in
+-- the most recent `silent` days — useful for insights' "recently
+-- silent" and attendance-trend-decline widgets.
+--
+-- Profile legend (density=1 daily, 2 alt-day, 3 every-third-day,
+--                 4 every-fourth-day):
+--   4  Hallare        daily,       star           (VC 11)
+--   5  Srirangapatna  alt-day                     (VC 12)
+--   6  Aland          every 3d                    (VC 13)
+--   7  Afzalpur       every 4d + 7-day silence    (VC 14)   ← at-risk
+--   8  Tiruvallur     daily,       star           (VC 15)
+--   9  Poonamallee    alt-day                     (VC 16)
+--   10 Gudiyatham     every 3d + 10-day silence   (VC 17)   ← at-risk
+--   11 Arcot          daily + 3-day silence       (VC 18)
+--   12 Ambur          daily                       (VC 19)
+--   13 Vaniyambadi    alt-day                     (VC 20)
+--   14 Melur          alt-day + 12-day silence    (VC 21)   ← at-risk
+--   15 Usilampatti    daily                       (VC 22)
+--   16 Sechu          alt-day (even)              (VC 23)
+--   17 Jakhama        alt-day (odd)               (VC 24)
+--   18 Ungma          every 3d + 9-day silence    (VC 25)   ← at-risk
+--   19 Longsa         daily,       star           (VC 26)
+INSERT INTO attendance_session (village_id, event_id, date, start_time, end_time, created_at, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89),
+prof(village_id, vc_id, density, d_off, silent) AS (VALUES
+  (4,  11, 1, 0, 0),
+  (5,  12, 2, 1, 0),
+  (6,  13, 3, 0, 0),
+  (7,  14, 4, 1, 7),
+  (8,  15, 1, 0, 0),
+  (9,  16, 2, 1, 0),
+  (10, 17, 3, 0, 10),
+  (11, 18, 1, 0, 3),
+  (12, 19, 1, 0, 0),
+  (13, 20, 2, 1, 0),
+  (14, 21, 2, 1, 12),
+  (15, 22, 1, 0, 0),
+  (16, 23, 2, 0, 0),
+  (17, 24, 2, 1, 0),
+  (18, 25, 3, 0, 9),
+  (19, 26, 1, 0, 0)
+)
+SELECT prof.village_id,
+       3 + (n % 6),
+       date('now', '-' || n || ' days'),
+       '10:00', '11:00',
+       unixepoch(),
+       prof.vc_id
+FROM days
+JOIN prof ON n >= prof.silent AND (n % prof.density) = prof.d_off
+WHERE n <= 89;
+
 -- Attendance marks — one row per (session, child-in-village). Present
--- flag uses deterministic modular arithmetic so each seeded village
--- gets a distinguishable attendance %:
---   v2: ~82% present (star village)
---   v3: ~58% (worst, matching its lapsed status)
+-- flag uses deterministic modular arithmetic so each village gets a
+-- distinguishable attendance %. Approximate rates (1 - 1/modulus):
+--   v2  Belur        ~83% present   (existing star)
+--   v3  Chandragiri  ~60% present   (existing at-risk)
+--   v4  Hallare      ~83% (star)
+--   v5  Srirangapatna~80%
+--   v6  Aland        ~75%
+--   v7  Afzalpur     ~67% (at-risk)
+--   v8  Tiruvallur   ~86% (star)
+--   v9  Poonamallee  ~80%
+--   v10 Gudiyatham   ~67% (at-risk)
+--   v11 Arcot        ~80%
+--   v12 Ambur        ~75%
+--   v13 Vaniyambadi  ~80%
+--   v14 Melur        ~67% (at-risk)
+--   v15 Usilampatti  ~83%
+--   v16 Sechu        ~80%
+--   v17 Jakhama      ~75%
+--   v18 Ungma        ~67% (at-risk)
+--   v19 Longsa       ~86% (star)
 INSERT INTO attendance_mark (session_id, student_id, present)
 SELECT s.id, c.id,
   CASE s.village_id
-    WHEN 2 THEN CASE WHEN ((s.id * 11 + c.id * 5) % 6) = 0 THEN 0 ELSE 1 END
-    ELSE       CASE WHEN ((s.id * 17 + c.id * 3) % 5) <= 1 THEN 0 ELSE 1 END
+    WHEN 2  THEN CASE WHEN ((s.id * 11 + c.id * 5)  % 6) = 0 THEN 0 ELSE 1 END
+    WHEN 3  THEN CASE WHEN ((s.id * 17 + c.id * 3)  % 5) <= 1 THEN 0 ELSE 1 END
+    WHEN 4  THEN CASE WHEN ((s.id * 11 + c.id * 5)  % 6) = 0 THEN 0 ELSE 1 END
+    WHEN 5  THEN CASE WHEN ((s.id * 13 + c.id * 7)  % 5) = 0 THEN 0 ELSE 1 END
+    WHEN 6  THEN CASE WHEN ((s.id * 11 + c.id * 3)  % 4) = 0 THEN 0 ELSE 1 END
+    WHEN 7  THEN CASE WHEN ((s.id * 7  + c.id * 5)  % 3) = 0 THEN 0 ELSE 1 END
+    WHEN 8  THEN CASE WHEN ((s.id * 13 + c.id * 9)  % 7) = 0 THEN 0 ELSE 1 END
+    WHEN 9  THEN CASE WHEN ((s.id * 11 + c.id * 5)  % 5) = 0 THEN 0 ELSE 1 END
+    WHEN 10 THEN CASE WHEN ((s.id * 7  + c.id * 3)  % 3) = 0 THEN 0 ELSE 1 END
+    WHEN 11 THEN CASE WHEN ((s.id * 13 + c.id * 11) % 5) = 0 THEN 0 ELSE 1 END
+    WHEN 12 THEN CASE WHEN ((s.id * 11 + c.id * 7)  % 4) = 0 THEN 0 ELSE 1 END
+    WHEN 13 THEN CASE WHEN ((s.id * 7  + c.id * 9)  % 5) = 0 THEN 0 ELSE 1 END
+    WHEN 14 THEN CASE WHEN ((s.id * 13 + c.id * 5)  % 3) = 0 THEN 0 ELSE 1 END
+    WHEN 15 THEN CASE WHEN ((s.id * 11 + c.id * 3)  % 6) = 0 THEN 0 ELSE 1 END
+    WHEN 16 THEN CASE WHEN ((s.id * 7  + c.id * 11) % 5) = 0 THEN 0 ELSE 1 END
+    WHEN 17 THEN CASE WHEN ((s.id * 13 + c.id * 7)  % 4) = 0 THEN 0 ELSE 1 END
+    WHEN 18 THEN CASE WHEN ((s.id * 11 + c.id * 5)  % 3) = 0 THEN 0 ELSE 1 END
+    WHEN 19 THEN CASE WHEN ((s.id * 13 + c.id * 9)  % 7) = 0 THEN 0 ELSE 1 END
+    ELSE                                                         1
   END
 FROM attendance_session s
 JOIN student c ON c.village_id = s.village_id
@@ -500,3 +650,136 @@ SELECT
   3, 3
 FROM days
 WHERE n IN (12, 38, 65);
+
+-- Media for five representative new villages. tag_event_id is set to
+-- the same event the village's attendance session carries that day
+-- (3 + (n % 6), matching the session profile above), so the
+-- consolidated image_pct / video_pct KPIs on the drill-down see the
+-- join at (village_id, event_id, IST-day) and register a non-zero
+-- percentage. Five villages is enough variety for the home dashboard
+-- to light up different KPI colours at zone / state / cluster scopes
+-- without the seed turning into a mirror of every village.
+--
+-- Coverage map:
+--   v4  Hallare      many tagged photos + some videos   (star, high image%)
+--   v5  Srirangapatna periodic photos                   (mid)
+--   v8  Tiruvallur   many tagged photos + videos        (star)
+--   v12 Ambur        periodic photos                    (mid)
+--   v19 Longsa       many tagged photos + videos        (star, Northeast)
+
+-- v4 Hallare — photos every 2 days, videos sparse.
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-hal-img-' || n,
+  'image',
+  'image/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/4/seed-hal-img-' || n || '.jpg',
+  'image/jpeg',
+  230000 + (n * 900),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  12.087, 76.653,
+  4, 3 + (n % 6), 11
+FROM days WHERE n % 2 = 0 AND n <= 89;
+
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-hal-vid-' || n,
+  'video',
+  'video/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/4/seed-hal-vid-' || n || '.mp4',
+  'video/mp4',
+  4100000 + (n * 10000),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  12.087, 76.653,
+  4, 3 + (n % 6), 11
+FROM days WHERE n IN (4, 18, 31, 46, 59, 74);
+
+-- v5 Srirangapatna — photos every 6 days.
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-sri-img-' || n,
+  'image',
+  'image/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/5/seed-sri-img-' || n || '.jpg',
+  'image/jpeg',
+  210000 + (n * 800),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  12.414, 76.705,
+  5, 3 + (n % 6), 12
+FROM days WHERE n % 6 = 1 AND n <= 89;
+
+-- v8 Tiruvallur — photos every 2 days, videos on 8 days.
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-tir-img-' || n,
+  'image',
+  'image/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/8/seed-tir-img-' || n || '.jpg',
+  'image/jpeg',
+  245000 + (n * 1100),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  13.143, 79.907,
+  8, 3 + (n % 6), 15
+FROM days WHERE n % 2 = 1 AND n <= 89;
+
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-tir-vid-' || n,
+  'video',
+  'video/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/8/seed-tir-vid-' || n || '.mp4',
+  'video/mp4',
+  4350000 + (n * 11500),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  13.143, 79.907,
+  8, 3 + (n % 6), 15
+FROM days WHERE n IN (3, 11, 21, 35, 48, 62, 75, 86);
+
+-- v12 Ambur — photos every 5 days.
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-amb-img-' || n,
+  'image',
+  'image/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/12/seed-amb-img-' || n || '.jpg',
+  'image/jpeg',
+  225000 + (n * 950),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  12.792, 78.711,
+  12, 3 + (n % 6), 19
+FROM days WHERE n % 5 = 0 AND n <= 89;
+
+-- v19 Longsa — photos every 3 days, videos every ~15 days.
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-lon-img-' || n,
+  'image',
+  'image/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/19/seed-lon-img-' || n || '.jpg',
+  'image/jpeg',
+  260000 + (n * 1000),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  26.331, 94.509,
+  19, 3 + (n % 6), 26
+FROM days WHERE n % 3 = 0 AND n <= 89;
+
+INSERT INTO media (uuid, kind, r2_key, mime, bytes, captured_at, received_at, latitude, longitude, village_id, tag_event_id, created_by)
+WITH RECURSIVE days(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM days WHERE n < 89)
+SELECT
+  'seed-lon-vid-' || n,
+  'video',
+  'video/' || strftime('%Y/%m/%d', date('now', '-' || n || ' days')) || '/19/seed-lon-vid-' || n || '.mp4',
+  'video/mp4',
+  4500000 + (n * 13000),
+  unixepoch('now', '-' || n || ' days'),
+  unixepoch('now', '-' || n || ' days'),
+  26.331, 94.509,
+  19, 3 + (n % 6), 26
+FROM days WHERE n IN (6, 21, 37, 52, 69, 83);
