@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="{{lang}}">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{village.name}} — {{window.label}}</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="themes/{{theme}}.css" />
+  </head>
+  <body>
+    <section class="page">
+      <header class="brand">
+        <div class="logo">
+          <img src="assets/logo.svg" alt="NavSahyog" />
+        </div>
+        <div class="title">
+          <div class="org">NavSahyog Foundation</div>
+          <div class="sub">
+            <span class="village">{{village.name}}</span>
+            <span class="sep">·</span>
+            <span class="cluster">{{village.cluster}}</span>
+          </div>
+        </div>
+        <div class="window">
+          <div class="window-label">{{window.label}}</div>
+          <div class="window-dates">{{window.from}} — {{window.to}}</div>
+        </div>
+      </header>
+
+      <section class="stats">
+        {{#each stats}}
+        <div class="stat">
+          <div class="stat-value">{{value}}</div>
+          <div class="stat-label">{{label}}</div>
+        </div>
+        {{/each}}
+      </section>
+
+      <section class="story">
+        <h2 class="story-title">{{story.title}}</h2>
+        <div class="story-body">{{story.body}}</div>
+        {{#if story.quote}}
+        <blockquote class="story-quote">
+          <span class="quote-mark">“</span>{{story.quote}}<span class="quote-mark">”</span>
+          <footer class="story-attr">— {{story.attribution}}</footer>
+        </blockquote>
+        {{/if}}
+      </section>
+
+      {{#if highlights}}
+      <section class="highlights">
+        <div class="highlights-label">Also from this quarter</div>
+        <div class="highlights-row">
+          {{#each highlights}}
+          <div class="highlight">
+            <div class="highlight-kicker">{{kicker}}</div>
+            <div class="highlight-body">{{body}}</div>
+          </div>
+          {{/each}}
+        </div>
+      </section>
+      {{/if}}
+
+      <section class="media">
+        {{#each media}}
+        <figure class="media-item">
+          <div class="media-frame">
+            <img src="{{url}}" alt="{{caption}}" />
+          </div>
+          <figcaption class="media-caption">{{caption}}</figcaption>
+        </figure>
+        {{/each}}
+      </section>
+
+      <footer class="footer">
+        <div class="footer-main">
+          {{footer.tagline}}
+          {{#if donor.name}}<span class="donor-line">Made for {{donor.name}}.</span>{{/if}}
+        </div>
+        <div class="footer-meta">
+          <span>{{footer.org_url}}</span>
+          <span class="sep">·</span>
+          <span>{{footer.contact}}</span>
+        </div>
+      </footer>
+    </section>
+  </body>
+</html>

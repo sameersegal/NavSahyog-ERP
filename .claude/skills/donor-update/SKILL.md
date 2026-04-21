@@ -1,6 +1,6 @@
 ---
 name: donor-update
-description: Draft a donor engagement update for a specific NavSahyog village and timeframe, by composing reads across the ERP APIs. Use when the operator asks for "donor update", "quarterly update for village X", "write a donor letter", or similar. Output is a markdown draft the operator reviews and sends manually via email or WhatsApp.
+description: Draft a donor engagement update for a specific NavSahyog village and timeframe, by composing reads across the ERP APIs. Use when the operator asks for "donor update", "quarterly update for village X", "write a donor letter", "donor PDF", or similar. Outputs are (a) a markdown draft the operator reviews and sends manually via email or WhatsApp, and (b) a 1-pager PDF the operator can attach, rendered from mvp/donor-pdf/.
 ---
 
 # Donor update
@@ -19,7 +19,9 @@ something is missing, ask once — don't guess.
 |---|---|---|
 | `village` | yes | UUID, or a name the operator will resolve. Prefer UUID. |
 | `from`, `to` | yes | ISO dates bounding the update window (e.g. calendar quarter, rolling 90 days — whatever the operator specifies). |
-| `channel` | yes | `whatsapp` or `email`. Governs length and tone. |
+| `channel` | yes | `whatsapp` or `email`. Governs length and tone of the markdown draft. |
+| `pdf` | no | `true` \| `false`. Default: `true`. When true, also render the 1-pager PDF from `mvp/donor-pdf/` (step 8). |
+| `theme` | no | `quarterly` (default), `celebration`, or `milestone`. Maps to `mvp/donor-pdf/themes/<name>.css`. Free-text prompts ("festive", "formal", …) are mapped to the closest preset. |
 | `tone` | no | Free-text hint (e.g. "warm", "formal", "data-heavy"). Default: warm-but-factual. |
 | `donor_name` | no | If given, address the message to them. Otherwise produce a generic draft. |
 | `length` | no | `short` (≤ 120 words, WhatsApp default), `medium` (≤ 300, email default), `long` (≤ 600). |
@@ -133,6 +135,49 @@ Sources used:
 
 So the operator can sanity-check coverage.
 
+### 8. Render the 1-pager PDF (if `pdf=true`)
+
+Skip this step if the operator asked for markdown only.
+
+1. Assemble the data JSON per `mvp/donor-pdf/README.md`. Populate:
+   - `village`, `window`, `donor`, `theme`, `lang`
+   - `stats[]` (4–5 tiles; typical picks: children active,
+     sessions held, attendance %, SoMs, gold medals)
+   - `story.title`, `story.body` (2 paragraphs, ~150–200 words),
+     `story.quote`, `story.attribution`
+   - `highlights[]` (three kicker/body pairs — Feb / Mar / Apr
+     moments, or Event A / Event B / Event C)
+   - `media[]` (exactly three items with `url` + `caption`).
+     Download each selected media item via
+     `GET /api/media/raw/:uuid` into a sibling `media/` folder
+     and reference with a relative path; absolute `file://`
+     URLs also work.
+2. Write the JSON to `mvp/donor-pdf/examples/<village>-<window>.json`.
+3. Invoke the renderer:
+   ```
+   node scripts/render-donor-pdf.mjs \
+     mvp/donor-pdf/examples/<slug>.json \
+     [--theme=<name>]
+   ```
+   The renderer writes `<slug>.pdf` and `<slug>.preview.png`
+   next to the JSON.
+4. Show the operator the preview PNG and the path to the PDF.
+
+### 9. Iterate
+
+The operator will often want one or more rounds of changes:
+
+- **"Use celebration theme"** → re-run step 8 with `--theme=celebration`.
+- **"Swap media 2 for item 5"** → edit `media[1]` in the JSON,
+  re-run step 8.
+- **"Make the story warmer"** / **"Tighten the second paragraph"** →
+  regenerate `story.body` only, re-run step 8.
+- **"Add an `Activity of the Quarter` highlight"** → adjust
+  `highlights[]` (3 items max — more overflows the strip).
+
+Regenerate from the existing JSON; don't re-fetch the API data
+unless the window or village changes. Each render is fast (~2 s).
+
 ## Output rules
 
 - **No child PII in the draft.** No last names, no DOB, no school
@@ -173,7 +218,10 @@ Skill resolves:
 - `channel=email`, `length=medium`
 - `tone=warm`, `donor_name=Mrs. Sharma`
 
-Then runs steps 2–6 and emits the markdown draft + sources block.
+Then runs steps 2–7 and emits the markdown draft + sources block,
+and (because `pdf` defaults true) runs step 8 to produce the PDF
++ preview. On "try a celebration theme", jumps to step 9 and
+re-renders only.
 
 ## Spec cross-refs
 

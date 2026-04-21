@@ -1,0 +1,16 @@
+/*
+  Default theme — matches the main web app's primary green (§index.css
+  HSL 158 64% 32%). Sober, data-forward. Good for routine quarterly
+  recaps.
+*/
+:root {
+  --bg: #ffffff;
+  --fg: #101828;
+  --muted: #475467;
+  --card: #f8fafc;
+  --accent: #1e8a5a;
+  --accent-soft: #e6f4ed;
+  --accent-fg: #ffffff;
+  --rule: #e4e7ec;
+  --quote: #1e8a5a;
+}

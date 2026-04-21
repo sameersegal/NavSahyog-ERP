@@ -1,0 +1,54 @@
+{
+  "lang": "en",
+  "theme": "quarterly",
+  "village": {
+    "name": "Belur",
+    "cluster": "Bidar Cluster 1",
+    "coordinator": "Ramesh Kulkarni"
+  },
+  "window": {
+    "label": "Jan–Apr 2026",
+    "from": "2026-01-21",
+    "to": "2026-04-21"
+  },
+  "donor": {
+    "name": "Mrs. Sharma"
+  },
+  "stats": [
+    { "value": "6",  "label": "children active" },
+    { "value": "90", "label": "sessions held" },
+    { "value": "83%", "label": "average attendance" },
+    { "value": "3",  "label": "stars of the month" },
+    { "value": "3",  "label": "gold medals" }
+  ],
+  "story": {
+    "title": "A quarter of firsts in Belur",
+    "body": "Ninety days, ninety sessions — an unbroken daily streak kept by six children and their coordinator Ramesh Kulkarni. February belonged to Ishaan, who maintained the session notebook every single day. March went to Gauri, who organised the reading circle out of a dusty corner of the Anganwadi and turned it into the room everyone wanted to be in. In April, Farhan took over the Thursday story-circle from her — our third Star of the Month in as many months.\n\nThe medals followed the momentum. Gauri led our Kho-Kho squad to the inter-village championship, coming home with two golds. A week earlier, Hitesh had won gold at the district inter-school running meet, outpacing children from a dozen schools we hadn't met before. What you're sponsoring, in numbers and in names, is a village that has decided to show up for each other every single day.",
+    "quote": "Organised the reading circle.",
+    "attribution": "Gauri, Star of the Month, March 2026"
+  },
+  "highlights": [
+    { "kicker": "Feb · Ishaan",  "body": "Kept the session notebook every single day." },
+    { "kicker": "Mar · Hitesh",  "body": "Gold at the district inter-school running meet." },
+    { "kicker": "Apr · Gauri",   "body": "Two golds at the Kho-Kho inter-village championship." }
+  ],
+  "media": [
+    {
+      "url": "../assets/photo-placeholder.svg",
+      "caption": "Feb 8 — a reading-corner morning"
+    },
+    {
+      "url": "../assets/photo-placeholder.svg",
+      "caption": "Mar 18 — days before the district running win"
+    },
+    {
+      "url": "../assets/photo-placeholder.svg",
+      "caption": "Apr 15 — Kho-Kho championship day"
+    }
+  ],
+  "footer": {
+    "tagline": "Thank you for walking with us.",
+    "org_url": "navsahyog.org",
+    "contact": "info@navsahyog.org"
+  }
+}

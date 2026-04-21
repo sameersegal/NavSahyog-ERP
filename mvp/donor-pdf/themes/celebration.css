@@ -1,0 +1,26 @@
+/*
+  Celebration theme — warm saffron + marigold. Use for annual wins,
+  festivals, major milestones. Keeps the accent green on the stats so
+  the NavSahyog identity still reads at a glance.
+*/
+:root {
+  --bg: #fffaf2;
+  --fg: #1a1005;
+  --muted: #735c40;
+  --card: #fff2dd;
+  --accent: #c95a13;           /* saffron */
+  --accent-soft: #ffe7c9;
+  --accent-fg: #ffffff;
+  --rule: #f0dfc2;
+  --quote: #c95a13;
+}
+
+/* A touch of warmth on the whole page. */
+.page {
+  background: linear-gradient(180deg, #fffaf2 0%, #ffffff 25%);
+}
+
+/* Stat values keep the house green for brand continuity. */
+.stat-value {
+  color: #1e8a5a;
+}

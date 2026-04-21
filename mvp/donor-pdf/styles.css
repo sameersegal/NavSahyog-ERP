@@ -1,0 +1,336 @@
+/*
+  Base layout for the 1-pager donor update.
+
+  Theme overrides live in themes/<name>.css and are layered on top
+  via a second <link> in the template. Only colour, accent imagery,
+  and font-family are expected to vary per theme — the geometry below
+  is theme-agnostic so one bad override can't break the page layout.
+
+  A4 portrait = 210×297mm. We draw inside 190×277mm with 10mm gutter.
+*/
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+:root {
+  /* Defaults; themes override these. */
+  --bg: #ffffff;
+  --fg: #101828;
+  --muted: #475467;
+  --card: #f8fafc;
+  --accent: #1e8a5a;          /* NavSahyog teal-green (HSL 158 64% 32%) */
+  --accent-soft: #e6f4ed;
+  --accent-fg: #ffffff;
+  --rule: #e4e7ec;
+  --quote: #1e8a5a;
+
+  --font-sans: "Inter", "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-display: "Inter", "Georgia", serif;
+  --font-story: "Georgia", "Iowan Old Style", "Palatino", serif;
+
+  --radius: 6px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #eef2f7;   /* screen preview only; hidden under .page */
+  font-family: var(--font-sans);
+  color: var(--fg);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Single A4 page, centred on screen for preview and exact 210×297mm on print. */
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  max-height: 297mm;
+  margin: 0 auto;
+  padding: 10mm 12mm;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  row-gap: 5mm;
+  overflow: hidden;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────── */
+
+.brand {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 6mm;
+  padding-bottom: 4mm;
+  border-bottom: 1px solid var(--rule);
+}
+
+.brand .logo img {
+  height: 16mm;
+  width: auto;
+  display: block;
+}
+
+.brand .title .org {
+  font-family: var(--font-display);
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.brand .title .sub {
+  font-size: 10pt;
+  color: var(--muted);
+  margin-top: 1mm;
+}
+
+.brand .title .village {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.brand .window {
+  text-align: right;
+}
+
+.brand .window-label {
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.brand .window-dates {
+  font-size: 8.5pt;
+  color: var(--muted);
+  margin-top: 0.5mm;
+}
+
+/* ─── Stats strip ────────────────────────────────────────────────── */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3mm;
+}
+
+.stat {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 4mm 3mm;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 26pt;
+  font-weight: 700;
+  line-height: 1.0;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.stat-label {
+  font-size: 8.5pt;
+  color: var(--muted);
+  margin-top: 1.5mm;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Story block ────────────────────────────────────────────────── */
+
+.story {
+  padding: 2mm 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;            /* lets the body shrink inside the 1fr row */
+}
+
+.story-title {
+  font-family: var(--font-display);
+  font-size: 17pt;
+  font-weight: 700;
+  margin: 0 0 3mm 0;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+  position: relative;
+  padding-left: 4mm;
+  flex: 0 0 auto;
+}
+
+.story-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3pt;
+  bottom: 3pt;
+  width: 2mm;
+  background: var(--accent);
+  border-radius: 1mm;
+}
+
+.story-body {
+  font-family: var(--font-story);
+  font-size: 11.5pt;
+  line-height: 1.6;
+  color: var(--fg);
+  margin: 0 0 5mm 0;
+  /* \n in the JSON renders as a line break; \n\n gives a visible
+     paragraph gap at 1.6 line-height. */
+  white-space: pre-line;
+  /* Natural height; any slack in the 1fr row becomes breathing room
+     above the quote. overflow hidden keeps runaway copy on-page. */
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+
+.story-quote {
+  margin: 0;
+  padding: 4mm 6mm;
+  border-left: 2mm solid var(--quote);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-family: var(--font-story);
+  font-size: 12pt;
+  line-height: 1.45;
+  color: var(--fg);
+  font-style: italic;
+  flex: 0 0 auto;
+}
+
+.story-quote .quote-mark {
+  color: var(--accent);
+  font-size: 1.2em;
+  font-weight: 700;
+}
+
+.story-attr {
+  display: block;
+  margin-top: 2mm;
+  font-size: 9pt;
+  color: var(--muted);
+  font-style: normal;
+}
+
+/* ─── Highlights strip (optional) ───────────────────────────────── */
+
+.highlights {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 4mm 0;
+}
+
+.highlights-label {
+  font-size: 8pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2.5mm;
+}
+
+.highlights-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+}
+
+.highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+}
+
+.highlight-kicker {
+  font-family: var(--font-display);
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+
+.highlight-body {
+  font-size: 9.5pt;
+  line-height: 1.4;
+  color: var(--fg);
+}
+
+/* ─── Media grid ─────────────────────────────────────────────────── */
+
+.media {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+  align-content: end;
+  /* Anchors media + footer to the bottom when the copy above runs
+     short. Keeps the page visually balanced without leaving a hole
+     in the middle. */
+  margin-top: auto;
+}
+
+.media-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.media-frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.media-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-caption {
+  margin-top: 2mm;
+  font-size: 8.5pt;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────── */
+
+.footer {
+  border-top: 1px solid var(--rule);
+  padding-top: 3mm;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 3mm;
+  font-size: 9pt;
+  color: var(--muted);
+}
+
+.footer-main {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.footer-main .donor-line {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 2mm;
+}
+
+.footer-meta .sep {
+  margin: 0 1.5mm;
+}

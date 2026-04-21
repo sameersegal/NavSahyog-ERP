@@ -1,0 +1,27 @@
+/*
+  Milestone theme — formal, one-big-win focus. Deeper green with gold
+  accents. Use when the update centres on a single achievement (a
+  district-level medal, a graduation, a long streak broken).
+*/
+:root {
+  --bg: #ffffff;
+  --fg: #0a1f14;
+  --muted: #3f5b4a;
+  --card: #f2f7f4;
+  --accent: #0f5c3a;           /* deep green */
+  --accent-soft: #e2efe8;
+  --accent-fg: #ffffff;
+  --rule: #d9e2dc;
+  --quote: #b08020;            /* gold pull-quote */
+}
+
+/* Heavier header rule matches the formal vibe. */
+.brand {
+  border-bottom-width: 2px;
+  border-bottom-color: var(--accent);
+}
+
+/* Gold edge on the quote. */
+.story-quote {
+  border-left-color: #b08020;
+}
