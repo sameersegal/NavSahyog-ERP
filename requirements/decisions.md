@@ -9,6 +9,30 @@ justification.
 
 ---
 
+## 2026-04-21 — L2.5 scoping (dashboard polish + §3.6.2 fold)
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D12 | **Consolidated dashboard (§3.6.2) is folded into the drill-down dashboard (§3.6.1), not built as a separate screen.** The live L2 dashboard already carries a KPI strip and attendance-trend chart; L2.5.3 extends both with the §3.6.2 metric pack (image %, video %, SoM MoM) and a "View More" per-village drill. One page, one URL, one edge-cache key. L3 scope shrinks to Master Creations + Secondary screens. | L3's "Consolidated dashboard" bullet (mvp/level-3.md prior to 2026-04-21); any earlier assumption that §3.6.2 ships as its own route. |
+| D13 | **Image % and video % denominators are per scheduled attendance session in scope × date range.** A session counts toward the `image_pct` numerator if at least one image is tagged to the same event / village / day, and toward `video_pct` likewise. This reuses data the schema already has — no new "expected media count" field. §3.6.2's "uploads vs expected" phrasing is pinned to this definition. | §3.6.2's undefined "expected" baseline (ambiguous between per-day, per-session, per-village). |
+| D14 | **The consolidated KPI pack renders at every drill level, not only cluster.** §3.6.2 originally framed the Consolidated view as cluster-scoped (a vendor-app holdover). In our single-tenant build, showing the same pack at India / Zone / State / Region / District / Cluster / Village gives one coherent dashboard and saves a second screen. The §3.6.2 cluster-specific "View More" button still renders at cluster level only, because village is already the leaf. | §3.6.2's implicit "cluster-only" scope. |
+
+### Follow-on spec / mvp cleanups (same commit as D12–D14)
+
+- `mvp/level-2.5.md` created (new file; sub-levels L2.5.1 / 2 / 3).
+- `mvp/level-3.md` — Consolidated dashboard entry removed; title
+  shortened to "Master CRUD + secondary screens"; acceptance list
+  no longer references the consolidated dashboard; note inserted
+  pointing at L2.5.3 + D12.
+- `mvp/README.md` — ladder table gains an L2.5 row between L2 and L3.
+- `mvp/level-2.md` — Status line notes L2.5 as the polish follow-on.
+- `requirements/03-functional.md` §3.6.2 — rewritten to describe
+  the fold: the section now defers mechanics to §3.6.1, records the
+  D13 denominator, and affirms the D14 every-level scope. Section
+  numbering is stable per CLAUDE.md; the header stays.
+
+---
+
 ## 2026-04-20 — L2 kickoff
 
 | # | Decision | Supersedes |
