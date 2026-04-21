@@ -2,7 +2,9 @@
 
 **Status:** in progress. L1 merged (PRs #18–#21). L2.0 and L2.1 landed
 (PR #22). L2.2 landed (PR #23). L2.3 landed (PR #24). L2.4 in flight
-on `claude/l2.4-media-wTcDW`.
+on `claude/l2.4-media-wTcDW`. Polish follow-on scoped as L2.5
+(see [`level-2.5.md`](./level-2.5.md)); L2.5.3 pulls §3.6.2
+forward from L3 into the drill-down dashboard (decisions.md D12).
 
 ## Goal
 

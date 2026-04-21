@@ -190,13 +190,31 @@ Before upload, each item must be tagged as exactly one of:
   Achievements.
 
 #### 3.6.2 Consolidated dashboard
-- Date selector: **single day** or **range** (two date icons in the
-  green header strip, per the onboarding doc).
-- Cluster picker (scope-bound).
-- Metrics for the selection: attendance %, average children,
-  image % / video % (uploads vs expected), SoM current vs previous
-  month, bar chart.
-- **View More** drills to per-village rows within the chosen cluster.
+- **Folded into §3.6.1** (decisions.md D12). Mechanics — scope
+  picker, breadcrumb, drill, CSV, URL state — are §3.6.1's; this
+  section describes only the metric pack and its behaviour.
+- Date selector: **single day** or **range** (two date icons in
+  the green header strip, per the onboarding doc). Shared with
+  §3.6.1; single-day collapses `from = to`.
+- Scope picker: **not cluster-only**. The metric pack renders at
+  every drill level — India / Zone / State / Region / District /
+  Cluster / Village (decisions.md D14).
+- Metrics for the selection:
+  - **attendance %** = sessions with an attendance row / scheduled
+    attendance sessions in scope × date range.
+  - **average children** per session in scope × date range.
+  - **image %** = sessions with ≥ 1 image tagged to the same
+    event / village / day / scheduled sessions (decisions.md D13).
+  - **video %** = sessions with ≥ 1 video tagged to the same
+    event / village / day / scheduled sessions (decisions.md D13).
+  - **SoM current vs previous month** — current-month count with a
+    delta chip against the previous full calendar month.
+  - **bar chart** — attendance trend. 6-month window at cluster
+    level and above, 3-month at district / village.
+- **View More** drills to per-village rows within the chosen
+  cluster. At non-cluster levels the button is absent (users
+  drill by tapping the table row, as in §3.6.1). At village level
+  it is absent (already at the leaf).
 
 #### 3.6.3 Acceptance
 - CSV export mirrors the on-screen table exactly (same columns,
