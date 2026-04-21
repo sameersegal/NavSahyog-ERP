@@ -1712,7 +1712,10 @@ describe('dashboard consolidated (L2.5.3)', () => {
       expect(k[key] === null || typeof k[key] === 'number').toBe(true);
     }
     expect(typeof k.som_current).toBe('number');
-    expect(typeof k.som_delta).toBe('number');
+    // som_delta widened to `number | null` — see PR #31 review #4.
+    // Null when both months recorded zero SoMs so the client can
+    // render a dash instead of a misleading "+0" chip.
+    expect(k.som_delta === null || typeof k.som_delta === 'number').toBe(true);
     // 6-month trend at aggregate scopes. Each point has a 'YYYY-MM'
     // month and a nullable numeric pct.
     expect(body.consolidated.chart.bars).toHaveLength(6);
@@ -1746,11 +1749,14 @@ describe('dashboard consolidated (L2.5.3)', () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      consolidated: { kpis: { attendance_pct: number | null; image_pct: number | null } };
+      consolidated: { kpis: { attendance_pct: number | null; image_pct: number | null; som_delta: number | null } };
     };
     // No sessions in that ancient window → null denominator.
     expect(body.consolidated.kpis.attendance_pct).toBeNull();
     expect(body.consolidated.kpis.image_pct).toBeNull();
+    // Ancient period puts both SoM months in 2000 → 0 current, 0
+    // prev → som_delta should now be null (review #4), not 0.
+    expect(body.consolidated.kpis.som_delta).toBeNull();
   });
 
   it('scope-filters the KPI pack for a VC', async () => {

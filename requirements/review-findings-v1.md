@@ -244,6 +244,23 @@ files link to it.
   the capability in §2.3 extends to Cluster Admins or donors ever
   see media through a self-serve portal.
 
+### U8 — `avg_children` denominator (§3.6.2 consolidated KPI)
+
+- §3.6.2 lists "average children" among the consolidated KPIs
+  without pinning the denominator. L2.5.3 ships it as
+  `total_marks / total_attendance_sessions` — i.e. *all scheduled
+  sessions*, including sessions that happened but had zero
+  attendance marks. That can pull the average down when a session
+  was logged but nobody showed up.
+- **Decision prompt.** Keep the current definition (scheduled
+  sessions) or tighten to "sessions with at least one mark"
+  (held-and-non-empty)? Flagged by PR #31 review #6.
+- **Fix.** Write the rule into §3.6.2 under the KPI list, the
+  way D13 pins image % / video %. If ops chooses
+  "held-and-non-empty", change `consolidatedAvgChildren` in
+  `apps/api/src/routes/dashboard.ts` to `total_marks /
+  sessions_with_marks`.
+
 ---
 
 ## 5. LOW
@@ -269,6 +286,17 @@ files link to it.
   Pick between the two backends (§7.9 open item) and land the
   consumer in L2.5 or L3 — tracked here so the follow-up doesn't
   orphan when L2 closes.
+- **L7.** **IST-vs-UTC date bucketing drift across date-keyed
+  queries.** Fixed in `consolidatedMediaPct` (PR #31 L2.5.3) by
+  applying `'unixepoch', '+5 hours 30 minutes'` to `captured_at`
+  before the `date()` compare, so media taken in the IST 18:30–
+  23:59 window joins to the correct IST-day attendance session
+  instead of UTC-day N-1. The same drift lives in
+  `insights.ts` (`strftime('%Y-%m', captured_at, 'unixepoch')` at
+  lines ≈ 243 and 323) and in any future query that compares
+  `captured_at` to an IST calendar date. Sweep these in a later
+  fix — not a regression, but newly user-visible wherever the
+  numbers feed a KPI. Flagged by PR #31 review #5.
 
 ---
 
