@@ -10,6 +10,28 @@ system. They invoke this skill with a single village and a date
 range; the skill fetches stats + media from the ERP and drafts an
 engagement message the operator then reviews and sends.
 
+## Files in this skill
+
+Everything lives under `.claude/skills/donor-update/`. Paths below
+are relative to that directory.
+
+| File | Role | What the agent does with it |
+|---|---|---|
+| `SKILL.md` | this document | follow the Procedure below |
+| `references/render.mjs` | **execute** — HTML→PDF+PNG via Playwright | run via `node …/render.mjs <data.json>`; do not edit |
+| `references/template.html` | the layout (mustache `{{…}}` slots) | do not edit; it's the target the data JSON fills |
+| `references/styles.css` | theme-agnostic geometry | edit only if the operator asks for a structural tweak |
+| `references/themes/{quarterly,celebration,milestone}.css` | colour + tone variants | pick one via `--theme=<name>`; author a new file here only if the operator asks for a fresh theme |
+| `references/assets/logo.svg` | NavSahyog placeholder mark | replace with the real logo before external release (flag U7-adjacent) |
+| `references/assets/photo-placeholder.svg` | stand-in when real media bytes aren't fetched | leave as-is; real runs overwrite `media[].url` with a local file path |
+| `references/examples/belur-q1-2026.json` | **canonical data-shape reference** | **read this first** before assembling a new data JSON |
+| `references/examples/belur-q1-2026.preview.png` | visual of what a good render looks like | look at this before showing your own preview |
+| `references/README.md` | longer human-facing notes | skim if a step is unclear |
+
+If the operator mentions a file under `references/` directly
+("tweak the celebration theme"), edit it in place and re-render;
+don't clone it outside the skill.
+
 ## Inputs
 
 Collect these from the operator before making any API call. If
@@ -140,45 +162,83 @@ So the operator can sanity-check coverage.
 Skip this step if the operator asked for markdown only. All paths
 in this step are relative to the repo root.
 
-1. Assemble the data JSON per `references/README.md`. Populate:
-   - `village`, `window`, `donor`, `theme`, `lang`
-   - `stats[]` (4–5 tiles; typical picks: children active,
-     sessions held, attendance %, SoMs, gold medals)
-   - `story.title`, `story.body` (2 paragraphs, ~150–200 words),
-     `story.quote`, `story.attribution`
-   - `highlights[]` (three kicker/body pairs — Feb / Mar / Apr
-     moments, or Event A / Event B / Event C)
-   - `media[]` (exactly three items with `url` + `caption`).
-     Download each selected media item via
-     `GET /api/media/raw/:uuid` into a sibling `media/` folder
-     and reference with a relative path; absolute `file://`
-     URLs also work.
-2. Write the JSON to
-   `.claude/skills/donor-update/references/examples/<village>-<window>.json`.
-3. Invoke the renderer:
+**Before you write the JSON, read
+`.claude/skills/donor-update/references/examples/belur-q1-2026.json`**
+— it's the canonical shape. Copy its structure verbatim (same keys,
+same ordering, same optional fields); change only the values.
+
+1. **Pick a slug** like `<village-lowercased>-<window-slug>`, e.g.
+   `belur-q1-2026`.
+
+2. **Create a media folder** next to where the JSON will live and
+   download the three selected items into it. With a valid session
+   cookie (the same one used for steps 2–3):
    ```
-   node .claude/skills/donor-update/references/render.mjs \
+   mkdir -p .claude/skills/donor-update/references/examples/<slug>/media
+   for u in <uuid1> <uuid2> <uuid3>; do
+     curl -sS -b /tmp/cookies.txt \
+       "http://127.0.0.1:8787/api/media/raw/$u" \
+       -o .claude/skills/donor-update/references/examples/<slug>/media/$u
+   done
+   ```
+   If any fetched file is suspiciously small (< 1 KiB is usually
+   a JSON error body, not an image), the media row has no R2 bytes
+   behind it — fall back to `../assets/photo-placeholder.svg` for
+   that slot and note it in the sources block.
+
+3. **Assemble the data JSON.** Populate every required key; include
+   `highlights` and `donor.name` when you have them. Key rules:
+   - `stats[]` — 4 or 5 tiles. More overflows the strip.
+   - `story.body` — 2 paragraphs, ~150–200 words total, separated
+     by `\n\n`. Short bodies leave the page feeling thin.
+   - `story.quote` — at most one sentence, verbatim from an
+     achievement description; set `story.attribution` to
+     `"<Name>, <role>, <month year>"`.
+   - `highlights[]` — exactly 3 kicker/body pairs (if used).
+   - `media[]` — exactly 3 items. `url` is relative to the JSON
+     file's directory (e.g. `<slug>/media/<uuid>`) or an absolute
+     `file://`/`http(s)://`. `caption` is a date + one factual
+     clause; no invented descriptions.
+   - `theme` — the preset name, not free text. Map the operator's
+     vibe word to the nearest of: `quarterly` | `celebration` |
+     `milestone`.
+
+4. **Write the JSON** to
+   `.claude/skills/donor-update/references/examples/<slug>.json`.
+
+5. **Invoke the renderer** (Playwright must find Chromium — set
+   `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` when the default
+   cache is missing):
+   ```
+   PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers \
+     node .claude/skills/donor-update/references/render.mjs \
      .claude/skills/donor-update/references/examples/<slug>.json \
      [--theme=<name>]
    ```
-   The renderer writes `<slug>.pdf` and `<slug>.preview.png`
-   next to the JSON.
-4. Show the operator the preview PNG and the path to the PDF.
+   The renderer writes `<slug>.pdf` and `<slug>.preview.png` next
+   to the JSON. Add `--keep-html` if a render looks wrong — it
+   leaves `references/.render.html` for inspection.
+
+6. **Show the operator** the preview PNG (via the Read tool so the
+   image actually renders in the session) and the paths to both
+   files. Compare to
+   `references/examples/belur-q1-2026.preview.png` — the layout
+   should feel the same.
 
 ### 9. Iterate
 
-The operator will often want one or more rounds of changes:
+The operator will often want one or more rounds of changes. Don't
+re-fetch API data unless the window or village changes — each
+iteration is a JSON edit + a render (~2 s).
 
-- **"Use celebration theme"** → re-run step 8 with `--theme=celebration`.
-- **"Swap media 2 for item 5"** → edit `media[1]` in the JSON,
-  re-run step 8.
-- **"Make the story warmer"** / **"Tighten the second paragraph"** →
-  regenerate `story.body` only, re-run step 8.
-- **"Add an `Activity of the Quarter` highlight"** → adjust
-  `highlights[]` (3 items max — more overflows the strip).
-
-Regenerate from the existing JSON; don't re-fetch the API data
-unless the window or village changes. Each render is fast (~2 s).
+| Operator says | Agent does |
+|---|---|
+| "Use celebration theme" | Re-run step 8.5 with `--theme=celebration`. JSON untouched. |
+| "Swap media 2 for item 5" | Edit `media[1]` in the JSON (download the new item into `<slug>/media/` if needed), re-run the renderer (step 8 sub-step 5). |
+| "Make the story warmer" / "Tighten paragraph 2" | Rewrite `story.body` only, re-run the renderer (step 8 sub-step 5). |
+| "Add an Activity of the Quarter highlight" | Update `highlights[]` (3 items max — more overflows the strip), re-run the renderer (step 8 sub-step 5). |
+| "Try a new theme called <X>" | Author `references/themes/<X>.css` using an existing theme as template, then `--theme=<X>`. |
+| "Logo is wrong" | Replace `references/assets/logo.svg` with the provided file; theme CSS consumes it automatically. |
 
 ## Output rules
 
