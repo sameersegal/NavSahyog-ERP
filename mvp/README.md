@@ -33,7 +33,8 @@ both docs can evolve independently.
 |---|---|---|
 | 1 | Multi-role skeleton, one cluster | [`level-1.md`](./level-1.md) |
 | 2 | Full write loop + full drill-down dashboards | [`level-2.md`](./level-2.md) |
-| 3 | Consolidated dashboards + master CRUD + secondary screens | [`level-3.md`](./level-3.md) |
+| 2.5 | Dashboard polish (mobile-first) + §3.6.2 fold | [`level-2.5.md`](./level-2.5.md) |
+| 3 | Master CRUD + secondary screens | [`level-3.md`](./level-3.md) |
 | 4 | Offline mode | [`level-4.md`](./level-4.md) |
 | 5 | Auth + compliance hardening (gated on approach decision) | [`level-5.md`](./level-5.md) |
 
