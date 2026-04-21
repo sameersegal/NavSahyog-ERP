@@ -14,14 +14,14 @@
   expects its own data shape — see the matching example JSON in
   examples/.
 
-  Kept deliberately small:
-    - No template engine dependency. Mustache-style {{path}} and
-      {{#each arr}}...{{/each}} / {{#if key}}...{{/if}} cover every
-      construct the templates use.
-    - Playwright is the only external requirement; it's already in the
-      root devDependencies. On first run: `pnpm exec playwright install chromium`.
+  Templating is Handlebars — `{{path}}`, `{{{path}}}` (raw),
+  `{{#if key}}...{{/if}}`, `{{#each arr}}...{{/each}}`, plus all the
+  usual niceties. Playwright is the only other external dep; both
+  are devDependencies at the repo root. On first run:
+  `pnpm exec playwright install chromium`.
 */
 
+import Handlebars from 'handlebars';
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -44,82 +44,6 @@ function parseArgs(argv) {
   return args;
 }
 
-// Look up a dotted path on the data object. Returns undefined if any
-// hop misses so the caller can fall back to the empty string.
-function lookup(data, dotted) {
-  return dotted.split('.').reduce((acc, k) => (acc == null ? undefined : acc[k]), data);
-}
-
-// Expand {{#each arr}}...{{/each}} blocks. The inner body is
-// re-rendered with the item as the data context, so nested
-// {{#if}} / {{#each}} / {{path}} inside the body resolve against
-// the item's fields. Matches only innermost {{#each}}s first
-// (negative lookahead) and iterates until no more remain, which
-// keeps sibling and nested eaches unambiguous.
-function expandEach(tmpl, data) {
-  const re = /\{\{#each ([\w.]+)\}\}((?:(?!\{\{#each)[\s\S])*?)\{\{\/each\}\}/g;
-  let out = tmpl;
-  let prev;
-  do {
-    prev = out;
-    out = out.replace(re, (_, key, body) => {
-      const arr = lookup(data, key);
-      if (!Array.isArray(arr)) return '';
-      return arr.map((item) => render(body, item)).join('');
-    });
-  } while (out !== prev);
-  return out;
-}
-
-// Expand {{#if key}}...{{/if}}. Truthy check; no else branch.
-// Matches only innermost {{#if}}s first (negative lookahead)
-// and iterates, so nested conditionals resolve correctly
-// regardless of which branch is truthy.
-function expandIf(tmpl, data) {
-  const re = /\{\{#if ([\w.]+)\}\}((?:(?!\{\{#if)[\s\S])*?)\{\{\/if\}\}/g;
-  let out = tmpl;
-  let prev;
-  do {
-    prev = out;
-    out = out.replace(re, (_, key, body) => (lookup(data, key) ? body : ''));
-  } while (out !== prev);
-  return out;
-}
-
-// HTML-escape a value so stray `&`, `<`, `>`, `"`, `'` in a caption
-// or village name can't corrupt the render. Attribute and text
-// contexts both need all five; there's no audience where leaving
-// these raw is desirable.
-const HTML_ENTITIES = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => HTML_ENTITIES[c]);
-}
-
-// Simple substitution. {{path}} is HTML-escaped (the default — safe
-// for every string the templates actually use). {{{path}}} is raw;
-// reserve it for values that are deliberately pre-built HTML and
-// are never operator-editable.
-// Missing paths render as empty string (safer than leaving the
-// marker visible in the PDF).
-function expandSimple(tmpl, data) {
-  // Triple-stache first so the {{…}} pass below doesn't half-eat it.
-  let out = tmpl.replace(/\{\{\{([\w.]+)\}\}\}/g, (_, key) => {
-    const v = lookup(data, key);
-    return v == null ? '' : String(v);
-  });
-  out = out.replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
-    const v = lookup(data, key);
-    return v == null ? '' : esc(v);
-  });
-  return out;
-}
-
 // Walk the data tree and absolutise any `url` property on an object.
 // Mutates in place. Non-strings, absolute URLs, and empty values are
 // left alone. Arrays and nested objects recurse.
@@ -139,16 +63,6 @@ function resolveUrls(node, dataDir) {
       resolveUrls(v, dataDir);
     }
   }
-}
-
-function render(tmpl, data) {
-  // Order matters: resolve nested control flow first, then simple
-  // substitutions. Each pass is stable because the expanders match
-  // tags that can't be introduced by later substitution output.
-  let out = expandEach(tmpl, data);
-  out = expandIf(out, data);
-  out = expandSimple(out, data);
-  return out;
 }
 
 async function main() {
@@ -208,7 +122,7 @@ async function main() {
     }
     throw e;
   });
-  const html = render(tmpl, merged);
+  const html = Handlebars.compile(tmpl)(merged);
 
   // Write the rendered HTML next to its template (inside themes/) so
   // the template's own `<link href="../base.css">` etc. resolve
@@ -224,6 +138,19 @@ async function main() {
     // Set the viewport to the A4 pixel-equivalent so the PNG preview
     // matches what the PDF will render. 96 DPI × 210mm/25.4 ≈ 794px.
     await page.setViewportSize({ width: 794, height: 1123 });
+    // `networkidle` has been observed to let the page settle before
+    // https: images finish decoding when the page itself is loaded
+    // via file:// (the cross-origin fetch timing confuses the idle
+    // heuristic). Explicitly block on every <img> completing before
+    // we screenshot/PDF, or fail loud if one 404s.
+    await page.waitForFunction(
+      () =>
+        Array.from(document.images).every(
+          (img) => img.complete && img.naturalWidth > 0,
+        ),
+      null,
+      { timeout: 30_000 },
+    );
     await page.pdf({
       path: pdfPath,
       format: 'A4',

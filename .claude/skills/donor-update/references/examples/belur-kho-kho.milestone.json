@@ -15,7 +15,7 @@
     "name": "Mrs. Sharma"
   },
   "hero": {
-    "url": "../assets/photos/story-longjump.jpg",
+    "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/story-longjump.jpg",
     "caption": "Belur's Kho-Kho squad at the inter-village final"
   },
   "milestone": {

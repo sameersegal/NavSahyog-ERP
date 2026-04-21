@@ -22,13 +22,7 @@ itself is defined one level up in `SKILL.md`.
     │   └── celebration.html + .css   ← layout 3 — festive mosaic + wins
     ├── assets/
     │   ├── logo.png                  ← real NavSahyog wordmark
-    │   ├── photo-placeholder.svg     ← fallback when /api/media/raw has no bytes
-    │   └── photos/                   ← library of stock NavSahyog photos
-    │       ├── hero-mission.jpg      ← running race, village grounds
-    │       ├── impact-hero.jpg       ← Kho-Kho under the mango tree
-    │       ├── story-1.jpg           ← reading circle
-    │       ├── story-2.jpg           ← group portrait with coordinator
-    │       └── story-longjump.jpg    ← long-jump mid-air
+    │   └── photo-placeholder.svg     ← fallback when /api/media/raw has no bytes
     └── examples/
         ├── belur-q1-2026.quarterly.json      (+ pdf + preview.png)
         ├── belur-kho-kho.milestone.json      (+ pdf + preview.png)
@@ -128,20 +122,35 @@ node .claude/skills/donor-update/references/render.mjs <data.json> --keep-html
 3. Composes the data from the ERP read APIs (children, attendance,
    achievements, media — §5.6/5.9/5.10/5.8).
 4. Downloads the required photos (`/api/media/raw/:uuid`) or falls
-   back to a stock photo from `assets/photos/`.
+   back to `assets/photo-placeholder.svg` and flag the gap.
 5. Writes the JSON to `references/examples/<slug>.<theme>.json`.
 6. Shells out to `references/render.mjs`.
 7. Presents the preview PNG for operator review.
 8. Iterates on content, photos, or layout choice as the operator
    asks.
 
+## Demo photos
+
+The committed examples reference stock NavSahyog photos via
+`https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/
+main/src/assets/images/<name>` — bytes aren't shipped in this
+repo. Re-rendering an example therefore needs network access (the
+URLs are public). A real operator run populates `media[].url` /
+`hero.url` / `mosaic[].url` with local paths pointing at images
+fetched via `GET /api/media/raw/:uuid`, not with these URLs.
+
+## Templating
+
+Renderer uses [Handlebars](https://handlebarsjs.com) — `{{path}}`
+(HTML-escaped), `{{{path}}}` (raw), `{{#if key}}…{{/if}}`,
+`{{#each arr}}…{{/each}}`, dotted paths, all standard.
+
 ## Production gaps to close
 
-- **Real consented village photos.** The examples use
-  NavSahyog-Website stock photos (`assets/photos/*.jpg`) because
-  seeded `media` rows have no R2 objects behind them. A live run
-  fetches bytes via `GET /api/media/raw/:uuid` and saves them
-  alongside the JSON.
+- **Real consented village photos.** Demo examples reference the
+  NavSahayog-Website repo for stock imagery because seeded `media`
+  rows have no R2 objects behind them. A live run fetches bytes
+  via `GET /api/media/raw/:uuid` and saves them alongside the JSON.
 - **Consent filter.** See `review-findings-v1.md` U7. Until a
   `donor_shareable` flag lands on `media`, every selected item is
   assumed shareable — the same placeholder assumption the skill

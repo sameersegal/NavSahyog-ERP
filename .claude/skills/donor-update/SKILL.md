@@ -25,7 +25,6 @@ are relative to that directory.
 | `references/themes/celebration.html` + `celebration.css` | **layout 3** — saffron hero band + 2×2 photo mosaic + wins list; festive | same |
 | `references/assets/logo.png` | real NavSahyog wordmark | leave as-is; every theme consumes it |
 | `references/assets/photo-placeholder.svg` | fallback when no real bytes | used only when `/api/media/raw/:uuid` has no object behind it |
-| `references/assets/photos/*.jpg` | library of NavSahyog stock photos (running, Kho-Kho, reading circle, group portrait) | reference these when a village has no consented photos yet |
 | `references/examples/belur-q1-2026.quarterly.json` | **canonical quarterly shape** | read first if `theme=quarterly` |
 | `references/examples/belur-kho-kho.milestone.json` | **canonical milestone shape** | read first if `theme=milestone` |
 | `references/examples/belur-annual-2026.celebration.json` | **canonical celebration shape** | read first if `theme=celebration` |
@@ -215,11 +214,11 @@ don't assemble a `quarterly`-shaped JSON for a `milestone` render.
    done
    ```
    If a fetched file is < 1 KiB it's probably a JSON error, not an
-   image. Fall back to a photo from
-   `references/assets/photos/<file>.jpg` — reference them as
-   `../assets/photos/<file>.jpg` from the example JSON — and note
-   in the sources block that the village has no consented photos
-   yet.
+   image. The skill doesn't ship stock photos — if the village
+   genuinely has no consented media yet, set that slot to
+   `../assets/photo-placeholder.svg` and flag the gap in the
+   sources block so the operator knows not to send the draft
+   externally until real photos land.
 
 3. **Assemble the data JSON.** Keys vary by theme (consult the
    matching example). Rules common to all three:

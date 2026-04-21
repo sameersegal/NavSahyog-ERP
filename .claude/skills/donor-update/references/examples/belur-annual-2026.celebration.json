@@ -20,19 +20,19 @@
   },
   "mosaic": [
     {
-      "url": "../assets/photos/hero-mission.jpg",
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/hero-mission.jpg",
       "caption": "Running race, village grounds"
     },
     {
-      "url": "../assets/photos/impact-hero.jpg",
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/impact-hero.jpg",
       "caption": "Kho-Kho under the mango tree"
     },
     {
-      "url": "../assets/photos/story-1.jpg",
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/story-1.jpg",
       "caption": "Reading circle, Thursday afternoon"
     },
     {
-      "url": "../assets/photos/story-2.jpg",
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/story-2.jpg",
       "caption": "Session day, with Ramesh"
     }
   ],
