@@ -1104,9 +1104,19 @@ describe('dashboard drill-down (L2.3)', () => {
     expect(body.child_level).toBe('zone');
     expect(body.crumbs).toEqual([{ level: 'india', id: null, name: 'India' }]);
     expect(body.headers).toEqual(['Zone', 'Children']);
-    // One zone (South Zone) with 20 seeded active students.
-    expect(body.rows).toHaveLength(1);
-    expect(body.rows[0]).toEqual(['South Zone', 20]);
+    // Two zones — South Zone (KA + TN) and Northeast Zone (NL) —
+    // summing to the 96 active students in the seed. Per-zone
+    // counts are asserted by total, not by value, so the seed can
+    // be rebalanced without rewriting this test.
+    expect(body.rows.length).toBeGreaterThanOrEqual(2);
+    const zoneNames = body.rows.map((r) => r[0]);
+    expect(zoneNames).toContain('South Zone');
+    expect(zoneNames).toContain('Northeast Zone');
+    const totalChildren = body.rows.reduce(
+      (acc, r) => acc + (r[1] as number),
+      0,
+    );
+    expect(totalChildren).toBe(96);
   });
 
   it('cluster level: achievements tallies seeded SoM / gold / silver', async () => {

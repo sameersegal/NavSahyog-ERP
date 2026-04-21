@@ -203,10 +203,24 @@ INSERT INTO user (id, user_id, full_name, password, role, scope_level, scope_id,
   -- Second zone admin (z2 Northeast Zone).
   (57, 'zone-ne', 'Temsula Longkumer', 'password', 'zone_admin', 'zone', 2, unixepoch());
 
--- ~20 students spread across the 3 villages. Ages 6-12 as of 2026.
+-- Students. 96 total across 19 villages.
+--   v1 Anandpur     (BID01): 7   ids 1..7    (L1 seed)
+--   v2 Belur        (BID01): 6   ids 8..13   (L1 seed)
+--   v3 Chandragiri  (BID01): 7   ids 14..20  (L1 seed)
+--   v4..v19                 : 76  ids 21..96 (this seed)
+-- IDs 1-20 are preserved for the existing test fixtures. New rows
+-- get autoincremented ids 21..96 in insertion order.
+--
+-- Names are drawn from the district's cultural namespace: Kannada in
+-- KA, Tamil in TN, Naga in NL. A reviewer walking the village picker
+-- should feel the three states, not a homogenised fixture.
+--
 -- DOB and joined_at are IST calendar dates ('YYYY-MM-DD').
 -- created_at stays a UTC epoch (audit timestamp, not a calendar date).
+-- created_by points at the village's own VC for v4..v19, and at user
+-- 6 (super) for v1..v3 so the L1 fixtures don't shift.
 INSERT INTO student (village_id, school_id, first_name, last_name, gender, dob, joined_at, created_at, created_by) VALUES
+  -- v1 Anandpur (ids 1..7).
   (1, 1, 'Aarav',  'Patil',    'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (1, 1, 'Aditi',  'Rao',      'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (1, 1, 'Arjun',  'Deshpande','m', '2019-01-01', '2024-06-01', unixepoch(), 6),
@@ -214,19 +228,113 @@ INSERT INTO student (village_id, school_id, first_name, last_name, gender, dob, 
   (1, 1, 'Chirag', 'Naik',     'm', '2015-01-01', '2024-06-01', unixepoch(), 6),
   (1, 1, 'Diya',   'Shetty',   'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (1, 1, 'Eshan',  'Pai',      'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  -- v2 Belur (ids 8..13).
   (2, 2, 'Farhan', 'Ali',      'm', '2015-01-01', '2024-06-01', unixepoch(), 6),
   (2, 2, 'Gauri',  'Hegde',    'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (2, 2, 'Hitesh', 'Bhat',     'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
   (2, 2, 'Ishaan', 'Gowda',    'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (2, 2, 'Jaya',   'Kamath',   'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
   (2, 2, 'Kiran',  'Murthy',   'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
+  -- v3 Chandragiri (ids 14..20).
   (3, 3, 'Lakshmi','Iyer',     'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Manav',  'Joshi',    'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Nidhi',  'Kalburgi', 'f', '2019-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Om',     'Mallya',   'm', '2017-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Priya',  'Nambiar',  'f', '2015-01-01', '2024-06-01', unixepoch(), 6),
   (3, 3, 'Rahul',  'Prabhu',   'm', '2019-01-01', '2024-06-01', unixepoch(), 6),
-  (3, 3, 'Sneha',  'Rao',      'f', '2017-01-01', '2024-06-01', unixepoch(), 6);
+  (3, 3, 'Sneha',  'Rao',      'f', '2017-01-01', '2024-06-01', unixepoch(), 6),
+  -- v4 Hallare / MYS01 (ids 21..25). Kannada names.
+  (4,  4,  'Aarush',   'Shenoy',     'm', '2017-01-01', '2024-07-01', unixepoch(), 11),
+  (4,  4,  'Ananya',   'Pai',        'f', '2016-01-01', '2024-07-01', unixepoch(), 11),
+  (4,  4,  'Bhuvan',   'Hegde',      'm', '2018-01-01', '2024-07-01', unixepoch(), 11),
+  (4,  4,  'Charita',  'Kamath',     'f', '2019-01-01', '2024-07-01', unixepoch(), 11),
+  (4,  4,  'Darshan',  'Bhat',       'm', '2015-01-01', '2024-07-01', unixepoch(), 11),
+  -- v5 Srirangapatna / MYS01 (ids 26..30).
+  (5,  5,  'Esha',     'Rao',        'f', '2017-01-01', '2024-07-01', unixepoch(), 12),
+  (5,  5,  'Girish',   'Naik',       'm', '2015-01-01', '2024-07-01', unixepoch(), 12),
+  (5,  5,  'Harika',   'Iyengar',    'f', '2019-01-01', '2024-07-01', unixepoch(), 12),
+  (5,  5,  'Ishan',    'Prabhu',     'm', '2018-01-01', '2024-07-01', unixepoch(), 12),
+  (5,  5,  'Janaki',   'Acharya',    'f', '2016-01-01', '2024-07-01', unixepoch(), 12),
+  -- v6 Aland / KLB01 (ids 31..35).
+  (6,  6,  'Kavya',    'Kulkarni',   'f', '2017-01-01', '2024-08-01', unixepoch(), 13),
+  (6,  6,  'Lohith',   'Desai',      'm', '2015-01-01', '2024-08-01', unixepoch(), 13),
+  (6,  6,  'Meghana',  'Jamadar',    'f', '2019-01-01', '2024-08-01', unixepoch(), 13),
+  (6,  6,  'Nihar',    'Patil',      'm', '2018-01-01', '2024-08-01', unixepoch(), 13),
+  (6,  6,  'Pranav',   'Kamble',     'm', '2016-01-01', '2024-08-01', unixepoch(), 13),
+  -- v7 Afzalpur / KLB01 (ids 36..39).
+  (7,  7,  'Qasim',    'Shaikh',     'm', '2017-01-01', '2024-08-01', unixepoch(), 14),
+  (7,  7,  'Rameez',   'Inamdar',    'm', '2015-01-01', '2024-08-01', unixepoch(), 14),
+  (7,  7,  'Saniya',   'Begum',      'f', '2019-01-01', '2024-08-01', unixepoch(), 14),
+  (7,  7,  'Tariq',    'Mulla',      'm', '2018-01-01', '2024-08-01', unixepoch(), 14),
+  -- v8 Tiruvallur / CHN01 (ids 40..44). Tamil names.
+  (8,  8,  'Aadhi',    'Murugan',    'm', '2017-01-01', '2024-07-15', unixepoch(), 15),
+  (8,  8,  'Bhavana',  'Selvi',      'f', '2015-01-01', '2024-07-15', unixepoch(), 15),
+  (8,  8,  'Chandran', 'Raja',       'm', '2019-01-01', '2024-07-15', unixepoch(), 15),
+  (8,  8,  'Deepika',  'Senthil',    'f', '2018-01-01', '2024-07-15', unixepoch(), 15),
+  (8,  8,  'Eeshwar',  'Velu',       'm', '2016-01-01', '2024-07-15', unixepoch(), 15),
+  -- v9 Poonamallee / CHN01 (ids 45..49).
+  (9,  9,  'Fathima',  'Banu',       'f', '2017-01-01', '2024-07-15', unixepoch(), 16),
+  (9,  9,  'Gokul',    'Subramani',  'm', '2015-01-01', '2024-07-15', unixepoch(), 16),
+  (9,  9,  'Harini',   'Selva',      'f', '2019-01-01', '2024-07-15', unixepoch(), 16),
+  (9,  9,  'Indrajit', 'Perumal',    'm', '2018-01-01', '2024-07-15', unixepoch(), 16),
+  (9,  9,  'Jeeva',    'Karthick',   'm', '2016-01-01', '2024-07-15', unixepoch(), 16),
+  -- v10 Gudiyatham / VLR01 (ids 50..53).
+  (10, 10, 'Kalaimani','Raja',       'f', '2017-01-01', '2024-08-01', unixepoch(), 17),
+  (10, 10, 'Lingesh',  'Pandian',    'm', '2015-01-01', '2024-08-01', unixepoch(), 17),
+  (10, 10, 'Malar',    'Vetri',      'f', '2019-01-01', '2024-08-01', unixepoch(), 17),
+  (10, 10, 'Navneeth', 'Raman',      'm', '2018-01-01', '2024-08-01', unixepoch(), 17),
+  -- v11 Arcot / VLR01 (ids 54..57).
+  (11, 11, 'Ozhili',   'Arul',       'f', '2017-01-01', '2024-08-01', unixepoch(), 18),
+  (11, 11, 'Prakash',  'Devar',      'm', '2015-01-01', '2024-08-01', unixepoch(), 18),
+  (11, 11, 'Rekha',    'Thangam',    'f', '2019-01-01', '2024-08-01', unixepoch(), 18),
+  (11, 11, 'Santhosh', 'Balu',       'm', '2018-01-01', '2024-08-01', unixepoch(), 18),
+  -- v12 Ambur / VLR02 (ids 58..62).
+  (12, 12, 'Thahira',  'Nazeer',     'f', '2017-01-01', '2024-08-01', unixepoch(), 19),
+  (12, 12, 'Udhay',    'Kumar',      'm', '2015-01-01', '2024-08-01', unixepoch(), 19),
+  (12, 12, 'Vidya',    'Lakshmi',    'f', '2019-01-01', '2024-08-01', unixepoch(), 19),
+  (12, 12, 'Waseem',   'Hussain',    'm', '2018-01-01', '2024-08-01', unixepoch(), 19),
+  (12, 12, 'Yamini',   'Sundari',    'f', '2016-01-01', '2024-08-01', unixepoch(), 19),
+  -- v13 Vaniyambadi / VLR02 (ids 63..67).
+  (13, 13, 'Zakir',    'Hussain',    'm', '2017-01-01', '2024-08-01', unixepoch(), 20),
+  (13, 13, 'Aarthi',   'Mohan',      'f', '2015-01-01', '2024-08-01', unixepoch(), 20),
+  (13, 13, 'Balaji',   'Ramesh',     'm', '2019-01-01', '2024-08-01', unixepoch(), 20),
+  (13, 13, 'Chitra',   'Pandian',    'f', '2018-01-01', '2024-08-01', unixepoch(), 20),
+  (13, 13, 'Dinesh',   'Kumar',      'm', '2016-01-01', '2024-08-01', unixepoch(), 20),
+  -- v14 Melur / MDU01 (ids 68..72).
+  (14, 14, 'Elango',   'Pandi',      'm', '2017-01-01', '2024-09-01', unixepoch(), 21),
+  (14, 14, 'Fathima',  'Jamal',      'f', '2015-01-01', '2024-09-01', unixepoch(), 21),
+  (14, 14, 'Gayathri', 'Pandiyan',   'f', '2019-01-01', '2024-09-01', unixepoch(), 21),
+  (14, 14, 'Hariharan','Kumar',      'm', '2018-01-01', '2024-09-01', unixepoch(), 21),
+  (14, 14, 'Ilavarasi','Raja',       'f', '2016-01-01', '2024-09-01', unixepoch(), 21),
+  -- v15 Usilampatti / MDU01 (ids 73..77).
+  (15, 15, 'Jayanthi', 'Velu',       'f', '2017-01-01', '2024-09-01', unixepoch(), 22),
+  (15, 15, 'Kavin',    'Pandi',      'm', '2015-01-01', '2024-09-01', unixepoch(), 22),
+  (15, 15, 'Lalitha',  'Muthu',      'f', '2019-01-01', '2024-09-01', unixepoch(), 22),
+  (15, 15, 'Madhavan', 'Raja',       'm', '2018-01-01', '2024-09-01', unixepoch(), 22),
+  (15, 15, 'Nithya',   'Selvam',     'f', '2016-01-01', '2024-09-01', unixepoch(), 22),
+  -- v16 Sechu / KHM01 (ids 78..82). Naga names.
+  (16, 16, 'Asenla',     'Lemtur',   'f', '2017-01-01', '2024-09-15', unixepoch(), 23),
+  (16, 16, 'Bendang',    'Imchen',   'm', '2015-01-01', '2024-09-15', unixepoch(), 23),
+  (16, 16, 'Chubayanger','Ao',       'm', '2019-01-01', '2024-09-15', unixepoch(), 23),
+  (16, 16, 'Diyano',     'Angami',   'f', '2018-01-01', '2024-09-15', unixepoch(), 23),
+  (16, 16, 'Entoli',     'Kikon',    'm', '2016-01-01', '2024-09-15', unixepoch(), 23),
+  -- v17 Jakhama / KHM01 (ids 83..87).
+  (17, 17, 'Fabi',       'Dolie',    'f', '2017-01-01', '2024-09-15', unixepoch(), 24),
+  (17, 17, 'Gwayhunlo',  'Angami',   'm', '2015-01-01', '2024-09-15', unixepoch(), 24),
+  (17, 17, 'Hekani',     'Kehie',    'f', '2019-01-01', '2024-09-15', unixepoch(), 24),
+  (17, 17, 'Imchanba',   'Jamir',    'm', '2018-01-01', '2024-09-15', unixepoch(), 24),
+  (17, 17, 'Juno',       'Kiho',     'f', '2016-01-01', '2024-09-15', unixepoch(), 24),
+  -- v18 Ungma / MKC01 (ids 88..91).
+  (18, 18, 'Keduovinuo', 'Pienyu',   'f', '2017-01-01', '2024-10-01', unixepoch(), 25),
+  (18, 18, 'Lanu',       'Jamir',    'm', '2015-01-01', '2024-10-01', unixepoch(), 25),
+  (18, 18, 'Mhalo',      'Sumi',     'f', '2019-01-01', '2024-10-01', unixepoch(), 25),
+  (18, 18, 'Nokcha',     'Walling',  'm', '2018-01-01', '2024-10-01', unixepoch(), 25),
+  -- v19 Longsa / MKC01 (ids 92..96).
+  (19, 19, 'Obi',        'Ao',       'm', '2017-01-01', '2024-10-01', unixepoch(), 26),
+  (19, 19, 'Pangerlemla','Pongen',   'f', '2015-01-01', '2024-10-01', unixepoch(), 26),
+  (19, 19, 'Renben',     'Kikon',    'm', '2019-01-01', '2024-10-01', unixepoch(), 26),
+  (19, 19, 'Sashiben',   'Longchar', 'f', '2018-01-01', '2024-10-01', unixepoch(), 26),
+  (19, 19, 'Tialemla',   'Imchen',   'f', '2016-01-01', '2024-10-01', unixepoch(), 26);
 
 -- Events & activities (§3.4.2, §4.3.4). Event master is single-tenant
 -- and stable — same list surfaces in Attendance (L2.2) and Capture
