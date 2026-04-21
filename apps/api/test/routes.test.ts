@@ -1666,3 +1666,209 @@ describe('media pipeline (L2.4)', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('dashboard consolidated (L2.5.3)', () => {
+  beforeEach(async () => { await resetDb(); });
+
+  // KPIs don't ride on the drilldown response unless the caller
+  // asks — CSV exports and other callers that only need the table
+  // shouldn't pay for the extra queries.
+  it('omits `consolidated` unless consolidated=1', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { consolidated?: unknown };
+    expect(body.consolidated).toBeUndefined();
+  });
+
+  it('returns KPI pack + 6-point chart for india scope', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india&consolidated=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      consolidated: {
+        kpis: {
+          attendance_pct: number | null;
+          avg_children: number | null;
+          image_pct: number | null;
+          video_pct: number | null;
+          som_current: number;
+          som_delta: number | null;
+        };
+        chart: { bars: Array<{ month: string; pct: number | null }> };
+      };
+    };
+    expect(body.consolidated).toBeDefined();
+    // KPIs are numbers-or-null; shape check, not value check, so
+    // seed drift doesn't bite.
+    const k = body.consolidated.kpis;
+    for (const key of ['attendance_pct', 'avg_children', 'image_pct', 'video_pct'] as const) {
+      expect(k[key] === null || typeof k[key] === 'number').toBe(true);
+    }
+    expect(typeof k.som_current).toBe('number');
+    // som_delta widened to `number | null` — see PR #31 review #4.
+    // Null when both months recorded zero SoMs so the client can
+    // render a dash instead of a misleading "+0" chip.
+    expect(k.som_delta === null || typeof k.som_delta === 'number').toBe(true);
+    // 6-month trend at aggregate scopes. Each point has a 'YYYY-MM'
+    // month and a nullable numeric pct.
+    expect(body.consolidated.chart.bars).toHaveLength(6);
+    for (const bar of body.consolidated.chart.bars) {
+      expect(bar.month).toMatch(/^\d{4}-\d{2}$/);
+      expect(bar.pct === null || typeof bar.pct === 'number').toBe(true);
+    }
+  });
+
+  it('skips the chart at village leaf', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=village&id=1&consolidated=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      child_level: string;
+      consolidated: { chart: { bars: unknown[] } };
+    };
+    expect(body.child_level).toBe('detail');
+    expect(body.consolidated.chart.bars).toEqual([]);
+  });
+
+  it('honours the from/to period for the KPI pack', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india&consolidated=1'
+        + '&from=2000-01-01&to=2000-01-02',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      consolidated: { kpis: { attendance_pct: number | null; image_pct: number | null; som_delta: number | null } };
+    };
+    // No sessions in that ancient window → null denominator.
+    expect(body.consolidated.kpis.attendance_pct).toBeNull();
+    expect(body.consolidated.kpis.image_pct).toBeNull();
+    // Ancient period puts both SoM months in 2000 → 0 current, 0
+    // prev → som_delta should now be null (review #4), not 0.
+    expect(body.consolidated.kpis.som_delta).toBeNull();
+  });
+
+  it('scope-filters the KPI pack for a VC', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=village&id=1&consolidated=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      consolidated: { kpis: { avg_children: number | null } };
+    };
+    // The caller is village-scoped — the endpoint should still
+    // produce a consolidated payload for their own village rather
+    // than 403 or return nulls.
+    expect(body.consolidated).toBeDefined();
+    expect(body.consolidated.kpis).toBeDefined();
+  });
+});
+
+describe('geo navigation (L2.5.2)', () => {
+  beforeEach(async () => { await resetDb(); });
+
+  it('search returns [] for queries shorter than 2 chars', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/geo/search?q=a', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { results: unknown[] };
+    expect(body.results).toEqual([]);
+  });
+
+  it('search scope-filters results for a VC', async () => {
+    // vc-anandpur is village-scoped to Anandpur (id=1). A prefix
+    // match that hits any other village's name must be filtered out.
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/geo/search?q=bel', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      results: Array<{ level: string; id: number; name: string }>;
+    };
+    // Belur (village id 2) is out of scope for vc-anandpur, so the
+    // search must return no village hits for the "bel" prefix.
+    const villageHits = body.results.filter((r) => r.level === 'village');
+    expect(villageHits.length).toBe(0);
+  });
+
+  it('search returns villages for a super admin', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/geo/search?q=bel', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      results: Array<{ level: string; name: string; path: string }>;
+    };
+    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.results.some((r) => r.level === 'village' && r.name === 'Belur')).toBe(true);
+  });
+
+  it('search sanitises SQL-LIKE wildcards in the query', async () => {
+    // "50%" used to become an everything-matches pattern. The
+    // escape handler converts `%` / `_` to literal characters via
+    // ESCAPE '!'. Expect zero hits for a wildcard-only query.
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/geo/search?q=%25%25', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { results: unknown[] };
+    expect(body.results.length).toBe(0);
+  });
+
+  it('siblings returns other villages under the same cluster', async () => {
+    const token = await loginAs('super');
+    // Belur is village id 2 under Anandpur cluster. Its siblings
+    // include Anandpur (id 1). Both share cluster_id.
+    const res = await cookieFetch('/api/geo/siblings?level=village&id=2', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      siblings: Array<{ id: number; name: string }>;
+    };
+    expect(body.siblings.some((s) => s.name === 'Anandpur')).toBe(true);
+    expect(body.siblings.some((s) => s.name === 'Belur')).toBe(true);
+  });
+
+  it('siblings rejects level=india with 400', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/geo/siblings?level=india&id=1', token);
+    expect(res.status).toBe(400);
+  });
+
+  it('siblings rejects a missing id with 400', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/geo/siblings?level=village', token);
+    expect(res.status).toBe(400);
+  });
+
+  it('siblings returns only in-scope siblings for a VC', async () => {
+    // vc-anandpur only sees Anandpur (village id 1). Asking for
+    // siblings at village level with any id must return at most
+    // the caller's own village.
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/geo/siblings?level=village&id=2', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      siblings: Array<{ id: number; name: string }>;
+    };
+    for (const s of body.siblings) {
+      expect(s.name).toBe('Anandpur');
+    }
+  });
+
+  it('both endpoints require auth (no session cookie ⇒ 401)', async () => {
+    const r1 = await SELF.fetch('http://api.test/api/geo/search?q=bel');
+    expect(r1.status).toBe(401);
+    const r2 = await SELF.fetch('http://api.test/api/geo/siblings?level=village&id=1');
+    expect(r2.status).toBe(401);
+  });
+});

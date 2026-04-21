@@ -41,6 +41,8 @@ export {
   AT_RISK_THRESHOLD_DAYS,
   DASHBOARD_METRICS,
   GEO_LEVELS,
+  isDashboardMetric,
+  isGeoLevel,
 } from '@navsahyog/shared';
 
 import type {
@@ -251,6 +253,26 @@ export const api = {
     `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
   insights: () => req<InsightsResponse>('/api/insights'),
   streaks: () => req<StreakResponse>('/api/streaks/me'),
+  // L2.5.2 — dashboard scope navigation. Both endpoints are already
+  // scope-filtered server-side via villageIdsInScope(), so the
+  // client just renders whatever comes back.
+  geoSearch: (q: string, limit = 20) => {
+    const qs = new URLSearchParams({ q, limit: String(limit) });
+    return req<{ results: GeoSearchHit[] }>(`/api/geo/search?${qs.toString()}`);
+  },
+  geoSiblings: (level: GeoLevel, id: number) => {
+    const qs = new URLSearchParams({ level, id: String(id) });
+    return req<{ siblings: Array<{ id: number; name: string }> }>(
+      `/api/geo/siblings?${qs.toString()}`,
+    );
+  },
+};
+
+export type GeoSearchHit = {
+  level: GeoLevel;
+  id: number;
+  name: string;
+  path: string;
 };
 
 export type DrilldownQuery = {
@@ -259,6 +281,23 @@ export type DrilldownQuery = {
   id?: number | null;
   from?: string;
   to?: string;
+  // L2.5.3 — opt-in consolidated KPI pack + 6-month chart alongside
+  // the metric-specific rows. Off by default so CSV exports and
+  // other callers that only need the table stay cheap.
+  consolidated?: boolean;
+};
+export type ConsolidatedPayload = {
+  kpis: {
+    attendance_pct: number | null;
+    avg_children: number | null;
+    image_pct: number | null;
+    video_pct: number | null;
+    som_current: number;
+    som_delta: number | null;
+  };
+  chart: {
+    bars: Array<{ month: string; pct: number | null }>;
+  };
 };
 export type DrilldownResponse = {
   metric: DashboardMetric;
@@ -270,6 +309,7 @@ export type DrilldownResponse = {
   rows: Array<Array<string | number | null>>;
   drill_ids: Array<number | null>;
   period: { from: string; to: string } | null;
+  consolidated?: ConsolidatedPayload | null;
 };
 
 function drilldownQs(opts: DrilldownQuery): string {
@@ -279,5 +319,6 @@ function drilldownQs(opts: DrilldownQuery): string {
   if (opts.id !== undefined && opts.id !== null) qs.set('id', String(opts.id));
   if (opts.from) qs.set('from', opts.from);
   if (opts.to) qs.set('to', opts.to);
+  if (opts.consolidated) qs.set('consolidated', '1');
   return qs.toString();
 }

@@ -37,6 +37,32 @@ type DrillResult = {
   // Period covered by attendance / achievements metrics. `null` for
   // metrics that are period-independent (children, vc, af).
   period: { from: string; to: string } | null;
+  // L2.5.3 (§3.6.2) — consolidated KPI pack + attendance trend at
+  // the current scope. Omitted unless the request sets
+  // `consolidated=1`. Same page, same edge-cache key; one request
+  // serves both the metric-specific table and the always-on strip.
+  consolidated?: ConsolidatedPayload | null;
+};
+
+// L2.5.3 consolidated payload. KPIs share the drill-down's
+// `from`/`to` window. SoM counters are calendar-month scoped
+// (current vs previous full month) independent of the period
+// filter — the §3.6.2 spec treats SoM as a monthly cadence.
+export type ConsolidatedPayload = {
+  kpis: {
+    attendance_pct: number | null;
+    avg_children: number | null;
+    image_pct: number | null;
+    video_pct: number | null;
+    som_current: number;
+    som_delta: number | null;
+  };
+  // 6-month trend at non-village scopes, rolling back from the
+  // calendar month of `to`. Absent at village leaf (that view is
+  // per-session detail, not aggregate).
+  chart: {
+    bars: Array<{ month: string; pct: number | null }>;
+  };
 };
 
 const dashboard = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -440,6 +466,256 @@ function trimCrumbsToScope(user: SessionUser, crumbs: Crumb[]): Crumb[] {
   return crumbs.filter((c) => GEO_LEVELS.indexOf(c.level) >= scopeIdx);
 }
 
+// ---- consolidated (L2.5.3, §3.6.2) --------------------------------
+
+// Denominator for attendance_pct / image_pct / video_pct. Decisions
+// D13: "per scheduled attendance session in scope × date range".
+// `scheduled` in our schema = a row in attendance_session.
+async function sessionsInRange(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+): Promise<number> {
+  if (villageIds.length === 0) return 0;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM attendance_session
+        WHERE village_id IN (${placeholders})
+          AND date BETWEEN ? AND ?`,
+    )
+    .bind(...villageIds, from, to)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+// Attendance % over the period — same semantics as §3.6.1's
+// aggregateForAttendance cells, but collapsed to a single number
+// for the whole scope. Null when there are no marks (so the UI can
+// render a dash, not a misleading 0%).
+async function consolidatedAttendancePct(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+): Promise<number | null> {
+  if (villageIds.length === 0) return null;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT SUM(CASE WHEN m.present = 1 THEN 1 ELSE 0 END) AS present,
+              COUNT(*) AS total
+         FROM attendance_session s
+         JOIN attendance_mark m ON m.session_id = s.id
+        WHERE s.village_id IN (${placeholders})
+          AND s.date BETWEEN ? AND ?`,
+    )
+    .bind(...villageIds, from, to)
+    .first<{ present: number | null; total: number | null }>();
+  const total = row?.total ?? 0;
+  if (total === 0) return null;
+  return Math.round(((row?.present ?? 0) / total) * 100);
+}
+
+// Avg children per session = total marks / sessions. Null when
+// there are no sessions (same honest-null rule as above).
+async function consolidatedAvgChildren(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+  totalSessions: number,
+): Promise<number | null> {
+  if (villageIds.length === 0 || totalSessions === 0) return null;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(m.id) AS marks
+         FROM attendance_session s
+         JOIN attendance_mark m ON m.session_id = s.id
+        WHERE s.village_id IN (${placeholders})
+          AND s.date BETWEEN ? AND ?`,
+    )
+    .bind(...villageIds, from, to)
+    .first<{ marks: number | null }>();
+  const marks = row?.marks ?? 0;
+  return Math.round((marks / totalSessions) * 10) / 10;
+}
+
+// Image % / video % per D13 — "sessions with ≥ 1 image/video tagged
+// to the same event / village / day, divided by scheduled sessions
+// in scope × date range". Matching on (village_id, event_id, date)
+// rather than session_id because media rows reference events, not
+// sessions directly; multiple sessions on the same event-day share
+// the same photo set in practice.
+async function consolidatedMediaPct(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+  totalSessions: number,
+  kind: 'image' | 'video',
+): Promise<number | null> {
+  if (villageIds.length === 0 || totalSessions === 0) return null;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT s.id) AS hits
+         FROM attendance_session s
+        WHERE s.village_id IN (${placeholders})
+          AND s.date BETWEEN ? AND ?
+          AND EXISTS (
+            SELECT 1 FROM media md
+             WHERE md.village_id = s.village_id
+               AND md.tag_event_id = s.event_id
+               AND md.kind = ?
+               AND md.deleted_at IS NULL
+               -- IST offset on captured_at so a photo taken on
+               -- IST-day N (but uploaded in the UTC 18:30-23:59
+               -- window that spills into UTC-day N-1) still buckets
+               -- under N. Attendance sessions (s.date) are
+               -- IST-calendar, so the join needs matching calendar
+               -- semantics. PR #31 review #5.
+               AND date(md.captured_at, 'unixepoch', '+5 hours 30 minutes') = s.date
+          )`,
+    )
+    .bind(...villageIds, from, to, kind)
+    .first<{ hits: number | null }>();
+  const hits = row?.hits ?? 0;
+  return Math.round((hits / totalSessions) * 100);
+}
+
+// SoM counts for a calendar month. `monthPrefix` = 'YYYY-MM'. Joins
+// achievement to student to re-apply the scope filter — achievements
+// don't carry village_id directly.
+async function consolidatedSomForMonth(
+  db: D1Database,
+  villageIds: number[],
+  monthPrefix: string,
+): Promise<number> {
+  if (villageIds.length === 0) return 0;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n
+         FROM achievement a
+         JOIN student st ON st.id = a.student_id
+        WHERE st.village_id IN (${placeholders})
+          AND a.type = 'som'
+          AND a.date LIKE ? || '%'`,
+    )
+    .bind(...villageIds, monthPrefix)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+// Rolling monthly attendance %, ending at the calendar month of
+// `endIso`. Returns `months` points, oldest first. Matches the
+// shape the client's AttendanceTrendInline already consumes.
+async function consolidatedTrend(
+  db: D1Database,
+  villageIds: number[],
+  endIso: string,
+  months: number,
+): Promise<Array<{ month: string; pct: number | null }>> {
+  if (villageIds.length === 0) {
+    return Array.from({ length: months }, (_, i) => ({
+      month: shiftMonth(endIso.slice(0, 7), -(months - 1 - i)),
+      pct: null,
+    }));
+  }
+  const placeholders = villageIds.map(() => '?').join(',');
+  // Fire the per-month queries in parallel — they're independent
+  // and D1 handles concurrent reads cheaply. Previous serial loop
+  // was the dominant cost in `consolidated=1` at aggregate scopes.
+  return Promise.all(
+    Array.from({ length: months }, (_, i) => {
+      const month = shiftMonth(endIso.slice(0, 7), -(months - 1 - i));
+      return db
+        .prepare(
+          `SELECT SUM(CASE WHEN m.present = 1 THEN 1 ELSE 0 END) AS present,
+                  COUNT(m.id) AS total
+             FROM attendance_session s
+             LEFT JOIN attendance_mark m ON m.session_id = s.id
+            WHERE s.village_id IN (${placeholders})
+              AND s.date LIKE ? || '%'`,
+        )
+        .bind(...villageIds, month)
+        .first<{ present: number | null; total: number | null }>()
+        .then((row) => {
+          const total = row?.total ?? 0;
+          return {
+            month,
+            pct: total === 0 ? null : Math.round(((row?.present ?? 0) / total) * 100),
+          };
+        });
+    }),
+  );
+}
+
+// 'YYYY-MM' → 'YYYY-MM' shifted by `delta` months. Pure calendar
+// arithmetic; avoids Date() drift on month-length mismatches.
+function shiftMonth(yyyyMm: string, delta: number): string {
+  const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
+  const idx = y * 12 + (m - 1) + delta;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12 + 12) % 12;
+  return `${ny}-${String(nm + 1).padStart(2, '0')}`;
+}
+
+async function buildConsolidated(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+  skipChart: boolean,
+): Promise<ConsolidatedPayload> {
+  // `totalSessions` gates the denominator-based KPIs — the others
+  // short-circuit to null when it's 0, so we resolve it once and
+  // pass the value into the helpers. Everything downstream is then
+  // independent and fires in parallel. Matters for §8.13 SLOs
+  // as session counts grow past the lab seed.
+  const totalSessions = await sessionsInRange(db, villageIds, from, to);
+  const currentMonth = to.slice(0, 7);
+  const prevMonth = shiftMonth(currentMonth, -1);
+  const [
+    attendancePct,
+    avgChildren,
+    imagePct,
+    videoPct,
+    somCurrent,
+    somPrev,
+    bars,
+  ] = await Promise.all([
+    consolidatedAttendancePct(db, villageIds, from, to),
+    consolidatedAvgChildren(db, villageIds, from, to, totalSessions),
+    consolidatedMediaPct(db, villageIds, from, to, totalSessions, 'image'),
+    consolidatedMediaPct(db, villageIds, from, to, totalSessions, 'video'),
+    consolidatedSomForMonth(db, villageIds, currentMonth),
+    consolidatedSomForMonth(db, villageIds, prevMonth),
+    skipChart
+      ? Promise.resolve<Array<{ month: string; pct: number | null }>>([])
+      : consolidatedTrend(db, villageIds, to, 6),
+  ]);
+  // §3.6.2 delta chip is a comparison — showing "+0" when neither
+  // month produced a SoM reads as "steady" but the real story is
+  // "no SoMs recorded". Collapse to null so the client renders a
+  // dash instead of a misleading flat chip. Review PR #31 #4.
+  const somDelta = somCurrent === 0 && somPrev === 0 ? null : somCurrent - somPrev;
+  return {
+    kpis: {
+      attendance_pct: attendancePct,
+      avg_children: avgChildren,
+      image_pct: imagePct,
+      video_pct: videoPct,
+      som_current: somCurrent,
+      som_delta: somDelta,
+    },
+    chart: { bars },
+  };
+}
+
 function parsePeriod(
   from: string | undefined,
   to: string | undefined,
@@ -472,6 +748,14 @@ async function effectiveVillages(
   return intersection;
 }
 
+// Success envelope for `buildDrillDown` — `effective` is the
+// scope-filtered village id list already computed to produce the
+// table, exposed so the consolidated branch in the request handler
+// can reuse it (PR #31 review #2 — no second `effectiveVillages`
+// round-trip per request).
+type BuildOk = { result: DrillResult; effective: number[] };
+type BuildFail = { status: 403 | 404; message: string };
+
 async function buildDrillDown(
   db: D1Database,
   scopeVillageIds: number[],
@@ -479,7 +763,7 @@ async function buildDrillDown(
   level: GeoLevel,
   id: number | null,
   period: { from: string; to: string },
-): Promise<DrillResult | { status: 403 | 404; message: string }> {
+): Promise<BuildOk | BuildFail> {
   const effective = await effectiveVillages(db, scopeVillageIds, level, id);
   if (effective === 'out_of_scope') {
     return { status: 403, message: 'out of scope' };
@@ -506,7 +790,7 @@ async function buildDrillDown(
               : metric === 'achievements'  ? await leafAchievements(db, id, period.from, period.to)
               : metric === 'vc'            ? await leafVc(db, id)
               : /* metric === 'af' */        await leafAf(db, id);
-    return {
+    const result: DrillResult = {
       metric,
       level,
       id,
@@ -517,59 +801,66 @@ async function buildDrillDown(
       drill_ids: leaf.rows.map(() => null),
       period: reportedPeriod,
     };
+    return { result, effective };
   }
 
   // Aggregate at child level.
+  let result: DrillResult;
   switch (metric) {
     case 'children': {
       const agg = await aggregateForChildren(db, effective, childLevel);
-      return {
+      result = {
         metric, level, id, crumbs, child_level: childLevel,
         headers: [capLabel(childLevel), 'Children'],
         rows: agg.map((r) => [r.name, r.value]),
         drill_ids: agg.map((r) => r.id),
         period: null,
       };
+      break;
     }
     case 'vc': {
       const agg = await aggregateForVc(db, effective, childLevel);
-      return {
+      result = {
         metric, level, id, crumbs, child_level: childLevel,
         headers: [capLabel(childLevel), 'VCs'],
         rows: agg.map((r) => [r.name, r.value]),
         drill_ids: agg.map((r) => r.id),
         period: null,
       };
+      break;
     }
     case 'af': {
       const agg = await aggregateForAf(db, effective, childLevel);
-      return {
+      result = {
         metric, level, id, crumbs, child_level: childLevel,
         headers: [capLabel(childLevel), 'AFs'],
         rows: agg.map((r) => [r.name, r.value]),
         drill_ids: agg.map((r) => r.id),
         period: null,
       };
+      break;
     }
     case 'attendance': {
       const agg = await aggregateForAttendance(db, effective, childLevel, period.from, period.to);
-      return {
+      result = {
         metric, level, id, crumbs, child_level: childLevel,
         headers: [capLabel(childLevel), 'Attendance %', 'Present/Marked'],
         rows: agg.map((r) => [r.name, r.value, r.extra]),
         drill_ids: agg.map((r) => r.id),
         period: reportedPeriod,
       };
+      break;
     }
     case 'achievements': {
       const agg = await aggregateForAchievements(db, effective, childLevel, period.from, period.to);
-      return {
+      result = {
         metric, level, id, crumbs, child_level: childLevel,
         headers: [capLabel(childLevel), 'Total', 'SoM', 'Gold', 'Silver'],
         rows: agg.map((r) => [r.name, r.value, r.som, r.gold, r.silver]),
         drill_ids: agg.map((r) => r.id),
         period: reportedPeriod,
       };
+      break;
     }
     default: {
       // Exhaustiveness check — if a new Metric is added to the union
@@ -579,6 +870,7 @@ async function buildDrillDown(
       throw new Error(`unhandled metric: ${_never as string}`);
     }
   }
+  return { result, effective };
 }
 
 function capLabel(level: GeoLevel): string {
@@ -601,19 +893,37 @@ async function handleDrillDownRequest(
   if ('error' in levelParsed) return err(c, 'bad_request', 400, levelParsed.error);
   const periodParsed = parsePeriod(c.req.query('from'), c.req.query('to'));
   if ('error' in periodParsed) return err(c, 'bad_request', 400, periodParsed.error);
+  // L2.5.3 — opt-in consolidated payload. Only truthy string values
+  // count; `consolidated=0` reads as off. Accept `1` / `true` for
+  // symmetry with the rest of the codebase.
+  const consolidatedParam = c.req.query('consolidated');
+  const wantConsolidated =
+    consolidatedParam === '1' || consolidatedParam === 'true';
 
   const scope = await villageIdsInScope(c.env.DB, user);
-  const result = await buildDrillDown(
+  const buildOut = await buildDrillDown(
     c.env.DB, scope, metricParam, levelParsed.level, levelParsed.id, periodParsed,
   );
-  if ('status' in result) {
+  if ('status' in buildOut) {
     return err(c,
-      result.status === 403 ? 'forbidden' : 'not_found',
-      result.status,
-      result.message,
+      buildOut.status === 403 ? 'forbidden' : 'not_found',
+      buildOut.status,
+      buildOut.message,
     );
   }
+  const { result, effective } = buildOut;
   result.crumbs = trimCrumbsToScope(user, result.crumbs);
+  if (wantConsolidated) {
+    // Reuse `effective` from `buildDrillDown` — computing it again
+    // here would mean a second `villagesUnder` + scope intersection
+    // per consolidated request (PR #31 review #2).
+    // Skip chart at village leaf — per-session detail lives in the
+    // table, a 6-month rollup of one village is noisy.
+    const skipChart = result.child_level === 'detail';
+    result.consolidated = await buildConsolidated(
+      c.env.DB, effective, periodParsed.from, periodParsed.to, skipChart,
+    );
+  }
   return result;
 }
 
