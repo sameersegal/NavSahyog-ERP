@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /*
   Render a donor-update 1-pager from a JSON data file + the template
-  in mvp/donor-pdf/. Produces a PDF and a PNG preview.
+  that ships with this skill. Produces a PDF and a PNG preview.
 
   Usage:
-    node scripts/render-donor-pdf.mjs <data.json> [--out=<dir>]
+    node .claude/skills/donor-update/references/render.mjs \
+      <data.json> [--theme=<name>] [--out=<dir>] [--keep-html]
 
-  The data file shape matches mvp/donor-pdf/examples/belur-q1-2026.json.
-  The skill (.claude/skills/donor-update/SKILL.md) produces and refines
-  these JSON files; this script only renders.
+  The data file shape matches references/examples/belur-q1-2026.json.
+  SKILL.md (one level up) produces and refines these JSON files; this
+  script only renders.
 
   Kept deliberately small:
     - No template engine dependency. Mustache-style {{path}} and
@@ -24,8 +25,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..');
-const templateDir = path.join(repoRoot, 'mvp', 'donor-pdf');
+// Template and assets sit alongside this script inside references/.
+const templateDir = __dirname;
 
 function parseArgs(argv) {
   const args = { flags: {}, positional: [] };
@@ -132,7 +133,7 @@ async function main() {
   // rewrite them as `file://` absolute URLs. This way a JSON sitting
   // at examples/foo/foo.json can say `media/bar.jpg` to mean
   // examples/foo/media/bar.jpg, and the rendered HTML (written into
-  // mvp/donor-pdf/.render.html) still resolves it correctly.
+  // references/.render.html) still resolves it correctly.
   // Absolute URLs (http/https/file, or starting with `/`) pass through.
   if (Array.isArray(merged.media)) {
     const dataDir = path.dirname(dataAbs);

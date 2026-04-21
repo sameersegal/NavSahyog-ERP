@@ -1,6 +1,6 @@
 ---
 name: donor-update
-description: Draft a donor engagement update for a specific NavSahyog village and timeframe, by composing reads across the ERP APIs. Use when the operator asks for "donor update", "quarterly update for village X", "write a donor letter", "donor PDF", or similar. Outputs are (a) a markdown draft the operator reviews and sends manually via email or WhatsApp, and (b) a 1-pager PDF the operator can attach, rendered from mvp/donor-pdf/.
+description: Draft a donor engagement update for a specific NavSahyog village and timeframe, by composing reads across the ERP APIs. Use when the operator asks for "donor update", "quarterly update for village X", "write a donor letter", "donor PDF", or similar. Outputs are (a) a markdown draft the operator reviews and sends manually via email or WhatsApp, and (b) a 1-pager PDF the operator can attach, rendered from this skill's `references/` templates.
 ---
 
 # Donor update
@@ -20,8 +20,8 @@ something is missing, ask once — don't guess.
 | `village` | yes | UUID, or a name the operator will resolve. Prefer UUID. |
 | `from`, `to` | yes | ISO dates bounding the update window (e.g. calendar quarter, rolling 90 days — whatever the operator specifies). |
 | `channel` | yes | `whatsapp` or `email`. Governs length and tone of the markdown draft. |
-| `pdf` | no | `true` \| `false`. Default: `true`. When true, also render the 1-pager PDF from `mvp/donor-pdf/` (step 8). |
-| `theme` | no | `quarterly` (default), `celebration`, or `milestone`. Maps to `mvp/donor-pdf/themes/<name>.css`. Free-text prompts ("festive", "formal", …) are mapped to the closest preset. |
+| `pdf` | no | `true` \| `false`. Default: `true`. When true, also render the 1-pager PDF from `references/` (step 8). |
+| `theme` | no | `quarterly` (default), `celebration`, or `milestone`. Maps to `references/themes/<name>.css`. Free-text prompts ("festive", "formal", …) are mapped to the closest preset. |
 | `tone` | no | Free-text hint (e.g. "warm", "formal", "data-heavy"). Default: warm-but-factual. |
 | `donor_name` | no | If given, address the message to them. Otherwise produce a generic draft. |
 | `length` | no | `short` (≤ 120 words, WhatsApp default), `medium` (≤ 300, email default), `long` (≤ 600). |
@@ -137,9 +137,10 @@ So the operator can sanity-check coverage.
 
 ### 8. Render the 1-pager PDF (if `pdf=true`)
 
-Skip this step if the operator asked for markdown only.
+Skip this step if the operator asked for markdown only. All paths
+in this step are relative to the repo root.
 
-1. Assemble the data JSON per `mvp/donor-pdf/README.md`. Populate:
+1. Assemble the data JSON per `references/README.md`. Populate:
    - `village`, `window`, `donor`, `theme`, `lang`
    - `stats[]` (4–5 tiles; typical picks: children active,
      sessions held, attendance %, SoMs, gold medals)
@@ -152,11 +153,12 @@ Skip this step if the operator asked for markdown only.
      `GET /api/media/raw/:uuid` into a sibling `media/` folder
      and reference with a relative path; absolute `file://`
      URLs also work.
-2. Write the JSON to `mvp/donor-pdf/examples/<village>-<window>.json`.
+2. Write the JSON to
+   `.claude/skills/donor-update/references/examples/<village>-<window>.json`.
 3. Invoke the renderer:
    ```
-   node scripts/render-donor-pdf.mjs \
-     mvp/donor-pdf/examples/<slug>.json \
+   node .claude/skills/donor-update/references/render.mjs \
+     .claude/skills/donor-update/references/examples/<slug>.json \
      [--theme=<name>]
    ```
    The renderer writes `<slug>.pdf` and `<slug>.preview.png`

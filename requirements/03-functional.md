@@ -297,11 +297,12 @@ reviews, and sends manually via email or WhatsApp.
   media (§5.8) for the village and window, and emits:
   1. a markdown draft (email- or WhatsApp-shaped) plus a "sources
      used" block, and
-  2. a 1-pager A4 PDF rendered from the `mvp/donor-pdf/` template
-     (header + 5-tile stats strip + story + optional highlights
-     strip + 3-up media grid + footer), produced by
-     `scripts/render-donor-pdf.mjs` via Playwright. Themes:
-     `quarterly` (default), `celebration`, `milestone`.
+  2. a 1-pager A4 PDF rendered from the skill's bundled template
+     (`.claude/skills/donor-update/references/`: header + 5-tile
+     stats strip + story + optional highlights strip + 3-up media
+     grid + footer), produced by `references/render.mjs` via
+     Playwright. Themes: `quarterly` (default), `celebration`,
+     `milestone`.
 - No write occurs against the operational schema — the skill is
   read-only. Distribution happens outside the system.
 
