@@ -50,30 +50,40 @@ function lookup(data, dotted) {
   return dotted.split('.').reduce((acc, k) => (acc == null ? undefined : acc[k]), data);
 }
 
-// Expand {{#each arr}}...{{/each}} blocks. The inner body sees each
-// item's keys as top-level {{keys}}. One-level only — donor PDFs
-// don't need nested iteration.
+// Expand {{#each arr}}...{{/each}} blocks. The inner body is
+// re-rendered with the item as the data context, so nested
+// {{#if}} / {{#each}} / {{path}} inside the body resolve against
+// the item's fields. Matches only innermost {{#each}}s first
+// (negative lookahead) and iterates until no more remain, which
+// keeps sibling and nested eaches unambiguous.
 function expandEach(tmpl, data) {
-  return tmpl.replace(
-    /\{\{#each ([\w.]+)\}\}([\s\S]*?)\{\{\/each\}\}/g,
-    (_, key, body) => {
+  const re = /\{\{#each ([\w.]+)\}\}((?:(?!\{\{#each)[\s\S])*?)\{\{\/each\}\}/g;
+  let out = tmpl;
+  let prev;
+  do {
+    prev = out;
+    out = out.replace(re, (_, key, body) => {
       const arr = lookup(data, key);
       if (!Array.isArray(arr)) return '';
-      return arr.map((item) => expandSimple(body, item)).join('');
-    },
-  );
+      return arr.map((item) => render(body, item)).join('');
+    });
+  } while (out !== prev);
+  return out;
 }
 
-// Expand {{#if key}}...{{/if}}. Truthy check; no else branch (not
-// needed yet).
+// Expand {{#if key}}...{{/if}}. Truthy check; no else branch.
+// Matches only innermost {{#if}}s first (negative lookahead)
+// and iterates, so nested conditionals resolve correctly
+// regardless of which branch is truthy.
 function expandIf(tmpl, data) {
-  return tmpl.replace(
-    /\{\{#if ([\w.]+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
-    (_, key, body) => {
-      const v = lookup(data, key);
-      return v ? body : '';
-    },
-  );
+  const re = /\{\{#if ([\w.]+)\}\}((?:(?!\{\{#if)[\s\S])*?)\{\{\/if\}\}/g;
+  let out = tmpl;
+  let prev;
+  do {
+    prev = out;
+    out = out.replace(re, (_, key, body) => (lookup(data, key) ? body : ''));
+  } while (out !== prev);
+  return out;
 }
 
 // Simple {{path}} substitution. Missing paths render as empty string
