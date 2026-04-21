@@ -275,3 +275,63 @@ Parity with the vendor app; keep them minimal.
   uses. No "app settings" screen — retention is out-of-system; other
   tunables are Worker env vars (decisions.md D1).
 
+---
+
+### 3.9 Donor engagement
+
+NavSahyog engages donors against the village(s) they sponsor. The
+donor ↔ village mapping is maintained **outside** this system (a
+spreadsheet the central office keeps); the ERP's role is only to
+supply the raw material for an update, which the operator drafts,
+reviews, and sends manually via email or WhatsApp.
+
+#### 3.9.1 Invocation
+- **Inputs** (per the operator):
+  - village (UUID; resolve by name via `/api/geo/villages?q=`, §5.3)
+  - date range (`from`, `to`) — any window the operator picks
+  - channel (`whatsapp` | `email`)
+  - optional: donor name, tone hint, length, language
+- **Behaviour**: the AI skill
+  (`.claude/skills/donor-update/SKILL.md`) composes reads across
+  children (§5.6), attendance (§5.9), achievements (§5.10), and
+  media (§5.8) for the village and window, and emits:
+  1. a markdown draft (email- or WhatsApp-shaped) plus a "sources
+     used" block, and
+  2. a 1-pager A4 PDF rendered from one of the three bundled
+     templates in `.claude/skills/donor-update/references/themes/`
+     (each a distinct layout, not just a palette): `quarterly`
+     (default — 5-stat strip + story + 3-photo grid, data-forward),
+     `milestone` (full-width hero photo + single achievement
+     headline, formal), or `celebration` (saffron hero band + 2×2
+     photo mosaic + wins list, festive). Produced by
+     `references/render.mjs` via Playwright; each theme has its
+     own required JSON shape documented in
+     `references/README.md`.
+- No write occurs against the operational schema — the skill is
+  read-only. Distribution happens outside the system.
+
+#### 3.9.2 Scope and PII
+- Gated by the `donor_update` capability (§2.3). A 403 on any
+  underlying API halts the draft and surfaces the scope error to
+  the operator.
+- No child PII beyond first names tied to a public achievement
+  (SoM, medal). No last names, DOB, parent names, school names,
+  or parent Aadhaar (which is masked anyway per §9.2). Child
+  Aadhaar does not exist in the schema (§9.1).
+
+#### 3.9.3 Media consent
+- **Current assumption**: every `/api/media` row is treated as
+  donor-shareable. Placeholder — §9 does not yet distinguish
+  internal from external use of child images/videos. Tracked in
+  `review-findings-v1.md` U7; must close before public launch.
+- Once §9 adds a `donor_shareable` flag, the skill must filter
+  on it before including any item.
+
+#### 3.9.4 Acceptance
+- Every stat in the draft traces to an API response recorded in
+  the sources block — no fabrication.
+- Each invocation appends a `donor_update.draft` row to
+  `audit_log` with `(operator, village, from, to, timestamp)`
+  per §9.4.
+- Online-only workflow; not in the §6.1 offline scope.
+

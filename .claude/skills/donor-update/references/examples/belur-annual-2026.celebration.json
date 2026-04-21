@@ -1,0 +1,56 @@
+{
+  "lang": "en",
+  "theme": "celebration",
+  "village": {
+    "name": "Belur",
+    "cluster": "Bidar Cluster 1",
+    "coordinator": "Ramesh Kulkarni"
+  },
+  "window": {
+    "label": "2026",
+    "from": "2026-01-01",
+    "to": "2026-04-21"
+  },
+  "donor": {
+    "name": "Mrs. Sharma"
+  },
+  "hero": {
+    "title": "A year in Belur",
+    "subtitle": "An annual celebration of our six children and the coordinator who showed up every single day"
+  },
+  "mosaic": [
+    {
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/hero-mission.jpg",
+      "caption": "Running race, village grounds"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/impact-hero.jpg",
+      "caption": "Kho-Kho under the mango tree"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/story-1.jpg",
+      "caption": "Reading circle, Thursday afternoon"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/story-2.jpg",
+      "caption": "Session day, with Ramesh"
+    }
+  ],
+  "wins": [
+    { "date": "Feb 11", "text": "Ishaan kept the session notebook every single day of February — our first Star of the Month." },
+    { "date": "Mar 12", "text": "Gauri organised the Anganwadi's reading circle from scratch." },
+    { "date": "Mar 20", "text": "Hitesh took gold at the district inter-school running meet." },
+    { "date": "Apr 06", "text": "Farhan took over the Thursday story-circle — our third Star in as many months." },
+    { "date": "Apr 15", "text": "Gauri led our Kho-Kho squad to two golds at the inter-village championship." },
+    { "date": "Apr 21", "text": "Belur closed the quarter on an unbroken 89-day attendance streak." }
+  ],
+  "closer": {
+    "quote": "A village that has decided to show up for each other every single day.",
+    "attribution": "Ramesh Kulkarni, Village Coordinator"
+  },
+  "footer": {
+    "tagline": "Thank you for walking with us.",
+    "org_url": "navsahyog.org",
+    "contact": "info@navsahyog.org"
+  }
+}

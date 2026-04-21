@@ -1,0 +1,230 @@
+/*
+  Milestone — one big win. A dominant hero photo takes the upper
+  third of the page; the achievement title and attribution sit right
+  below it in formal typography. Deep NavSahyog green + a gold
+  accent rail. Use for district-level medals, graduations, or the
+  first time a village clears a milestone.
+*/
+
+.page-milestone {
+  padding: 0;                  /* hero is full-bleed at the top */
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Header ─────────────────────────────────────────────────── */
+
+.page-milestone .brand {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 5mm;
+  padding: 6mm 12mm;
+  background: var(--ns-green-deep);
+  color: #fff;
+}
+
+.page-milestone .brand .logo img {
+  height: 14mm;
+  width: auto;
+  display: block;
+  /* Invert the logo's dark text on the green band. If the logo lacks
+     a dark portion, this filter is a no-op visually. */
+  filter: brightness(0) invert(1);
+}
+
+.page-milestone .brand .title .village {
+  font-family: var(--font-display);
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-milestone .brand .title .sub {
+  font-size: 9pt;
+  opacity: 0.85;
+  margin-top: 0.5mm;
+}
+
+.page-milestone .brand .window {
+  font-size: 10pt;
+  font-weight: 600;
+  padding: 2mm 4mm;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ─── Hero photo ─────────────────────────────────────────────── */
+
+.page-milestone .hero {
+  margin: 0;
+  width: 100%;
+  height: 100mm;               /* dominant — ~a third of the page */
+  overflow: hidden;
+  position: relative;
+}
+
+.page-milestone .hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Gold rail under the hero signals "this is the award moment." */
+.page-milestone .hero::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2.5mm;
+  background: linear-gradient(90deg, var(--ns-gold), #e2b750, var(--ns-gold));
+}
+
+/* ─── Milestone headline ─────────────────────────────────────── */
+
+.page-milestone .milestone {
+  padding: 8mm 12mm 4mm;
+  text-align: center;
+}
+
+.page-milestone .milestone-badge {
+  font-size: 22pt;
+  line-height: 1;
+  margin-bottom: 2mm;
+}
+
+.page-milestone .milestone-title {
+  font-family: var(--font-display);
+  font-size: 22pt;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ns-green-deep);
+  line-height: 1.1;
+}
+
+.page-milestone .milestone-meta {
+  margin-top: 3mm;
+  font-size: 11pt;
+  color: var(--muted);
+  font-family: var(--font-story);
+}
+
+.page-milestone .milestone-meta .milestone-child {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.page-milestone .milestone-meta .sep {
+  margin: 0 2mm;
+  color: var(--ns-gold);
+}
+
+/* ─── Pullquote ──────────────────────────────────────────────── */
+
+.page-milestone .pullquote {
+  margin: 3mm 24mm 5mm;
+  padding: 0;
+  text-align: center;
+  font-family: var(--font-story);
+  font-style: italic;
+  font-size: 13pt;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.page-milestone .pullquote .quote-mark {
+  color: var(--ns-gold);
+  font-size: 1.4em;
+  font-weight: 700;
+}
+
+.page-milestone .pullquote-attr {
+  display: block;
+  margin-top: 2mm;
+  font-size: 9pt;
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* ─── Story body ─────────────────────────────────────────────── */
+
+.page-milestone .story-body {
+  padding: 0 18mm;
+  font-family: var(--font-story);
+  font-size: 11pt;
+  line-height: 1.6;
+  color: var(--ink);
+  /* See quarterly.css — `pre-line` preserves `\n\n` paragraph breaks
+     the skill writes into story.body. */
+  white-space: pre-line;
+  overflow: hidden;
+  flex: 0 1 auto;
+}
+
+/* ─── Supporting stats ───────────────────────────────────────── */
+
+.page-milestone .stats {
+  margin: 8mm 18mm 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+}
+
+.page-milestone .stat {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 4mm 3mm;
+  text-align: center;
+  background: var(--ns-green-soft);
+}
+
+.page-milestone .stat-value {
+  font-family: var(--font-display);
+  font-size: 22pt;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ns-green-deep);
+  letter-spacing: -0.02em;
+}
+
+.page-milestone .stat-label {
+  font-size: 8.5pt;
+  color: var(--muted);
+  margin-top: 1.5mm;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────── */
+
+.page-milestone .footer {
+  margin-top: auto;             /* anchor to bottom regardless of body length */
+  padding: 6mm 12mm;
+  background: var(--card);
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 3mm;
+  font-size: 9pt;
+  color: var(--muted);
+}
+
+.page-milestone .footer-main {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.page-milestone .footer-main .donor-line {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 2mm;
+}
+
+.page-milestone .footer-meta .sep {
+  margin: 0 1.5mm;
+}

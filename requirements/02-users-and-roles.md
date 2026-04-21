@@ -41,6 +41,7 @@ within the user's effective scope; `—` = denied.
 | CSV export | — | ✔ | ✔ | ✔ | ✔ |
 | Manage users | — | — | ✔ | ✔ | ✔ |
 | Master CRUD (villages, schools, events…) | — | — | ✔ | ✔ | ✔ |
+| Donor update (draft) — §3.9 | — | — | — | — | ✔ |
 
 **Acceptance:** every write endpoint enforces scope server-side from
 the session claim. A VC cannot mark attendance for another village by

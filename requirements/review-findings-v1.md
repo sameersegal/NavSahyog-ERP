@@ -226,6 +226,24 @@ files link to it.
 - **Fix.** Add: _"Mandatory for `/api/sync/outbox` items;
   optional but recommended for direct POST/PATCH."_
 
+### U7 — Donor-facing media use has no consent surface
+- §9.1 lists the child PII the app stores (including photos); §9
+  is silent on external sharing. §3.9 (donor engagement) currently
+  assumes every `/api/media` row is donor-shareable — a placeholder
+  that must close before public launch or before the workflow
+  extends beyond a single Super-Admin operator.
+- **Fix.** Add `donor_shareable BOOLEAN DEFAULT 0` and
+  `donor_consent_captured_at` columns to the `media` row (§4). Add
+  a consent-capture step to §3.4 (likely per-media or per-event
+  opt-in by the uploader, attested by guardian). Update §5.8
+  list/get responses to always return the flag. Remove the
+  "assume shareable" language from §3.9.3 and the stand-in note
+  in `.claude/skills/donor-update/SKILL.md` once shipped.
+- **Sequencing.** Low-risk to defer while donor engagement is a
+  single-operator workflow with manual review. Must land before
+  the capability in §2.3 extends to Cluster Admins or donors ever
+  see media through a self-serve portal.
+
 ---
 
 ## 5. LOW

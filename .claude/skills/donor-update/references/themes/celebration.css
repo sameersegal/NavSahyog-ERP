@@ -1,0 +1,226 @@
+/*
+  Celebration — the annual recap. A warm saffron hero band at the
+  top; a 2×2 photo mosaic; a wins list with dates; a closer quote.
+  The green brand identity stays in the logo + supporting marks, but
+  the page reads festive, not data-forward. Use for annual summaries,
+  festivals, or cluster-level wins where there's more to celebrate
+  than a single headline.
+*/
+
+.page-celebration {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--ns-cream) 0%, #ffffff 40%);
+}
+
+/* ─── Hero band ──────────────────────────────────────────────── */
+
+.page-celebration .hero-band {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6mm;
+  align-items: center;
+  padding: 8mm 12mm;
+  background: linear-gradient(135deg, #e8791f 0%, var(--ns-saffron) 55%, #a84a0e 100%);
+  color: #fff;
+  position: relative;
+}
+
+.page-celebration .hero-band::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2.5mm;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ns-gold) 0 4mm,
+    #e2b750 4mm 8mm
+  );
+}
+
+.page-celebration .logo img {
+  height: 18mm;
+  width: auto;
+  display: block;
+  background: #fff;
+  padding: 2mm;
+  border-radius: var(--radius);
+}
+
+.page-celebration .hero-title {
+  font-family: var(--font-display);
+  font-size: 24pt;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin: 0;
+  line-height: 1.05;
+}
+
+.page-celebration .hero-subtitle {
+  margin-top: 2mm;
+  font-size: 11pt;
+  font-style: italic;
+  opacity: 0.92;
+}
+
+.page-celebration .hero-stamp {
+  font-family: var(--font-display);
+  font-size: 14pt;
+  font-weight: 700;
+  padding: 3mm 5mm;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: var(--radius);
+  letter-spacing: 0.04em;
+}
+
+/* ─── Photo mosaic ───────────────────────────────────────────── */
+
+.page-celebration .mosaic {
+  margin: 7mm 12mm 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 42mm 42mm;
+  gap: 3mm;
+}
+
+.page-celebration .mosaic-item {
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  position: relative;
+  background: var(--card);
+}
+
+.page-celebration .mosaic-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.page-celebration .mosaic-item figcaption {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 2mm 3mm;
+  font-size: 8pt;
+  color: #fff;
+  background: linear-gradient(180deg, transparent, rgba(10, 31, 20, 0.75));
+}
+
+/* ─── Wins list ──────────────────────────────────────────────── */
+
+.page-celebration .wins {
+  margin: 7mm 12mm 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.page-celebration .wins-title {
+  font-family: var(--font-display);
+  font-size: 14pt;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ns-saffron);
+  margin: 0 0 3mm 0;
+  padding-bottom: 1.5mm;
+  border-bottom: 1.5pt solid var(--ns-saffron);
+}
+
+.page-celebration .wins-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page-celebration .win {
+  display: grid;
+  grid-template-columns: 24mm 1fr;
+  align-items: baseline;
+  column-gap: 4mm;
+  padding: 2mm 0;
+  border-bottom: 1px dashed var(--rule);
+  font-size: 10.5pt;
+  line-height: 1.45;
+}
+
+.page-celebration .win:last-child {
+  border-bottom: none;
+}
+
+.page-celebration .win-date {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10pt;
+  color: var(--ns-saffron);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.page-celebration .win-text {
+  color: var(--ink);
+}
+
+/* ─── Closer quote ───────────────────────────────────────────── */
+
+.page-celebration .closer {
+  margin: 6mm 18mm 0;
+  padding: 4mm 6mm;
+  background: var(--ns-saffron-soft);
+  border-radius: var(--radius);
+  font-family: var(--font-story);
+  font-style: italic;
+  font-size: 11.5pt;
+  line-height: 1.45;
+  color: #4a2a0a;
+  text-align: center;
+  position: relative;
+}
+
+.page-celebration .closer .quote-mark {
+  color: var(--ns-saffron);
+  font-size: 1.4em;
+  font-weight: 700;
+}
+
+.page-celebration .closer-attr {
+  display: block;
+  margin-top: 2mm;
+  font-size: 9pt;
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────── */
+
+.page-celebration .footer {
+  margin-top: auto;
+  padding: 5mm 12mm;
+  background: #fff;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 3mm;
+  font-size: 9pt;
+  color: var(--muted);
+}
+
+.page-celebration .footer-main {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.page-celebration .footer-main .donor-line {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 2mm;
+}
+
+.page-celebration .footer-meta .sep {
+  margin: 0 1.5mm;
+}

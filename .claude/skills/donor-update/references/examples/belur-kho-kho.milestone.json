@@ -1,0 +1,42 @@
+{
+  "lang": "en",
+  "theme": "milestone",
+  "village": {
+    "name": "Belur",
+    "cluster": "Bidar Cluster 1",
+    "coordinator": "Ramesh Kulkarni"
+  },
+  "window": {
+    "label": "April 2026",
+    "from": "2026-04-01",
+    "to": "2026-04-30"
+  },
+  "donor": {
+    "name": "Mrs. Sharma"
+  },
+  "hero": {
+    "url": "https://raw.githubusercontent.com/sameersegal/NavSahayog-Website/main/src/assets/images/story-longjump.jpg",
+    "caption": "Belur's Kho-Kho squad at the inter-village final"
+  },
+  "milestone": {
+    "badge": "🏆",
+    "title": "Kho-Kho inter-village champions",
+    "child": "Gauri Hegde",
+    "date": "April 15, 2026"
+  },
+  "story": {
+    "quote": "Organised the reading circle.",
+    "attribution": "Gauri, Star of the Month, March 2026",
+    "body": "A month before the Kho-Kho final, Gauri was quietly sorting the Anganwadi's book corner — the same child who, on April 15th, led Belur through three knockout rounds to bring home two golds. The final was called against the reigning village champions and clinched in the last 90 seconds with a chain of chaser-defender runs the crowd still talks about. It's the kind of win that doesn't happen without ninety days of daily sessions behind it."
+  },
+  "stats": [
+    { "value": "2",   "label": "gold medals" },
+    { "value": "89",  "label": "day streak" },
+    { "value": "83%", "label": "attendance" }
+  ],
+  "footer": {
+    "tagline": "Thank you for walking with us.",
+    "org_url": "navsahyog.org",
+    "contact": "info@navsahyog.org"
+  }
+}

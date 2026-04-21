@@ -63,7 +63,7 @@ below.
 | `GET` | `/api/geo/regions?state=<uuid>` | |
 | `GET` | `/api/geo/districts?region=<uuid>` | |
 | `GET` | `/api/geo/clusters?district=<uuid>` | |
-| `GET` | `/api/geo/villages?cluster=<uuid>` | Includes coordinates, pincode, program window. |
+| `GET` | `/api/geo/villages?cluster=<uuid>&q=<string>` | Both params optional; caller must narrow within their scope. `cluster` filters to one cluster; `q` is a case-insensitive substring match on village name (supports the donor-update workflow, §3.9). Response includes coordinates, pincode, program window. |
 | `POST` / `PATCH` / `DELETE` | `/api/geo/{level}/…` | Same shape for each level (`zones`, `states`, `regions`, `districts`, `clusters`, `villages`). Soft delete only. |
 | `POST` | `/api/geo/villages/:uuid/set-coordinates` | Replaces the vendor's `UpdateVillageCoordinates`. Body `{ latitude, longitude, altitude?, radius_m? }`. |
 

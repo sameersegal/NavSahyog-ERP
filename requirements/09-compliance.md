@@ -36,7 +36,7 @@
   `deleted_by/at` (soft delete).
 - Append-only `audit_log` table records: login, password change,
   OTP issue/verify, failed login, user create / role change, data
-  export.
+  export, donor-update drafts (§3.9).
 - Readable only by Super Admin.
 
 ### 9.5 Security baseline

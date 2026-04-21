@@ -17,6 +17,7 @@
     "db:reset": "pnpm --filter @navsahyog/api db:reset"
   },
   "devDependencies": {
+    "handlebars": "^4.7.9",
     "playwright": "1.56.1",
     "typescript": "^5.6.3"
   },

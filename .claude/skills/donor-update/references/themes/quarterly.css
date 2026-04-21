@@ -1,0 +1,273 @@
+/*
+  Quarterly update — data-forward. Clean rhythm of header → stats →
+  story+quote → highlights → media → footer. NavSahyog's primary
+  green is the only strong colour; everything else is neutral so the
+  numbers and photos carry the message.
+*/
+
+.page-quarterly {
+  padding: 10mm 12mm;
+  display: flex;
+  flex-direction: column;
+  row-gap: 5mm;
+}
+
+/* ─── Header ─────────────────────────────────────────────────── */
+
+.page-quarterly .brand {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 6mm;
+  padding-bottom: 4mm;
+  border-bottom: 1px solid var(--rule);
+}
+
+.page-quarterly .brand .logo img {
+  height: 18mm;
+  width: auto;
+  display: block;
+}
+
+.page-quarterly .brand .title .sub {
+  font-size: 11pt;
+  color: var(--muted);
+}
+
+.page-quarterly .brand .title .village {
+  color: var(--ns-green);
+  font-weight: 700;
+  font-size: 13pt;
+}
+
+.page-quarterly .brand .title .sep {
+  margin: 0 1.5mm;
+}
+
+.page-quarterly .brand .window {
+  text-align: right;
+}
+
+.page-quarterly .brand .window-label {
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.page-quarterly .brand .window-dates {
+  font-size: 8.5pt;
+  color: var(--muted);
+  margin-top: 0.5mm;
+}
+
+/* ─── Stats strip ────────────────────────────────────────────── */
+
+.page-quarterly .stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3mm;
+}
+
+.page-quarterly .stat {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 4mm 3mm;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.page-quarterly .stat-value {
+  font-family: var(--font-display);
+  font-size: 26pt;
+  font-weight: 700;
+  line-height: 1.0;
+  color: var(--ns-green);
+  letter-spacing: -0.02em;
+}
+
+.page-quarterly .stat-label {
+  font-size: 8.5pt;
+  color: var(--muted);
+  margin-top: 1.5mm;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Story block ────────────────────────────────────────────── */
+
+.page-quarterly .story {
+  padding: 2mm 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.page-quarterly .story-title {
+  font-family: var(--font-display);
+  font-size: 17pt;
+  font-weight: 700;
+  margin: 0 0 3mm 0;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  position: relative;
+  padding-left: 4mm;
+}
+
+.page-quarterly .story-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3pt;
+  bottom: 3pt;
+  width: 2mm;
+  background: var(--ns-green);
+  border-radius: 1mm;
+}
+
+.page-quarterly .story-body {
+  font-family: var(--font-story);
+  font-size: 11.5pt;
+  line-height: 1.6;
+  color: var(--ink);
+  margin: 0 0 5mm 0;
+  /* `pre-line` preserves the `\n\n` paragraph breaks the skill writes
+     into story.body while still collapsing runs of spaces. Don't
+     change to `normal` — newlines would collapse and the page would
+     render as one wall of text. */
+  white-space: pre-line;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.page-quarterly .story-quote {
+  margin: 0;
+  padding: 4mm 6mm;
+  border-left: 2mm solid var(--ns-green);
+  background: var(--ns-green-soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-family: var(--font-story);
+  font-size: 12pt;
+  line-height: 1.45;
+  color: var(--ink);
+  font-style: italic;
+}
+
+.page-quarterly .quote-mark {
+  color: var(--ns-green);
+  font-size: 1.2em;
+  font-weight: 700;
+}
+
+.page-quarterly .story-attr {
+  display: block;
+  margin-top: 2mm;
+  font-size: 9pt;
+  color: var(--muted);
+  font-style: normal;
+}
+
+/* ─── Highlights strip ───────────────────────────────────────── */
+
+.page-quarterly .highlights {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 4mm 0;
+}
+
+.page-quarterly .highlights-label {
+  font-size: 8pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2.5mm;
+}
+
+.page-quarterly .highlights-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+}
+
+.page-quarterly .highlight-kicker {
+  font-family: var(--font-display);
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--ns-green);
+  letter-spacing: -0.01em;
+  margin-bottom: 1mm;
+}
+
+.page-quarterly .highlight-body {
+  font-size: 9.5pt;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+/* ─── Media grid ─────────────────────────────────────────────── */
+
+.page-quarterly .media {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+  align-content: end;
+  margin-top: auto;
+}
+
+.page-quarterly .media-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-quarterly .media-frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.page-quarterly .media-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.page-quarterly .media-caption {
+  margin-top: 2mm;
+  font-size: 8.5pt;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────── */
+
+.page-quarterly .footer {
+  border-top: 1px solid var(--rule);
+  padding-top: 3mm;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 3mm;
+  font-size: 9pt;
+  color: var(--muted);
+}
+
+.page-quarterly .footer-main {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.page-quarterly .footer-main .donor-line {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 2mm;
+}
+
+.page-quarterly .footer-meta .sep {
+  margin: 0 1.5mm;
+}
