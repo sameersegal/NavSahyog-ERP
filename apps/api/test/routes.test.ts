@@ -1667,8 +1667,112 @@ describe('media pipeline (L2.4)', () => {
   });
 });
 
+describe('dashboard consolidated (L2.5.3)', () => {
+  beforeEach(async () => { await resetDb(); });
+
+  // KPIs don't ride on the drilldown response unless the caller
+  // asks — CSV exports and other callers that only need the table
+  // shouldn't pay for the extra queries.
+  it('omits `consolidated` unless consolidated=1', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { consolidated?: unknown };
+    expect(body.consolidated).toBeUndefined();
+  });
+
+  it('returns KPI pack + 6-point chart for india scope', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india&consolidated=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      consolidated: {
+        kpis: {
+          attendance_pct: number | null;
+          avg_children: number | null;
+          image_pct: number | null;
+          video_pct: number | null;
+          som_current: number;
+          som_delta: number | null;
+        };
+        chart: { bars: Array<{ month: string; pct: number | null }> };
+      };
+    };
+    expect(body.consolidated).toBeDefined();
+    // KPIs are numbers-or-null; shape check, not value check, so
+    // seed drift doesn't bite.
+    const k = body.consolidated.kpis;
+    for (const key of ['attendance_pct', 'avg_children', 'image_pct', 'video_pct'] as const) {
+      expect(k[key] === null || typeof k[key] === 'number').toBe(true);
+    }
+    expect(typeof k.som_current).toBe('number');
+    expect(typeof k.som_delta).toBe('number');
+    // 6-month trend at aggregate scopes. Each point has a 'YYYY-MM'
+    // month and a nullable numeric pct.
+    expect(body.consolidated.chart.bars).toHaveLength(6);
+    for (const bar of body.consolidated.chart.bars) {
+      expect(bar.month).toMatch(/^\d{4}-\d{2}$/);
+      expect(bar.pct === null || typeof bar.pct === 'number').toBe(true);
+    }
+  });
+
+  it('skips the chart at village leaf', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=village&id=1&consolidated=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      child_level: string;
+      consolidated: { chart: { bars: unknown[] } };
+    };
+    expect(body.child_level).toBe('detail');
+    expect(body.consolidated.chart.bars).toEqual([]);
+  });
+
+  it('honours the from/to period for the KPI pack', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=india&consolidated=1'
+        + '&from=2000-01-01&to=2000-01-02',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      consolidated: { kpis: { attendance_pct: number | null; image_pct: number | null } };
+    };
+    // No sessions in that ancient window → null denominator.
+    expect(body.consolidated.kpis.attendance_pct).toBeNull();
+    expect(body.consolidated.kpis.image_pct).toBeNull();
+  });
+
+  it('scope-filters the KPI pack for a VC', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch(
+      '/api/dashboard/drilldown?metric=children&level=village&id=1&consolidated=1',
+      token,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      consolidated: { kpis: { avg_children: number | null } };
+    };
+    // The caller is village-scoped — the endpoint should still
+    // produce a consolidated payload for their own village rather
+    // than 403 or return nulls.
+    expect(body.consolidated).toBeDefined();
+    expect(body.consolidated.kpis).toBeDefined();
+  });
+});
+
 describe('geo navigation (L2.5.2)', () => {
-  beforeEach(async () => { await resetDb(env.DB); });
+  beforeEach(async () => { await resetDb(); });
 
   it('search returns [] for queries shorter than 2 chars', async () => {
     const token = await loginAs('super');

@@ -37,6 +37,32 @@ type DrillResult = {
   // Period covered by attendance / achievements metrics. `null` for
   // metrics that are period-independent (children, vc, af).
   period: { from: string; to: string } | null;
+  // L2.5.3 (§3.6.2) — consolidated KPI pack + attendance trend at
+  // the current scope. Omitted unless the request sets
+  // `consolidated=1`. Same page, same edge-cache key; one request
+  // serves both the metric-specific table and the always-on strip.
+  consolidated?: ConsolidatedPayload | null;
+};
+
+// L2.5.3 consolidated payload. KPIs share the drill-down's
+// `from`/`to` window. SoM counters are calendar-month scoped
+// (current vs previous full month) independent of the period
+// filter — the §3.6.2 spec treats SoM as a monthly cadence.
+export type ConsolidatedPayload = {
+  kpis: {
+    attendance_pct: number | null;
+    avg_children: number | null;
+    image_pct: number | null;
+    video_pct: number | null;
+    som_current: number;
+    som_delta: number | null;
+  };
+  // 6-month trend at non-village scopes, rolling back from the
+  // calendar month of `to`. Absent at village leaf (that view is
+  // per-session detail, not aggregate).
+  chart: {
+    bars: Array<{ month: string; pct: number | null }>;
+  };
 };
 
 const dashboard = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -440,6 +466,223 @@ function trimCrumbsToScope(user: SessionUser, crumbs: Crumb[]): Crumb[] {
   return crumbs.filter((c) => GEO_LEVELS.indexOf(c.level) >= scopeIdx);
 }
 
+// ---- consolidated (L2.5.3, §3.6.2) --------------------------------
+
+// Denominator for attendance_pct / image_pct / video_pct. Decisions
+// D13: "per scheduled attendance session in scope × date range".
+// `scheduled` in our schema = a row in attendance_session.
+async function sessionsInRange(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+): Promise<number> {
+  if (villageIds.length === 0) return 0;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM attendance_session
+        WHERE village_id IN (${placeholders})
+          AND date BETWEEN ? AND ?`,
+    )
+    .bind(...villageIds, from, to)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+// Attendance % over the period — same semantics as §3.6.1's
+// aggregateForAttendance cells, but collapsed to a single number
+// for the whole scope. Null when there are no marks (so the UI can
+// render a dash, not a misleading 0%).
+async function consolidatedAttendancePct(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+): Promise<number | null> {
+  if (villageIds.length === 0) return null;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT SUM(CASE WHEN m.present = 1 THEN 1 ELSE 0 END) AS present,
+              COUNT(*) AS total
+         FROM attendance_session s
+         JOIN attendance_mark m ON m.session_id = s.id
+        WHERE s.village_id IN (${placeholders})
+          AND s.date BETWEEN ? AND ?`,
+    )
+    .bind(...villageIds, from, to)
+    .first<{ present: number | null; total: number | null }>();
+  const total = row?.total ?? 0;
+  if (total === 0) return null;
+  return Math.round(((row?.present ?? 0) / total) * 100);
+}
+
+// Avg children per session = total marks / sessions. Null when
+// there are no sessions (same honest-null rule as above).
+async function consolidatedAvgChildren(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+  totalSessions: number,
+): Promise<number | null> {
+  if (villageIds.length === 0 || totalSessions === 0) return null;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(m.id) AS marks
+         FROM attendance_session s
+         JOIN attendance_mark m ON m.session_id = s.id
+        WHERE s.village_id IN (${placeholders})
+          AND s.date BETWEEN ? AND ?`,
+    )
+    .bind(...villageIds, from, to)
+    .first<{ marks: number | null }>();
+  const marks = row?.marks ?? 0;
+  return Math.round((marks / totalSessions) * 10) / 10;
+}
+
+// Image % / video % per D13 — "sessions with ≥ 1 image/video tagged
+// to the same event / village / day, divided by scheduled sessions
+// in scope × date range". Matching on (village_id, event_id, date)
+// rather than session_id because media rows reference events, not
+// sessions directly; multiple sessions on the same event-day share
+// the same photo set in practice.
+async function consolidatedMediaPct(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+  totalSessions: number,
+  kind: 'image' | 'video',
+): Promise<number | null> {
+  if (villageIds.length === 0 || totalSessions === 0) return null;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT s.id) AS hits
+         FROM attendance_session s
+        WHERE s.village_id IN (${placeholders})
+          AND s.date BETWEEN ? AND ?
+          AND EXISTS (
+            SELECT 1 FROM media md
+             WHERE md.village_id = s.village_id
+               AND md.tag_event_id = s.event_id
+               AND md.kind = ?
+               AND md.deleted_at IS NULL
+               AND date(md.captured_at, 'unixepoch') = s.date
+          )`,
+    )
+    .bind(...villageIds, from, to, kind)
+    .first<{ hits: number | null }>();
+  const hits = row?.hits ?? 0;
+  return Math.round((hits / totalSessions) * 100);
+}
+
+// SoM counts for a calendar month. `monthPrefix` = 'YYYY-MM'. Joins
+// achievement to student to re-apply the scope filter — achievements
+// don't carry village_id directly.
+async function consolidatedSomForMonth(
+  db: D1Database,
+  villageIds: number[],
+  monthPrefix: string,
+): Promise<number> {
+  if (villageIds.length === 0) return 0;
+  const placeholders = villageIds.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n
+         FROM achievement a
+         JOIN student st ON st.id = a.student_id
+        WHERE st.village_id IN (${placeholders})
+          AND a.type = 'som'
+          AND a.date LIKE ? || '%'`,
+    )
+    .bind(...villageIds, monthPrefix)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+// Rolling monthly attendance %, ending at the calendar month of
+// `endIso`. Returns `months` points, oldest first. Matches the
+// shape the client's AttendanceTrendInline already consumes.
+async function consolidatedTrend(
+  db: D1Database,
+  villageIds: number[],
+  endIso: string,
+  months: number,
+): Promise<Array<{ month: string; pct: number | null }>> {
+  if (villageIds.length === 0) {
+    return Array.from({ length: months }, (_, i) => ({
+      month: shiftMonth(endIso.slice(0, 7), -(months - 1 - i)),
+      pct: null,
+    }));
+  }
+  const placeholders = villageIds.map(() => '?').join(',');
+  const out: Array<{ month: string; pct: number | null }> = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const month = shiftMonth(endIso.slice(0, 7), -i);
+    const row = await db
+      .prepare(
+        `SELECT SUM(CASE WHEN m.present = 1 THEN 1 ELSE 0 END) AS present,
+                COUNT(m.id) AS total
+           FROM attendance_session s
+           LEFT JOIN attendance_mark m ON m.session_id = s.id
+          WHERE s.village_id IN (${placeholders})
+            AND s.date LIKE ? || '%'`,
+      )
+      .bind(...villageIds, month)
+      .first<{ present: number | null; total: number | null }>();
+    const total = row?.total ?? 0;
+    out.push({
+      month,
+      pct: total === 0 ? null : Math.round(((row?.present ?? 0) / total) * 100),
+    });
+  }
+  return out;
+}
+
+// 'YYYY-MM' → 'YYYY-MM' shifted by `delta` months. Pure calendar
+// arithmetic; avoids Date() drift on month-length mismatches.
+function shiftMonth(yyyyMm: string, delta: number): string {
+  const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
+  const idx = y * 12 + (m - 1) + delta;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12 + 12) % 12;
+  return `${ny}-${String(nm + 1).padStart(2, '0')}`;
+}
+
+async function buildConsolidated(
+  db: D1Database,
+  villageIds: number[],
+  from: string,
+  to: string,
+  skipChart: boolean,
+): Promise<ConsolidatedPayload> {
+  const totalSessions = await sessionsInRange(db, villageIds, from, to);
+  const attendancePct = await consolidatedAttendancePct(db, villageIds, from, to);
+  const avgChildren = await consolidatedAvgChildren(db, villageIds, from, to, totalSessions);
+  const imagePct = await consolidatedMediaPct(db, villageIds, from, to, totalSessions, 'image');
+  const videoPct = await consolidatedMediaPct(db, villageIds, from, to, totalSessions, 'video');
+  const currentMonth = to.slice(0, 7);
+  const prevMonth = shiftMonth(currentMonth, -1);
+  const somCurrent = await consolidatedSomForMonth(db, villageIds, currentMonth);
+  const somPrev = await consolidatedSomForMonth(db, villageIds, prevMonth);
+  const bars = skipChart ? [] : await consolidatedTrend(db, villageIds, to, 6);
+  return {
+    kpis: {
+      attendance_pct: attendancePct,
+      avg_children: avgChildren,
+      image_pct: imagePct,
+      video_pct: videoPct,
+      som_current: somCurrent,
+      som_delta: somCurrent - somPrev,
+    },
+    chart: { bars },
+  };
+}
+
 function parsePeriod(
   from: string | undefined,
   to: string | undefined,
@@ -601,6 +844,12 @@ async function handleDrillDownRequest(
   if ('error' in levelParsed) return err(c, 'bad_request', 400, levelParsed.error);
   const periodParsed = parsePeriod(c.req.query('from'), c.req.query('to'));
   if ('error' in periodParsed) return err(c, 'bad_request', 400, periodParsed.error);
+  // L2.5.3 — opt-in consolidated payload. Only truthy string values
+  // count; `consolidated=0` reads as off. Accept `1` / `true` for
+  // symmetry with the rest of the codebase.
+  const consolidatedParam = c.req.query('consolidated');
+  const wantConsolidated =
+    consolidatedParam === '1' || consolidatedParam === 'true';
 
   const scope = await villageIdsInScope(c.env.DB, user);
   const result = await buildDrillDown(
@@ -614,6 +863,19 @@ async function handleDrillDownRequest(
     );
   }
   result.crumbs = trimCrumbsToScope(user, result.crumbs);
+  if (wantConsolidated) {
+    const effective = await effectiveVillages(
+      c.env.DB, scope, levelParsed.level, levelParsed.id,
+    );
+    if (effective !== 'out_of_scope') {
+      // Skip chart at village leaf — per-session detail lives in
+      // the table, a 6-month rollup of one village is noisy.
+      const skipChart = result.child_level === 'detail';
+      result.consolidated = await buildConsolidated(
+        c.env.DB, effective, periodParsed.from, periodParsed.to, skipChart,
+      );
+    }
+  }
   return result;
 }
 

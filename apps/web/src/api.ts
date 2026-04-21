@@ -281,6 +281,23 @@ export type DrilldownQuery = {
   id?: number | null;
   from?: string;
   to?: string;
+  // L2.5.3 — opt-in consolidated KPI pack + 6-month chart alongside
+  // the metric-specific rows. Off by default so CSV exports and
+  // other callers that only need the table stay cheap.
+  consolidated?: boolean;
+};
+export type ConsolidatedPayload = {
+  kpis: {
+    attendance_pct: number | null;
+    avg_children: number | null;
+    image_pct: number | null;
+    video_pct: number | null;
+    som_current: number;
+    som_delta: number | null;
+  };
+  chart: {
+    bars: Array<{ month: string; pct: number | null }>;
+  };
 };
 export type DrilldownResponse = {
   metric: DashboardMetric;
@@ -292,6 +309,7 @@ export type DrilldownResponse = {
   rows: Array<Array<string | number | null>>;
   drill_ids: Array<number | null>;
   period: { from: string; to: string } | null;
+  consolidated?: ConsolidatedPayload | null;
 };
 
 function drilldownQs(opts: DrilldownQuery): string {
@@ -301,5 +319,6 @@ function drilldownQs(opts: DrilldownQuery): string {
   if (opts.id !== undefined && opts.id !== null) qs.set('id', String(opts.id));
   if (opts.from) qs.set('from', opts.from);
   if (opts.to) qs.set('to', opts.to);
+  if (opts.consolidated) qs.set('consolidated', '1');
   return qs.toString();
 }

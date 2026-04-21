@@ -1,6 +1,7 @@
 # Level 2.5 — Dashboard polish + consolidated fold
 
-**Status:** scoped, not started. Requires L2.4 landed.
+**Status:** landed. L2.5.1 + L2.5.2 + L2.5.3 all shipped in PR #31
+(bundled per operator direction; stacked-PR rule waived for this one).
 
 ## Goal
 
@@ -38,14 +39,16 @@ same page, same components.
 
 ## Sub-level ordering
 
-Each sub-level is a self-contained PR. Land sequentially (not
-stacked) — stacked PRs have misfired once in this repo (PRs #4–#7).
+All three sub-levels shipped together in PR #31 at operator request
+(instead of the originally-planned sequential merges). Each commit
+on the branch maps 1:1 to a sub-level so the stacked fold is still
+reviewable section-by-section.
 
 | Sub | Theme | Status |
 |---|---|---|
-| **L2.5.1** | URL-backed scope + date state, responsive pass baseline | ⬜ |
-| **L2.5.2** | Scope quick-pick search, sibling-jump breadcrumbs, table → card view below `sm`, touch targets ≥ 44 px | ⬜ |
-| **L2.5.3** | §3.6.2 fold — image % / video % / SoM MoM tiles, "View More" per-village drill, cluster-level bar chart | ⬜ |
+| **L2.5.1** | URL-backed scope + date state, responsive pass baseline | ✅ |
+| **L2.5.2** | Scope quick-pick search, sibling-jump breadcrumbs, table → card view below `sm`, touch targets ≥ 44 px | ✅ |
+| **L2.5.3** | §3.6.2 fold — attendance % / avg children / image % / video % / SoM MoM tiles, 6-month trend chart, "View More" per-village drill, scope preserved on metric switch | ✅ |
 
 ## L2.5.1 — URL + responsive baseline
 

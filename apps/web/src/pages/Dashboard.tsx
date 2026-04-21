@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   api,
-  AT_RISK_THRESHOLD_DAYS,
   DASHBOARD_METRICS,
   isDashboardMetric,
   isGeoLevel,
+  type ConsolidatedPayload,
   type DashboardMetric,
   type DrilldownQuery,
   type DrilldownResponse,
   type GeoLevel,
   type GeoSearchHit,
-  type InsightsResponse,
-  type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
@@ -139,7 +137,6 @@ export function Dashboard() {
   );
 
   const [data, setData] = useState<DrilldownResponse | null>(null);
-  const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -175,6 +172,23 @@ export function Dashboard() {
       metric,
       level: pos.level,
       id: pos.id,
+      // Period is always sent for the consolidated pack even when
+      // the metric itself doesn't need it — image %/video %/
+      // attendance % share the drill-down's window (§3.6.2, D13).
+      from,
+      to,
+      consolidated: true,
+    }),
+    [metric, pos.level, pos.id, from, to],
+  );
+  // CSV export mirrors the on-screen table (§3.6.3), so the CSV URL
+  // builds from the metric-only query — without the consolidated
+  // hint and without period params for metrics that don't use them.
+  const csvQuery = useMemo<DrilldownQuery>(
+    () => ({
+      metric,
+      level: pos.level,
+      id: pos.id,
       ...(needsPeriod ? { from, to } : {}),
     }),
     [metric, pos.level, pos.id, from, to, needsPeriod],
@@ -197,19 +211,12 @@ export function Dashboard() {
     reload();
   }, [reload]);
 
-  // Insights ride alongside the table. Same scope as the rest of
-  // the app; no period filter (the insights card is always "now").
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .insights()
-      .then((r) => { if (!cancelled) setInsights(r); })
-      .catch(() => { if (!cancelled) setInsights(null); });
-    return () => { cancelled = true; };
-  }, []);
-
+  // L2.5.3 — switching metric preserves the current scope. The
+  // consolidated KPI pack is identical at any level, so tile
+  // selection just swaps which metric's detail table renders
+  // below; resetting would throw away the drill the user just did.
   function onMetricChange(m: DashboardMetric) {
-    updateUrl({ metric: m, level: fallbackPos.level, id: fallbackPos.id });
+    updateUrl({ metric: m });
   }
 
   function onRowClick(rowIndex: number) {
@@ -261,10 +268,6 @@ export function Dashboard() {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
-
-      {insights && pos.level === fallbackPos.level && pos.id === fallbackPos.id && (
-        <InsightRail insights={insights} />
-      )}
 
       <ScopePicker onPick={onScopePick} />
 
@@ -371,120 +374,167 @@ export function Dashboard() {
       {err && <p className="text-sm text-danger">{err}</p>}
       {loading && !data && <p className="text-muted-fg">{t('common.loading')}</p>}
 
+      {data?.consolidated && data.child_level !== 'detail' && (
+        <ConsolidatedStrip
+          payload={data.consolidated}
+          showViewMore={data.level === 'cluster'}
+        />
+      )}
+
       {data && (
         <DrillDownTable
           data={data}
           onRowClick={onRowClick}
-          csvHref={api.dashboardDrilldownCsvUrl(query)}
+          csvHref={api.dashboardDrilldownCsvUrl(csvQuery)}
         />
       )}
     </div>
   );
 }
 
-function InsightRail({ insights }: { insights: InsightsResponse }) {
-  const withCards =
-    insights.at_risk_villages.length > 0 || insights.top_villages.length > 1;
-  const starsAvailable =
-    insights.stars_current_month.length > 0 ||
-    insights.stars_prev_month.length > 0;
-  const trendAvailable = insights.attendance_trend.some((p) => p.pct !== null);
+// L2.5.3 — consolidated KPI pack + attendance trend at the current
+// scope. Reads its data off the drilldown response so scope + date
+// filters round-trip through a single request (one cache key).
+function ConsolidatedStrip({
+  payload,
+  showViewMore,
+}: {
+  payload: ConsolidatedPayload;
+  showViewMore: boolean;
+}) {
+  const { t } = useI18n();
+  const k = payload.kpis;
+  const deltaChip =
+    k.som_delta === null
+      ? null
+      : k.som_delta === 0
+        ? { glyph: '•', tone: 'text-muted-fg', label: t('dashboard.consolidated.som_flat') }
+        : k.som_delta > 0
+          ? { glyph: '▲', tone: 'text-primary', label: `+${k.som_delta}` }
+          : { glyph: '▼', tone: 'text-danger', label: `${k.som_delta}` };
+  const scrollToTable = () => {
+    const el = document.getElementById('drilldown-table');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   return (
-    <div className="space-y-4">
-      <KpiStrip kpis={insights.kpis} />
-      {trendAvailable && (
-        <AttendanceTrendInline points={insights.attendance_trend} />
+    <section aria-label={t('dashboard.consolidated.aria')} className="space-y-3">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiCard
+          label={t('dashboard.consolidated.attendance')}
+          value={formatPct(k.attendance_pct)}
+        />
+        <KpiCard
+          label={t('dashboard.consolidated.avg_children')}
+          value={k.avg_children === null ? '—' : String(k.avg_children)}
+        />
+        <KpiCard
+          label={t('dashboard.consolidated.image_pct')}
+          value={formatPct(k.image_pct)}
+        />
+        <KpiCard
+          label={t('dashboard.consolidated.video_pct')}
+          value={formatPct(k.video_pct)}
+        />
+        <KpiCard
+          label={t('dashboard.consolidated.som')}
+          value={String(k.som_current)}
+          footer={deltaChip && (
+            <span className={`text-xs ${deltaChip.tone}`}>
+              {deltaChip.glyph} {deltaChip.label}
+            </span>
+          )}
+        />
+      </div>
+      <p className="text-xs text-muted-fg">
+        {t('dashboard.consolidated.denominator_footer')}
+      </p>
+      {payload.chart.bars.some((b) => b.pct !== null) && (
+        <ConsolidatedTrend bars={payload.chart.bars} />
       )}
-      {withCards && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {insights.at_risk_villages.length > 0 && (
-            <AtRiskMini villages={insights.at_risk_villages.slice(0, 5)} />
-          )}
-          {insights.top_villages.length > 1 && (
-            <TopMini villages={insights.top_villages.slice(0, 5)} />
-          )}
+      {showViewMore && (
+        <div>
+          <button
+            type="button"
+            onClick={scrollToTable}
+            className="text-sm text-primary hover:underline px-2 py-2 min-h-[44px]"
+          >
+            {t('dashboard.consolidated.view_more')}
+          </button>
         </div>
       )}
-      {starsAvailable && (
-        <StarsInline
-          current={insights.stars_current_month}
-          previous={insights.stars_prev_month}
-        />
-      )}
-    </div>
-  );
-}
-
-function KpiStrip({ kpis }: { kpis: InsightsResponse['kpis'] }) {
-  const { t } = useI18n();
-  return (
-    <section className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-      {kpis.map((k) => {
-        const isPct =
-          k.label === 'attendance_week' || k.label === 'attendance_month';
-        const trendColor =
-          k.trend === 'up' ? 'text-primary'
-          : k.trend === 'down' ? 'text-danger'
-          : 'text-muted-fg';
-        const arrow =
-          k.trend === 'up' ? '▲'
-          : k.trend === 'down' ? '▼'
-          : k.trend === 'flat' ? '•' : null;
-        return (
-          <div key={k.label} className="bg-card border border-border rounded-lg p-3 flex flex-col gap-0.5">
-            <div className="text-xs text-muted-fg uppercase tracking-wide">
-              {t(`home.kpi.${k.label}`)}
-            </div>
-            <div className="text-xl font-semibold">
-              {k.value}{isPct ? '%' : ''}
-            </div>
-            {k.delta !== null && arrow && (
-              <div className={`text-xs ${trendColor}`}>
-                {arrow} {k.delta > 0 ? '+' : ''}{k.delta}{isPct ? 'pp' : ''}
-              </div>
-            )}
-          </div>
-        );
-      })}
     </section>
   );
 }
 
-function AttendanceTrendInline({
-  points,
+function KpiCard({
+  label,
+  value,
+  footer,
 }: {
-  points: InsightsResponse['attendance_trend'];
+  label: string;
+  value: string;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-0.5">
+      <div className="text-xs text-muted-fg uppercase tracking-wide">{label}</div>
+      <div className="text-xl font-semibold">{value}</div>
+      {footer ? <div>{footer}</div> : null}
+    </div>
+  );
+}
+
+function formatPct(v: number | null): string {
+  return v === null ? '—' : `${v}%`;
+}
+
+function ConsolidatedTrend({
+  bars,
+}: {
+  bars: ConsolidatedPayload['chart']['bars'];
 }) {
   const { t } = useI18n();
-  const max = Math.max(...points.map((p) => p.pct ?? 0), 1);
+  const max = Math.max(...bars.map((b) => b.pct ?? 0), 1);
+  const monthLabel = (yyyyMm: string) => {
+    const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${names[(m - 1) % 12]} ${String(y).slice(2)}`;
+  };
+  // Use a CSS variable so Tailwind's purger keeps the col count
+  // we actually emit (6 for aggregate scopes, 3 in practice at
+  // district/village fallback if we ever shrink the trend window).
+  const cols = Math.min(Math.max(bars.length, 1), 6);
+  const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
   return (
-    <div className="bg-card border border-border rounded-lg p-4 flex flex-wrap items-end gap-4">
-      <div className="min-w-[140px]">
-        <h3 className="text-sm font-semibold">{t('home.trend.title')}</h3>
-        <p className="text-xs text-muted-fg">{t('home.trend.hint')}</p>
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <h3 className="text-sm font-semibold">
+          {t('dashboard.consolidated.trend_title', { n: bars.length })}
+        </h3>
+        <span className="text-xs text-muted-fg">
+          {t('dashboard.consolidated.trend_hint')}
+        </span>
       </div>
-      <div className="flex-1 grid grid-cols-3 gap-4">
-        {points.map((p) => {
-          const height = p.pct === null ? 0 : Math.max(6, Math.round((p.pct / max) * 56));
+      <div className="grid gap-2" style={gridStyle}>
+        {bars.map((b) => {
+          const height = b.pct === null ? 0 : Math.max(6, Math.round((b.pct / max) * 56));
           return (
-            <div key={p.month} className="flex flex-col items-center gap-1">
+            <div key={b.month} className="flex flex-col items-center gap-1">
               <div className="h-16 flex items-end">
-                {p.pct === null ? (
+                {b.pct === null ? (
                   <span className="text-muted-fg text-sm">—</span>
                 ) : (
                   <div
-                    className="w-8 rounded-t bg-primary/70"
+                    className="w-6 sm:w-8 rounded-t bg-primary/70"
                     style={{ height: `${height}px` }}
                     aria-hidden="true"
                   />
                 )}
               </div>
               <div className="text-sm font-semibold">
-                {p.pct === null ? '—' : `${p.pct}%`}
+                {b.pct === null ? '—' : `${b.pct}%`}
               </div>
-              <div className="text-xs text-muted-fg">
-                {formatMonthLabel(p.month)}
-              </div>
+              <div className="text-xs text-muted-fg">{monthLabel(b.month)}</div>
             </div>
           );
         })}
@@ -493,119 +543,11 @@ function AttendanceTrendInline({
   );
 }
 
-function formatMonthLabel(yyyyMm: string): string {
-  const [y, m] = yyyyMm.split('-').map(Number) as [number, number];
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${names[(m - 1) % 12]} ${String(y).slice(2)}`;
-}
-
-function StarsInline({
-  current,
-  previous,
-}: {
-  current: InsightsResponse['stars_current_month'];
-  previous: InsightsResponse['stars_prev_month'];
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{t('home.stars.title')}</h3>
-        <span className="text-xs text-muted-fg">{t('home.stars.hint')}</span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <StarsBlock label={t('home.stars.this_month')} stars={current} />
-        <StarsBlock label={t('home.stars.last_month')} stars={previous} />
-      </div>
-    </div>
-  );
-}
-
-function StarsBlock({
-  label,
-  stars,
-}: {
-  label: string;
-  stars: InsightsResponse['stars_current_month'];
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="space-y-1.5">
-      <div className="text-xs font-medium text-muted-fg uppercase tracking-wide">
-        {label}
-      </div>
-      {stars.length === 0 ? (
-        <p className="text-sm text-muted-fg">{t('home.stars.empty')}</p>
-      ) : (
-        <ul className="space-y-1 text-sm">
-          {stars.slice(0, 5).map((s) => (
-            <li key={s.achievement_id} className="flex items-baseline gap-2">
-              <span aria-hidden="true">⭐</span>
-              <span className="truncate">
-                <span className="font-medium">{s.student_name}</span>
-                <span className="text-muted-fg"> · {s.village_name}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function AtRiskMini({ villages }: { villages: VillageActivity[] }) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-danger/30 rounded-lg p-4 space-y-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-danger">
-          {t('home.at_risk.title')}
-        </h3>
-        <span className="text-xs text-muted-fg">
-          {t('home.at_risk.threshold', { days: AT_RISK_THRESHOLD_DAYS })}
-        </span>
-      </div>
-      <ul className="space-y-1 text-sm">
-        {villages.map((v) => (
-          <li key={v.village_id} className="flex items-baseline justify-between gap-2">
-            <Link to={`/village/${v.village_id}`} className="text-primary hover:underline truncate">
-              {v.village_name}
-            </Link>
-            <span className="text-xs text-muted-fg shrink-0">
-              {v.days_since_last_session === null
-                ? t('home.at_risk.never')
-                : t('home.at_risk.days', { days: v.days_since_last_session })}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function TopMini({ villages }: { villages: VillageActivity[] }) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-      <h3 className="text-sm font-semibold">{t('home.top.title')}</h3>
-      <ul className="space-y-1 text-sm">
-        {villages.map((v, i) => (
-          <li key={v.village_id} className="flex items-baseline justify-between gap-2">
-            <span className="flex items-baseline gap-2 min-w-0">
-              <span className="text-xs text-muted-fg w-4 shrink-0">{i + 1}</span>
-              <Link to={`/village/${v.village_id}`} className="text-primary hover:underline truncate">
-                {v.village_name}
-              </Link>
-            </span>
-            <span className="text-xs font-medium shrink-0">
-              {v.attendance_pct_week}%
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// L2.5.3 — the home-page engagement rail (at-risk, top, stars) no
+// longer lives on the Dashboard. The scope-following ConsolidatedStrip
+// covers KPIs + trend at every drill level; engagement signals keep
+// their permanent home on `/` (Home.tsx), avoiding the duplication a
+// pre-L2.5.3 dashboard had at home-root.
 
 function TileButton({
   active,
@@ -653,7 +595,7 @@ function DrillDownTable({
     return cell === null || cell === undefined ? '' : String(cell);
   };
   return (
-    <div className="bg-card border border-border rounded overflow-hidden">
+    <div id="drilldown-table" className="bg-card border border-border rounded overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b border-border text-sm">
         <span className="text-muted-fg">
           {data.period
