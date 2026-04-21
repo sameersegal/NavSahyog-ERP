@@ -24,9 +24,12 @@ export function ScopePicker({ onPick }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Debounced search. Cancels the previous fetch by tracking the
-  // latest query string; a stale callback that finishes after a
-  // newer one has started writes nothing.
+  // Debounced search. `cancelled` lives at the effect scope (not
+  // inside the setTimeout callback) so the useEffect cleanup can
+  // actually mark an in-flight fetch as stale after the timer has
+  // already fired. Otherwise a slow `geoSearch` that resolves on
+  // an outdated query still calls `setResults` / `setLoading` and
+  // either overwrites newer results or fires after unmount.
   useEffect(() => {
     const q = query.trim();
     if (q.length < MIN_QUERY) {
@@ -35,16 +38,18 @@ export function ScopePicker({ onPick }: Props) {
       return;
     }
     setLoading(true);
+    let cancelled = false;
     const handle = window.setTimeout(() => {
-      let cancelled = false;
       api
         .geoSearch(q)
         .then((r) => { if (!cancelled) setResults(r.results); })
         .catch(() => { if (!cancelled) setResults([]); })
         .finally(() => { if (!cancelled) setLoading(false); });
-      return () => { cancelled = true; };
     }, DEBOUNCE_MS);
-    return () => window.clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
   }, [query]);
 
   // Click-outside dismisses the popover. Keyboard Esc handled on
