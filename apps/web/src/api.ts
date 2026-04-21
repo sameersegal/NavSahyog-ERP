@@ -41,6 +41,8 @@ export {
   AT_RISK_THRESHOLD_DAYS,
   DASHBOARD_METRICS,
   GEO_LEVELS,
+  isDashboardMetric,
+  isGeoLevel,
 } from '@navsahyog/shared';
 
 import type {

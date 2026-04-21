@@ -197,6 +197,9 @@
   "dashboard.preset.this_month": "This month",
   "dashboard.preset.last_month": "Last month",
   "dashboard.preset.custom": "Custom",
+  "dashboard.single_day": "Single day",
+  "dashboard.date.from": "From date",
+  "dashboard.date.to": "To date",
 
   "achievements.title": "Achievements",
   "achievements.add": "Add achievement",

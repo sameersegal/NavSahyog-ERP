@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   api,
   AT_RISK_THRESHOLD_DAYS,
   DASHBOARD_METRICS,
+  isDashboardMetric,
+  isGeoLevel,
   type DashboardMetric,
   type DrilldownQuery,
   type DrilldownResponse,
@@ -75,21 +77,96 @@ function detectPreset(from: string, to: string): PresetKey {
   return 'custom';
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// URL → state. `level`/`id` parse together; unrecognised combinations
+// fall back to the user's scope floor. Bad `id` for a valid level
+// still falls back — we'd rather show the user's own scope than a
+// silent "india" for a cluster admin who followed a broken link.
+function readStateFromUrl(
+  params: URLSearchParams,
+  fallbackPos: Position,
+): { metric: DashboardMetric; pos: Position; from: string; to: string } {
+  const rawMetric = params.get('metric');
+  const metric: DashboardMetric = isDashboardMetric(rawMetric) ? rawMetric : 'children';
+
+  const rawLevel = params.get('level');
+  const rawId = params.get('id');
+  let pos: Position = fallbackPos;
+  if (isGeoLevel(rawLevel)) {
+    if (rawLevel === 'india') {
+      pos = { level: 'india', id: null };
+    } else {
+      const n = rawId === null ? NaN : Number(rawId);
+      if (Number.isInteger(n) && n > 0) {
+        pos = { level: rawLevel, id: n };
+      }
+    }
+  }
+
+  const rawFrom = params.get('from');
+  const rawTo = params.get('to');
+  const from = rawFrom && ISO_DATE_RE.test(rawFrom) ? rawFrom : firstOfMonthIst();
+  const to = rawTo && ISO_DATE_RE.test(rawTo) ? rawTo : todayIstDate();
+
+  return { metric, pos, from, to };
+}
+
 export function Dashboard() {
   const { t } = useI18n();
   const { user } = useAuth();
-  const startingPos = user ? defaultPosition(user) : { level: 'india' as GeoLevel, id: null };
-  const [metric, setMetric] = useState<DashboardMetric>('children');
-  const [pos, setPos] = useState<Position>(startingPos);
-  const [from, setFrom] = useState(firstOfMonthIst());
-  const [to, setTo] = useState(todayIstDate());
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const fallbackPos: Position = user
+    ? defaultPosition(user)
+    : { level: 'india', id: null };
+
+  // URL is the source of truth for everything the server call
+  // consumes. Re-deriving on every render is cheap (small param set)
+  // and means refresh / tab-switch restores state without extra
+  // plumbing.
+  const { metric, pos, from, to } = readStateFromUrl(searchParams, fallbackPos);
+  const needsPeriod = metric === 'attendance' || metric === 'achievements';
+  const preset = detectPreset(from, to);
+
+  // Visual-only: when from === to we render one input + "Single day"
+  // label. A range with identical endpoints is still a valid range,
+  // so the toggle is about presentation, not data.
+  const [rangeMode, setRangeMode] = useState<'range' | 'single'>(
+    from === to ? 'single' : 'range',
+  );
+
   const [data, setData] = useState<DrilldownResponse | null>(null);
   const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const needsPeriod = metric === 'attendance' || metric === 'achievements';
-  const preset = detectPreset(from, to);
+  const updateUrl = useCallback(
+    (patch: {
+      metric?: DashboardMetric;
+      level?: GeoLevel;
+      id?: number | null;
+      from?: string;
+      to?: string;
+    }) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (patch.metric !== undefined) next.set('metric', patch.metric);
+          if (patch.level !== undefined) next.set('level', patch.level);
+          if (patch.id !== undefined) {
+            if (patch.id === null) next.delete('id');
+            else next.set('id', String(patch.id));
+          }
+          if (patch.from !== undefined) next.set('from', patch.from);
+          if (patch.to !== undefined) next.set('to', patch.to);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const query = useMemo<DrilldownQuery>(
     () => ({
@@ -130,35 +207,56 @@ export function Dashboard() {
   }, []);
 
   function onMetricChange(m: DashboardMetric) {
-    setMetric(m);
-    setPos(startingPos);
+    updateUrl({ metric: m, level: fallbackPos.level, id: fallbackPos.id });
   }
 
   function onRowClick(rowIndex: number) {
     if (!data || data.child_level === 'detail' || data.child_level === null) return;
     const id = data.drill_ids[rowIndex];
     if (id === null || id === undefined) return;
-    setPos({ level: data.child_level, id });
+    updateUrl({ level: data.child_level, id });
   }
 
   function onCrumbClick(index: number) {
     if (!data) return;
     const c = data.crumbs[index];
     if (!c) return;
-    setPos({ level: c.level, id: c.id });
+    updateUrl({ level: c.level, id: c.id });
   }
 
   function onPreset(key: PresetKey) {
     const next = applyPreset(key, from, to);
-    setFrom(next.from);
-    setTo(next.to);
+    updateUrl({ from: next.from, to: next.to });
+    setRangeMode(next.from === next.to ? 'single' : 'range');
+  }
+
+  function onFromChange(v: string) {
+    if (rangeMode === 'single') {
+      updateUrl({ from: v, to: v });
+    } else {
+      updateUrl({ from: v });
+    }
+  }
+
+  function onToChange(v: string) {
+    updateUrl({ to: v });
+  }
+
+  function toggleRangeMode() {
+    if (rangeMode === 'single') {
+      setRangeMode('range');
+    } else {
+      // collapse to single: keep `from`, sync `to`.
+      updateUrl({ to: from });
+      setRangeMode('single');
+    }
   }
 
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
 
-      {insights && pos.level === startingPos.level && pos.id === startingPos.id && (
+      {insights && pos.level === fallbackPos.level && pos.id === fallbackPos.id && (
         <InsightRail insights={insights} />
       )}
 
@@ -195,20 +293,37 @@ export function Dashboard() {
             </button>
           ))}
           {preset === 'custom' && (
-            <div className="flex items-center gap-2 text-sm ml-1">
-              <input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="bg-card text-fg border border-border rounded px-2 py-1"
-              />
-              <span className="text-muted-fg">–</span>
-              <input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="bg-card text-fg border border-border rounded px-2 py-1"
-              />
+            <div className="w-full sm:ml-1 sm:w-auto flex flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="flex items-center gap-1.5 text-xs text-muted-fg select-none">
+                <input
+                  type="checkbox"
+                  checked={rangeMode === 'single'}
+                  onChange={toggleRangeMode}
+                  className="h-4 w-4 accent-primary"
+                />
+                {t('dashboard.single_day')}
+              </label>
+              <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center">
+                <input
+                  type="date"
+                  aria-label={t('dashboard.date.from')}
+                  value={from}
+                  onChange={(e) => onFromChange(e.target.value)}
+                  className="bg-card text-fg border border-border rounded px-2 py-1 w-full sm:w-auto"
+                />
+                {rangeMode === 'range' && (
+                  <>
+                    <span className="hidden sm:inline text-muted-fg" aria-hidden="true">–</span>
+                    <input
+                      type="date"
+                      aria-label={t('dashboard.date.to')}
+                      value={to}
+                      onChange={(e) => onToChange(e.target.value)}
+                      className="bg-card text-fg border border-border rounded px-2 py-1 w-full sm:w-auto"
+                    />
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>

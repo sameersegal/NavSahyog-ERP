@@ -197,6 +197,9 @@
   "dashboard.preset.this_month": "इस महीने",
   "dashboard.preset.last_month": "पिछला महीना",
   "dashboard.preset.custom": "कस्टम",
+  "dashboard.single_day": "एक दिन",
+  "dashboard.date.from": "प्रारंभ तिथि",
+  "dashboard.date.to": "अंत तिथि",
 
   "achievements.title": "उपलब्धियाँ",
   "achievements.add": "उपलब्धि जोड़ें",
