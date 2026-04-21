@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 /*
-  Render a donor-update 1-pager from a JSON data file + the template
-  that ships with this skill. Produces a PDF and a PNG preview.
+  Render a donor-update 1-pager from a JSON data file + one of the
+  theme templates that ship with this skill. Produces a PDF and a
+  PNG preview.
 
   Usage:
     node .claude/skills/donor-update/references/render.mjs \
       <data.json> [--theme=<name>] [--out=<dir>] [--keep-html]
 
-  The data file shape matches references/examples/belur-q1-2026.json.
-  SKILL.md (one level up) produces and refines these JSON files; this
-  script only renders.
+  The theme (`quarterly` | `milestone` | `celebration`) determines
+  which template in themes/<name>.html renders. `--theme` on the
+  command line overrides the JSON's `theme` field. Each template
+  expects its own data shape — see the matching example JSON in
+  examples/.
 
   Kept deliberately small:
     - No template engine dependency. Mustache-style {{path}} and
       {{#each arr}}...{{/each}} / {{#if key}}...{{/if}} cover every
-      construct the template uses.
+      construct the templates use.
     - Playwright is the only external requirement; it's already in the
       root devDependencies. On first run: `pnpm exec playwright install chromium`.
 */
@@ -82,6 +85,27 @@ function expandSimple(tmpl, data) {
   });
 }
 
+// Walk the data tree and absolutise any `url` property on an object.
+// Mutates in place. Non-strings, absolute URLs, and empty values are
+// left alone. Arrays and nested objects recurse.
+function resolveUrls(node, dataDir) {
+  if (node == null) return;
+  if (Array.isArray(node)) {
+    for (const item of node) resolveUrls(item, dataDir);
+    return;
+  }
+  if (typeof node !== 'object') return;
+  for (const [k, v] of Object.entries(node)) {
+    if (k === 'url' && typeof v === 'string' && v.length > 0) {
+      if (!/^(https?:|file:)/.test(v) && !v.startsWith('/')) {
+        node[k] = 'file://' + path.resolve(dataDir, v);
+      }
+    } else {
+      resolveUrls(v, dataDir);
+    }
+  }
+}
+
 function render(tmpl, data) {
   // Order matters: resolve nested control flow first, then simple
   // substitutions. Each pass is stable because the expanders match
@@ -129,32 +153,33 @@ async function main() {
   };
   if (args.flags.theme) merged.theme = args.flags.theme;
 
-  // Resolve media URLs relative to the *data file's* directory and
-  // rewrite them as `file://` absolute URLs. This way a JSON sitting
-  // at examples/foo/foo.json can say `media/bar.jpg` to mean
-  // examples/foo/media/bar.jpg, and the rendered HTML (written into
-  // references/.render.html) still resolves it correctly.
+  // Resolve every `url` key anywhere in the data tree relative to the
+  // *data file's* directory and rewrite them as `file://` absolute
+  // URLs. Covers media[].url, hero.url, mosaic[].url, and anything
+  // future templates introduce without touching the renderer.
   // Absolute URLs (http/https/file, or starting with `/`) pass through.
-  if (Array.isArray(merged.media)) {
-    const dataDir = path.dirname(dataAbs);
-    merged.media = merged.media.map((item) => {
-      const u = item?.url;
-      if (!u) return item;
-      if (/^(https?:|file:)/.test(u) || u.startsWith('/')) return item;
-      const abs = path.resolve(dataDir, u);
-      return { ...item, url: 'file://' + abs };
-    });
-  }
+  const dataDir = path.dirname(dataAbs);
+  resolveUrls(merged, dataDir);
 
-  const tmpl = await fs.readFile(path.join(templateDir, 'template.html'), 'utf8');
+  // The theme picks the template file. All three sit in themes/ and
+  // link their own CSS (base.css + themes/<name>.css) via relative
+  // paths; the renderer is theme-agnostic beyond the filename.
+  const tmplPath = path.join(templateDir, 'themes', `${merged.theme}.html`);
+  const tmpl = await fs.readFile(tmplPath, 'utf8').catch((e) => {
+    if (e.code === 'ENOENT') {
+      throw new Error(
+        `Unknown theme "${merged.theme}". Expected a template at ${path.relative(process.cwd(), tmplPath)}.`,
+      );
+    }
+    throw e;
+  });
   const html = render(tmpl, merged);
 
-  // We render the template from its own directory so relative asset
-  // paths (styles.css, themes/*.css, assets/*.svg, media/*.jpg)
-  // resolve without surgery. Write the rendered HTML into a sibling
-  // render.html and clean it up on success. Leaving it on failure
-  // makes debugging the output trivial — just open it in a browser.
-  const renderHtml = path.join(templateDir, '.render.html');
+  // Write the rendered HTML next to its template (inside themes/) so
+  // the template's own `<link href="../base.css">` etc. resolve
+  // correctly in the browser. Clean up on success; keep on failure
+  // so an operator can open .render.html in a browser to debug.
+  const renderHtml = path.join(templateDir, 'themes', '.render.html');
   await fs.writeFile(renderHtml, html);
 
   const browser = await chromium.launch();

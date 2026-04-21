@@ -18,19 +18,39 @@ are relative to that directory.
 | File | Role | What the agent does with it |
 |---|---|---|
 | `SKILL.md` | this document | follow the Procedure below |
-| `references/render.mjs` | **execute** — HTML→PDF+PNG via Playwright | run via `node …/render.mjs <data.json>`; do not edit |
-| `references/template.html` | the layout (mustache `{{…}}` slots) | do not edit; it's the target the data JSON fills |
-| `references/styles.css` | theme-agnostic geometry | edit only if the operator asks for a structural tweak |
-| `references/themes/{quarterly,celebration,milestone}.css` | colour + tone variants | pick one via `--theme=<name>`; author a new file here only if the operator asks for a fresh theme |
-| `references/assets/logo.svg` | NavSahyog placeholder mark | replace with the real logo before external release (flag U7-adjacent) |
-| `references/assets/photo-placeholder.svg` | stand-in when real media bytes aren't fetched | leave as-is; real runs overwrite `media[].url` with a local file path |
-| `references/examples/belur-q1-2026.json` | **canonical data-shape reference** | **read this first** before assembling a new data JSON |
-| `references/examples/belur-q1-2026.preview.png` | visual of what a good render looks like | look at this before showing your own preview |
+| `references/render.mjs` | **execute** — HTML→PDF+PNG via Playwright | `node …/render.mjs <data.json>`; do not edit |
+| `references/base.css` | shared page geometry + NavSahyog brand tokens | edit only when re-theming the whole brand |
+| `references/themes/quarterly.html` + `quarterly.css` | **layout 1** — 5-stat strip + story + 3-photo grid; data-forward | read the matching example before writing JSON; edit CSS only for structural tweaks |
+| `references/themes/milestone.html` + `milestone.css` | **layout 2** — dominant hero photo + single achievement headline; formal | same |
+| `references/themes/celebration.html` + `celebration.css` | **layout 3** — saffron hero band + 2×2 photo mosaic + wins list; festive | same |
+| `references/assets/logo.png` | real NavSahyog wordmark | leave as-is; every theme consumes it |
+| `references/assets/photo-placeholder.svg` | fallback when no real bytes | used only when `/api/media/raw/:uuid` has no object behind it |
+| `references/assets/photos/*.jpg` | library of NavSahyog stock photos (running, Kho-Kho, reading circle, group portrait) | reference these when a village has no consented photos yet |
+| `references/examples/belur-q1-2026.quarterly.json` | **canonical quarterly shape** | read first if `theme=quarterly` |
+| `references/examples/belur-kho-kho.milestone.json` | **canonical milestone shape** | read first if `theme=milestone` |
+| `references/examples/belur-annual-2026.celebration.json` | **canonical celebration shape** | read first if `theme=celebration` |
+| `references/examples/*.preview.png` | rendered reference previews | compare your output to the matching one before reporting done |
 | `references/README.md` | longer human-facing notes | skim if a step is unclear |
 
 If the operator mentions a file under `references/` directly
-("tweak the celebration theme"), edit it in place and re-render;
-don't clone it outside the skill.
+("tweak the celebration palette", "make the milestone hero taller"),
+edit it in place and re-render; don't clone it outside the skill.
+
+## Choosing a theme
+
+Each theme is a **different layout**, not just a different palette.
+Pick first, then write the JSON for that shape.
+
+| Theme | Layout feel | When to use |
+|---|---|---|
+| `quarterly` | header · 5-stat strip · story · highlights strip · 3-photo grid · footer | routine period update (a quarter, a term, rolling 90 days). Data-forward. **Default when in doubt.** |
+| `milestone` | green header band · **big hero photo** · achievement headline · pullquote · short story · 3 supporting stats · footer | one standout event: a district medal, a graduation, a streak milestone, a first-ever. The photo does the work. |
+| `celebration` | **warm saffron hero band** · 2×2 photo mosaic · wins list (5+ dated entries) · closer quote · footer | annual recap, festival, cluster-level celebration. Joy over data; 4+ photos, 5+ discrete wins. |
+
+Map operator phrasing:
+- "quarterly update" / "this term" / "last 90 days" → `quarterly`
+- "celebrate this win" / "district gold" / "one-pager about X" → `milestone`
+- "annual report" / "year-in-review" / "wrap-up" → `celebration`
 
 ## Inputs
 
@@ -43,7 +63,7 @@ something is missing, ask once — don't guess.
 | `from`, `to` | yes | ISO dates bounding the update window (e.g. calendar quarter, rolling 90 days — whatever the operator specifies). |
 | `channel` | yes | `whatsapp` or `email`. Governs length and tone of the markdown draft. |
 | `pdf` | no | `true` \| `false`. Default: `true`. When true, also render the 1-pager PDF from `references/` (step 8). |
-| `theme` | no | `quarterly` (default), `celebration`, or `milestone`. Maps to `references/themes/<name>.css`. Free-text prompts ("festive", "formal", …) are mapped to the closest preset. |
+| `theme` | no | `quarterly` (default), `milestone`, or `celebration`. **Picks both the layout and the visual style** — each theme has a different HTML template and a different data shape. See "Choosing a theme" above. Free-text prompts ("festive", "formal") are mapped to the closest preset. |
 | `tone` | no | Free-text hint (e.g. "warm", "formal", "data-heavy"). Default: warm-but-factual. |
 | `donor_name` | no | If given, address the message to them. Otherwise produce a generic draft. |
 | `length` | no | `short` (≤ 120 words, WhatsApp default), `medium` (≤ 300, email default), `long` (≤ 600). |
@@ -162,17 +182,30 @@ So the operator can sanity-check coverage.
 Skip this step if the operator asked for markdown only. All paths
 in this step are relative to the repo root.
 
-**Before you write the JSON, read
-`.claude/skills/donor-update/references/examples/belur-q1-2026.json`**
-— it's the canonical shape. Copy its structure verbatim (same keys,
-same ordering, same optional fields); change only the values.
+**Pick the theme first** (see "Choosing a theme" above). Then
+**read the matching example JSON** — it's the canonical shape for
+that layout:
 
-1. **Pick a slug** like `<village-lowercased>-<window-slug>`, e.g.
-   `belur-q1-2026`.
+- `theme=quarterly`   → `references/examples/belur-q1-2026.quarterly.json`
+- `theme=milestone`   → `references/examples/belur-kho-kho.milestone.json`
+- `theme=celebration` → `references/examples/belur-annual-2026.celebration.json`
 
-2. **Create a media folder** next to where the JSON will live and
-   download the three selected items into it. With a valid session
-   cookie (the same one used for steps 2–3):
+Copy its structure verbatim (same keys, same ordering, same optional
+fields); change only the values. **Data shapes differ per theme** —
+don't assemble a `quarterly`-shaped JSON for a `milestone` render.
+
+1. **Pick a slug** like `<village>-<window-or-event>.<theme>`, e.g.
+   `belur-q1-2026.quarterly`, `belur-kho-kho.milestone`.
+
+2. **Prepare photos.** Count depends on the theme:
+
+   | Theme | Photo count | Where they go in the JSON |
+   |---|---|---|
+   | quarterly | 3 | `media[]` |
+   | milestone | 1 (hero) | `hero.url` |
+   | celebration | 4 | `mosaic[]` |
+
+   Download from live API when possible:
    ```
    mkdir -p .claude/skills/donor-update/references/examples/<slug>/media
    for u in <uuid1> <uuid2> <uuid3>; do
@@ -181,27 +214,34 @@ same ordering, same optional fields); change only the values.
        -o .claude/skills/donor-update/references/examples/<slug>/media/$u
    done
    ```
-   If any fetched file is suspiciously small (< 1 KiB is usually
-   a JSON error body, not an image), the media row has no R2 bytes
-   behind it — fall back to `../assets/photo-placeholder.svg` for
-   that slot and note it in the sources block.
+   If a fetched file is < 1 KiB it's probably a JSON error, not an
+   image. Fall back to a photo from
+   `references/assets/photos/<file>.jpg` — reference them as
+   `../assets/photos/<file>.jpg` from the example JSON — and note
+   in the sources block that the village has no consented photos
+   yet.
 
-3. **Assemble the data JSON.** Populate every required key; include
-   `highlights` and `donor.name` when you have them. Key rules:
-   - `stats[]` — 4 or 5 tiles. More overflows the strip.
-   - `story.body` — 2 paragraphs, ~150–200 words total, separated
-     by `\n\n`. Short bodies leave the page feeling thin.
-   - `story.quote` — at most one sentence, verbatim from an
-     achievement description; set `story.attribution` to
-     `"<Name>, <role>, <month year>"`.
-   - `highlights[]` — exactly 3 kicker/body pairs (if used).
-   - `media[]` — exactly 3 items. `url` is relative to the JSON
-     file's directory (e.g. `<slug>/media/<uuid>`) or an absolute
-     `file://`/`http(s)://`. `caption` is a date + one factual
-     clause; no invented descriptions.
-   - `theme` — the preset name, not free text. Map the operator's
-     vibe word to the nearest of: `quarterly` | `celebration` |
-     `milestone`.
+3. **Assemble the data JSON.** Keys vary by theme (consult the
+   matching example). Rules common to all three:
+   - `theme` — the preset name exactly (`quarterly`, `milestone`,
+     or `celebration`).
+   - Relative image URLs resolve against the JSON file's directory;
+     absolute `file://` / `http(s)://` URLs pass through.
+   - `donor.name` surfaces "Made for <name>" in the footer; omit
+     for a generic render.
+   - `footer.tagline` / `footer.org_url` / `footer.contact` are
+     defaulted when absent.
+
+   Per-theme extras:
+   - **quarterly** — `stats[]` 4–5 tiles, `story.body` 2 paragraphs
+     (~150–200 words, `\n\n` between), `story.quote` + attribution,
+     `highlights[]` exactly 3 kicker/body pairs, `media[]` exactly 3.
+   - **milestone** — `hero.url`, `milestone.{badge,title,child,date}`,
+     optional `story.quote` + attribution, `story.body` one paragraph
+     (~100 words), `stats[]` exactly 3.
+   - **celebration** — `hero.{title,subtitle}`, `mosaic[]` exactly 4
+     with captions, `wins[]` 5–8 dated lines, optional
+     `closer.{quote,attribution}`.
 
 4. **Write the JSON** to
    `.claude/skills/donor-update/references/examples/<slug>.json`.
@@ -215,15 +255,17 @@ same ordering, same optional fields); change only the values.
      .claude/skills/donor-update/references/examples/<slug>.json \
      [--theme=<name>]
    ```
-   The renderer writes `<slug>.pdf` and `<slug>.preview.png` next
-   to the JSON. Add `--keep-html` if a render looks wrong — it
-   leaves `references/.render.html` for inspection.
+   The renderer picks `references/themes/<theme>.html` based on the
+   JSON's `theme` (or `--theme`) and writes `<slug>.pdf` +
+   `<slug>.preview.png` next to the JSON. Add `--keep-html` if a
+   render looks wrong — it leaves `references/themes/.render.html`
+   for inspection.
 
 6. **Show the operator** the preview PNG (via the Read tool so the
    image actually renders in the session) and the paths to both
-   files. Compare to
-   `references/examples/belur-q1-2026.preview.png` — the layout
-   should feel the same.
+   files. Compare to the matching reference preview
+   (`references/examples/<slug-of-same-theme>.preview.png`) — your
+   render should hold the same rhythm.
 
 ### 9. Iterate
 
@@ -233,12 +275,14 @@ iteration is a JSON edit + a render (~2 s).
 
 | Operator says | Agent does |
 |---|---|
-| "Use celebration theme" | Re-run step 8.5 with `--theme=celebration`. JSON untouched. |
-| "Swap media 2 for item 5" | Edit `media[1]` in the JSON (download the new item into `<slug>/media/` if needed), re-run the renderer (step 8 sub-step 5). |
+| "Try the celebration layout instead" / "switch to milestone" | **Regenerate the JSON for the new shape** — the data differs per theme. Re-read the matching example, re-shape the existing content (e.g. collapse `stats[]`+`highlights[]`+`media[]` into `wins[]`+`mosaic[]` for celebration), save as a new file with the matching slug, re-render. |
+| "Use a warmer palette in the quarterly" | Edit `references/themes/quarterly.css` directly; don't change the layout. Re-render — the existing JSON is fine. |
+| "Swap photo 2 for item 5" | Edit the photo slot in the JSON (download the new item into `<slug>/media/` if needed), re-run the renderer (step 8 sub-step 5). For milestone that's `hero.url`; for quarterly `media[1].url`; for celebration `mosaic[1].url`. |
 | "Make the story warmer" / "Tighten paragraph 2" | Rewrite `story.body` only, re-run the renderer (step 8 sub-step 5). |
-| "Add an Activity of the Quarter highlight" | Update `highlights[]` (3 items max — more overflows the strip), re-run the renderer (step 8 sub-step 5). |
-| "Try a new theme called <X>" | Author `references/themes/<X>.css` using an existing theme as template, then `--theme=<X>`. |
-| "Logo is wrong" | Replace `references/assets/logo.svg` with the provided file; theme CSS consumes it automatically. |
+| "Add another win" (celebration) | Append to `wins[]` — up to ~8 before the list overflows. Re-render. |
+| "Add an Activity of the Quarter highlight" (quarterly) | Update `highlights[]` (3 items max — more overflows the strip), re-render. |
+| "Try a new theme called <X>" | Author `references/themes/<X>.html` + `references/themes/<X>.css` using the closest existing theme as template. Also create a matching example JSON. Then `theme: "<X>"`. |
+| "Logo is wrong" | Replace `references/assets/logo.png` with the provided file; every theme consumes it automatically. |
 
 ## Output rules
 

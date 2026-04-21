@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="{{lang}}">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{village.name}} — {{milestone.title}}</title>
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="stylesheet" href="milestone.css" />
+  </head>
+  <body>
+    <section class="page page-milestone">
+      <header class="brand">
+        <div class="logo">
+          <img src="../assets/logo.png" alt="NavSahyog Foundation" />
+        </div>
+        <div class="title">
+          <div class="village">{{village.name}}</div>
+          <div class="sub">{{village.cluster}}</div>
+        </div>
+        <div class="window">{{window.label}}</div>
+      </header>
+
+      <figure class="hero">
+        <img src="{{hero.url}}" alt="{{hero.caption}}" />
+      </figure>
+
+      <section class="milestone">
+        <div class="milestone-badge">{{milestone.badge}}</div>
+        <h1 class="milestone-title">{{milestone.title}}</h1>
+        <div class="milestone-meta">
+          <span class="milestone-child">{{milestone.child}}</span>
+          <span class="sep">·</span>
+          <span class="milestone-date">{{milestone.date}}</span>
+        </div>
+      </section>
+
+      {{#if story.quote}}
+      <blockquote class="pullquote">
+        <span class="quote-mark">“</span>{{story.quote}}<span class="quote-mark">”</span>
+        <footer class="pullquote-attr">— {{story.attribution}}</footer>
+      </blockquote>
+      {{/if}}
+
+      <div class="story-body">{{story.body}}</div>
+
+      <section class="stats">
+        {{#each stats}}
+        <div class="stat">
+          <div class="stat-value">{{value}}</div>
+          <div class="stat-label">{{label}}</div>
+        </div>
+        {{/each}}
+      </section>
+
+      <footer class="footer">
+        <div class="footer-main">
+          {{footer.tagline}}
+          {{#if donor.name}}<span class="donor-line">Made for {{donor.name}}.</span>{{/if}}
+        </div>
+        <div class="footer-meta">
+          <span>{{footer.org_url}}</span>
+          <span class="sep">·</span>
+          <span>{{footer.contact}}</span>
+        </div>
+      </footer>
+    </section>
+  </body>
+</html>

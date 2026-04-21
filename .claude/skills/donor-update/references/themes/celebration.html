@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="{{lang}}">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{village.name}} — {{hero.title}}</title>
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="stylesheet" href="celebration.css" />
+  </head>
+  <body>
+    <section class="page page-celebration">
+      <header class="hero-band">
+        <div class="logo">
+          <img src="../assets/logo.png" alt="NavSahyog Foundation" />
+        </div>
+        <div class="hero-text">
+          <h1 class="hero-title">{{hero.title}}</h1>
+          <div class="hero-subtitle">{{hero.subtitle}}</div>
+        </div>
+        <div class="hero-stamp">{{window.label}}</div>
+      </header>
+
+      <section class="mosaic">
+        {{#each mosaic}}
+        <figure class="mosaic-item mosaic-item-{{@index}}">
+          <img src="{{url}}" alt="{{caption}}" />
+          {{#if caption}}<figcaption>{{caption}}</figcaption>{{/if}}
+        </figure>
+        {{/each}}
+      </section>
+
+      <section class="wins">
+        <h2 class="wins-title">Wins of the year</h2>
+        <ul class="wins-list">
+          {{#each wins}}
+          <li class="win">
+            <span class="win-date">{{date}}</span>
+            <span class="win-text">{{text}}</span>
+          </li>
+          {{/each}}
+        </ul>
+      </section>
+
+      {{#if closer.quote}}
+      <blockquote class="closer">
+        <span class="quote-mark">“</span>{{closer.quote}}<span class="quote-mark">”</span>
+        {{#if closer.attribution}}<footer class="closer-attr">— {{closer.attribution}}</footer>{{/if}}
+      </blockquote>
+      {{/if}}
+
+      <footer class="footer">
+        <div class="footer-main">
+          {{footer.tagline}}
+          {{#if donor.name}}<span class="donor-line">Made for {{donor.name}}.</span>{{/if}}
+        </div>
+        <div class="footer-meta">
+          <span>{{footer.org_url}}</span>
+          <span class="sep">·</span>
+          <span>{{footer.contact}}</span>
+        </div>
+      </footer>
+    </section>
+  </body>
+</html>
