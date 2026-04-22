@@ -6,22 +6,24 @@ import { isIsoDate, todayIstDate } from '../lib/time';
 import { err } from '../lib/errors';
 import { csvFilename, toCsv, type CsvCell } from '../lib/csv';
 import {
+  breadcrumbFor,
   childLevelOf,
+  effectiveVillages,
   GEO_JOIN,
   GEO_LEVELS,
   isGeoLevel,
   LEVEL_ALIAS,
+  villagesUnder,
   type GeoLevel,
   type NonRootLevel,
 } from '../lib/geo';
 import {
   DASHBOARD_METRICS,
   isDashboardMetric as isMetric,
+  type BreadcrumbCrumb as Crumb,
   type DashboardMetric as Metric,
 } from '@navsahyog/shared';
 import type { Bindings, SessionUser, Variables } from '../types';
-
-type Crumb = { level: GeoLevel; id: number | null; name: string };
 
 type DrillResult = {
   metric: Metric;
@@ -77,72 +79,6 @@ dashboard.use('*', requireAuth);
 // gives us 'YYYY-MM-DD' in IST; we just clamp the day to 01.
 function firstOfMonthIst(): string {
   return todayIstDate().slice(0, 7) + '-01';
-}
-
-// Villages under (level, id) — no scope filter yet. For india, no
-// filter at all.
-async function villagesUnder(
-  db: D1Database,
-  level: GeoLevel,
-  id: number | null,
-): Promise<number[]> {
-  if (level === 'india') {
-    const rs = await db.prepare('SELECT id FROM village').all<{ id: number }>();
-    return rs.results.map((r) => r.id);
-  }
-  if (id === null) return [];
-  const alias = LEVEL_ALIAS[level];
-  const sql = `SELECT v.id AS id ${GEO_JOIN} WHERE ${alias}.id = ?`;
-  const rs = await db.prepare(sql).bind(id).all<{ id: number }>();
-  return rs.results.map((r) => r.id);
-}
-
-// Breadcrumb for (level, id). Always starts with India and walks
-// down to the requested level. Used by the UI to render the trail
-// and by the CSV header row.
-async function breadcrumbFor(
-  db: D1Database,
-  level: GeoLevel,
-  id: number | null,
-): Promise<Crumb[]> {
-  const crumbs: Crumb[] = [{ level: 'india', id: null, name: 'India' }];
-  if (level === 'india' || id === null) return crumbs;
-  const rs = await db
-    .prepare(
-      `SELECT z.id AS zone_id, z.name AS zone_name,
-              st.id AS state_id, st.name AS state_name,
-              r.id  AS region_id,   r.name  AS region_name,
-              d.id  AS district_id, d.name  AS district_name,
-              c.id  AS cluster_id,  c.name  AS cluster_name,
-              v.id  AS village_id,  v.name  AS village_name
-       ${GEO_JOIN}
-       WHERE ${LEVEL_ALIAS[level]}.id = ?
-       LIMIT 1`,
-    )
-    .bind(id)
-    .first<{
-      zone_id: number; zone_name: string;
-      state_id: number; state_name: string;
-      region_id: number; region_name: string;
-      district_id: number; district_name: string;
-      cluster_id: number; cluster_name: string;
-      village_id: number; village_name: string;
-    }>();
-  if (!rs) return crumbs;
-  const ordered: Array<[GeoLevel, number, string]> = [
-    ['zone', rs.zone_id, rs.zone_name],
-    ['state', rs.state_id, rs.state_name],
-    ['region', rs.region_id, rs.region_name],
-    ['district', rs.district_id, rs.district_name],
-    ['cluster', rs.cluster_id, rs.cluster_name],
-    ['village', rs.village_id, rs.village_name],
-  ];
-  const stopAt = GEO_LEVELS.indexOf(level);
-  for (let i = 0; i < stopAt; i++) {
-    const [lvl, cid, cname] = ordered[i]!;
-    crumbs.push({ level: lvl, id: cid, name: cname });
-  }
-  return crumbs;
 }
 
 // Aggregate one metric at the child level below `(level, id)`,
@@ -726,26 +662,6 @@ function parsePeriod(
   if (!isIsoDate(t)) return { error: 'to must be YYYY-MM-DD' };
   if (f > t) return { error: 'from must be <= to' };
   return { from: f, to: t };
-}
-
-// Intersection of scope and requested area. Returns 'out_of_scope'
-// when the area exists but the user can see none of it (so the
-// caller emits 403 rather than silently 200-empty).
-async function effectiveVillages(
-  db: D1Database,
-  scopeVillageIds: number[],
-  level: GeoLevel,
-  id: number | null,
-): Promise<number[] | 'out_of_scope'> {
-  const area = await villagesUnder(db, level, id);
-  if (level === 'india') {
-    return scopeVillageIds.filter((v) => area.includes(v));
-  }
-  if (area.length === 0) return [];
-  const scopeSet = new Set(scopeVillageIds);
-  const intersection = area.filter((v) => scopeSet.has(v));
-  if (intersection.length === 0) return 'out_of_scope';
-  return intersection;
 }
 
 // Success envelope for `buildDrillDown` — `effective` is the

@@ -5,25 +5,32 @@
 //     and redirect to that village. Saves a wasted tap every time
 //     they log in (VCs are the most frequent users, in the field,
 //     one-handed).
-//   * Everyone else → KPI strip (includes Star-of-the-Month yes/no)
-//     + 90-day attendance sparkline + insight cards (at-risk /
-//     top-this-week / stars-of-the-month) + a village grid
-//     annotated with coordinator name + activity chip.
+//   * Everyone else → breadcrumb trail from India down to the
+//     current drill position + KPI strip (scoped to the drill) +
+//     insight cards (at-risk / top-this-week) + a grid of child
+//     tiles at the next hierarchy level. Click a zone tile → see
+//     states; click a state → see regions; etc. At cluster scope
+//     the tiles are villages and navigate to /village/:id.
 //
-// Data comes from /api/insights (scope-filtered). That single call
-// replaces the old /api/villages fetch and carries everything the
-// page needs — sparkline points, KPI deltas, stars, village
-// activity — so the home screen renders with one round-trip.
+// Drill position is URL-backed (`?level=&id=`) so refresh /
+// deep-link / back-button all preserve scope. An operator can
+// share a link like "home at Karnataka zone" and it opens there.
+//
+// Data comes from /api/insights, scope-filtered server-side. That
+// single round-trip carries crumbs + children + KPIs + sparks +
+// top/at-risk cards — the home screen renders with one request.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AT_RISK_THRESHOLD_DAYS,
   api,
-  type AttendanceSparkPoint,
+  isGeoLevel,
+  type BreadcrumbCrumb,
+  type GeoLevel,
+  type HierarchyChild,
   type InsightKpi,
   type InsightsResponse,
-  type StarOfTheMonth,
   type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
@@ -33,59 +40,70 @@ export function Home() {
   const { t, tPlural } = useI18n();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Parse ?level=&id= once per URL change. Bad params fail closed
+  // to "no drill override" — the server will resolve to the user's
+  // scope floor instead of erroring the whole page.
+  const drill = useMemo(() => {
+    const rawLevel = searchParams.get('level');
+    const rawId = searchParams.get('id');
+    if (!rawLevel) return {};
+    if (!isGeoLevel(rawLevel)) return {};
+    if (rawLevel === 'india') return { level: rawLevel };
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) return {};
+    return { level: rawLevel, id };
+  }, [searchParams]);
+
   useEffect(() => {
+    setData(null);
+    setError(null);
     api
-      .insights()
+      .insights(drill)
       .then((r) => setData(r))
       .catch((e) => setError(e instanceof Error ? e.message : 'failed'));
-  }, []);
+  }, [drill.level, drill.id]);
 
-  // Single-village fast path — redirect as soon as we know. This
-  // usually lands with the insights response; the grid flashes for
-  // one frame at most.
-  const autoRedirectVillage = useMemo(() => {
-    if (!user || user.scope_level !== 'village') return null;
-    if (!data || data.all_villages.length !== 1) return null;
-    return data.all_villages[0]!.village_id;
-  }, [user, data]);
-
+  // Single-village VC shortcut — redirect before the page even
+  // paints. The server would return a village-leaf view with empty
+  // children, but VCs rarely want to read stats; they want to mark
+  // attendance. Skipping the intermediate render saves a tap.
+  const vcSingleVillage =
+    user?.scope_level === 'village' ? user.scope_id : null;
   useEffect(() => {
-    if (autoRedirectVillage !== null) {
-      navigate(`/village/${autoRedirectVillage}`, { replace: true });
+    if (vcSingleVillage !== null) {
+      navigate(`/village/${vcSingleVillage}`, { replace: true });
     }
-  }, [autoRedirectVillage, navigate]);
+  }, [vcSingleVillage, navigate]);
 
   if (error) return <p className="text-danger">{error}</p>;
   if (!data) return <p className="text-muted-fg">{t('common.loading')}</p>;
-  if (autoRedirectVillage !== null) {
-    // Render nothing while the redirect is resolving — the grid
-    // would flash on slow connections otherwise.
-    return null;
-  }
+  if (vcSingleVillage !== null) return null;
 
-  const starsAvailable =
-    data.stars_current_month.length > 0 || data.stars_prev_month.length > 0;
+  const childLabel =
+    data.child_level && data.children.length > 0
+      ? tPlural(
+          `home.children.${data.child_level}`,
+          data.children.length,
+          { n: data.children.length },
+        )
+      : null;
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs crumbs={data.crumbs} />
+
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold">
           {t('home.heading', { scope: data.scope_label })}
         </h2>
-        <p className="text-sm text-muted-fg">
-          {t('home.subheading')}
-        </p>
+        <p className="text-sm text-muted-fg">{t('home.subheading')}</p>
       </header>
 
-      <KpiStrip
-        kpis={data.kpis}
-        somDeclared={data.som_declared_this_month}
-      />
-
-      <AttendanceSparkline points={data.attendance_90d} />
+      <KpiStrip kpis={data.kpis} somDeclaredPct={data.som_declared_pct} />
 
       {(data.at_risk_villages.length > 0 || data.top_villages.length > 1) && (
         <div className="grid gap-3 md:grid-cols-2">
@@ -98,49 +116,80 @@ export function Home() {
         </div>
       )}
 
-      {starsAvailable && (
-        <StarsCard
-          current={data.stars_current_month}
-          previous={data.stars_prev_month}
-        />
-      )}
-
-      <section>
-        <h3 className="mb-2 text-sm font-semibold text-muted-fg uppercase tracking-wide">
-          {tPlural('home.villages', data.all_villages.length)}
-        </h3>
-        {data.all_villages.length === 0 ? (
-          <p className="text-muted-fg">{t('home.empty')}</p>
-        ) : (
+      {data.children.length > 0 && childLabel && (
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-muted-fg uppercase tracking-wide">
+            {childLabel}
+          </h3>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data.all_villages.map((v) => (
-              <li key={v.village_id}>
-                <VillageCard v={v} />
+            {data.children.map((ch) => (
+              <li key={`${ch.level}-${ch.id}`}>
+                <ChildTile child={ch} />
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
+
+      {data.children.length === 0 && data.child_level !== null && (
+        <p className="text-muted-fg">{t('home.empty')}</p>
+      )}
     </div>
   );
 }
 
+// Breadcrumb trail from India down to the current drill position.
+// Every crumb except the last is a link back to that level. Plain
+// text chevrons between crumbs so the row reads on a phone without
+// any icon font. Hidden entirely at the scope floor (no navigation
+// to do) for users who can't drill further up anyway.
+function Breadcrumbs({ crumbs }: { crumbs: BreadcrumbCrumb[] }) {
+  if (crumbs.length < 2) return null;
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-fg"
+    >
+      {crumbs.map((c, i) => {
+        const last = i === crumbs.length - 1;
+        return (
+          <span key={`${c.level}-${c.id ?? 'root'}`} className="flex items-baseline gap-2">
+            {last ? (
+              <span className="text-fg font-medium">{c.name}</span>
+            ) : (
+              <Link to={crumbHref(c)} className="text-primary hover:underline">
+                {c.name}
+              </Link>
+            )}
+            {!last && <span aria-hidden="true">›</span>}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+function crumbHref(c: BreadcrumbCrumb): string {
+  if (c.level === 'india') return '/';
+  return `/?level=${c.level}&id=${c.id}`;
+}
+
 // KPI strip. On mobile the tiles stack in a single column so each
 // metric reads as its own line; desktop packs the same seven tiles
-// (six numeric + SOM yes/no) into a single row.
+// (six numeric + SOM %) into a single row.
 function KpiStrip({
   kpis,
-  somDeclared,
+  somDeclaredPct,
 }: {
   kpis: InsightKpi[];
-  somDeclared: boolean;
+  somDeclaredPct: number;
 }) {
   return (
     <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
       {kpis.map((k) => (
         <KpiTile key={k.label} k={k} />
       ))}
-      <SomDeclaredTile declared={somDeclared} />
+      <SomDeclaredTile pct={somDeclaredPct} />
     </section>
   );
 }
@@ -171,152 +220,93 @@ function KpiTile({ k }: { k: InsightKpi }) {
           {k.hint ? ' · ' + t(`home.kpi.hint.${k.hint}`) : ''}
         </div>
       )}
+      {k.spark && <TileSpark points={k.spark} isPct={isPct} />}
     </div>
   );
 }
 
-// Star-of-the-Month declaration tile — a yes/no signal rather than
-// a count. Ops uses this to confirm at a glance that the monthly
-// recognition ritual has been run for the current calendar month.
-function SomDeclaredTile({ declared }: { declared: boolean }) {
+// Inline 12-week sparkline inside a KPI tile. No axis, no dots, no
+// legend — the tile's big number is the headline; the spark is just
+// silhouette. `isPct`=true pins the y-axis to 0–100 so attendance
+// sparks compare meaningfully across scopes; count sparks (images,
+// videos, achievements) autoscale to their own max so a scope with
+// 2 uploads/week still reads as a shape.
+function TileSpark({
+  points,
+  isPct,
+}: {
+  points: Array<number | null>;
+  isPct: boolean;
+}) {
+  const observed = points.filter((v): v is number => v !== null);
+  if (observed.length === 0) return null;
+
+  const W = 120;
+  const H = 24;
+  const padX = 1;
+  const padY = 2;
+  const n = points.length;
+  const max = isPct ? 100 : Math.max(1, ...observed);
+  const xFor = (i: number) =>
+    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
+  const yFor = (v: number) =>
+    padY + ((max - v) * (H - 2 * padY)) / (max === 0 ? 1 : max);
+
+  // Build the polyline with 'M' gap-breaks so null weeks draw as
+  // broken segments rather than a false bridge to zero.
+  let d = '';
+  let penDown = false;
+  for (let i = 0; i < n; i++) {
+    const p = points[i];
+    if (p === null || p === undefined) {
+      penDown = false;
+      continue;
+    }
+    const cmd = penDown ? 'L' : 'M';
+    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p).toFixed(1)} `;
+    penDown = true;
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="w-full h-6 mt-1"
+      aria-hidden="true"
+    >
+      <path
+        d={d.trim()}
+        fill="none"
+        className="stroke-primary"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Star-of-the-Month declaration tile — share of in-scope villages
+// that have declared one this month. Tone flips to primary only at
+// 100% so partial coverage still reads as "work to do"; 0% reads
+// as danger so ops sees the miss at a glance.
+function SomDeclaredTile({ pct }: { pct: number }) {
   const { t } = useI18n();
-  const tone = declared ? 'text-primary' : 'text-danger';
+  const tone =
+    pct >= 100 ? 'text-primary'
+    : pct === 0 ? 'text-danger'
+    : 'text-fg';
   return (
     <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-1">
       <div className="text-xs text-muted-fg uppercase tracking-wide">
         {t('home.kpi.som_declared')}
       </div>
-      <div className={`text-2xl font-semibold ${tone}`}>
-        {declared ? t('home.kpi.som_declared.yes') : t('home.kpi.som_declared.no')}
-      </div>
+      <div className={`text-2xl font-semibold ${tone}`}>{pct}%</div>
       <div className="text-xs text-muted-fg">
         {t('home.kpi.som_declared.hint')}
       </div>
     </div>
   );
-}
-
-// 90-day attendance sparkline. Renders as an SVG polyline so it
-// survives sunlight theme and low-power devices. Days with no marks
-// are drawn as a gap (null break) rather than a zero floor, so an
-// empty day reads as "no session" not "0% attendance".
-function AttendanceSparkline({ points }: { points: AttendanceSparkPoint[] }) {
-  const { t } = useI18n();
-  if (points.every((p) => p.pct === null)) return null;
-
-  const W = 600;
-  const H = 80;
-  const padX = 4;
-  const padY = 6;
-  const n = points.length;
-  // y maps 0..100 → bottom..top of the drawable area. Max is pinned
-  // at 100 so attendance is comparable across sparkline renders
-  // across scopes and days; a partial-scope 80% shouldn't look like
-  // a "peak" just because the local max happened to be 82%.
-  const xFor = (i: number) =>
-    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
-  const yFor = (pct: number) => padY + ((100 - pct) * (H - 2 * padY)) / 100;
-
-  // Build the polyline with gaps. An 'M' starts a new subpath after
-  // any run of null days so the line never falsely bridges missing
-  // sessions.
-  let d = '';
-  let penDown = false;
-  for (let i = 0; i < n; i++) {
-    const p = points[i]!;
-    if (p.pct === null) {
-      penDown = false;
-      continue;
-    }
-    const cmd = penDown ? 'L' : 'M';
-    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p.pct).toFixed(1)} `;
-    penDown = true;
-  }
-
-  // Dots on days with marks — visually anchors the line and helps on
-  // scopes that run infrequently (one session every few days).
-  const dots = points
-    .map((p, i) => (p.pct === null ? null : { i, pct: p.pct }))
-    .filter((x): x is { i: number; pct: number } => x !== null);
-
-  const observed = points
-    .map((p) => p.pct)
-    .filter((v): v is number => v !== null);
-  const latest = observed[observed.length - 1];
-  const avg = observed.length === 0
-    ? null
-    : Math.round(observed.reduce((a, b) => a + b, 0) / observed.length);
-
-  const startLabel = formatDayMonth(points[0]!.date);
-  const endLabel = formatDayMonth(points[n - 1]!.date);
-
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{t('home.spark.title')}</h3>
-        <span className="text-xs text-muted-fg">
-          {avg === null
-            ? t('home.spark.hint')
-            : t('home.spark.hint_avg', { avg })}
-        </span>
-      </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={t('home.spark.aria', { n })}
-        preserveAspectRatio="none"
-        className="w-full h-20"
-      >
-        {/* 50% reference line — a visual guide without a full axis. */}
-        <line
-          x1={padX}
-          x2={W - padX}
-          y1={yFor(50)}
-          y2={yFor(50)}
-          className="stroke-border"
-          strokeDasharray="3 4"
-          strokeWidth={1}
-        />
-        <path
-          d={d.trim()}
-          fill="none"
-          className="stroke-primary"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {dots.map(({ i, pct }) => (
-          <circle
-            key={i}
-            cx={xFor(i)}
-            cy={yFor(pct)}
-            r={1.8}
-            className="fill-primary"
-          />
-        ))}
-      </svg>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-fg">
-        <span>{startLabel}</span>
-        <span>
-          {latest !== undefined && (
-            <span className="text-fg font-medium">{latest}%</span>
-          )}
-          {latest !== undefined ? ' · ' : ''}
-          {t('home.spark.today')}
-        </span>
-        <span>{endLabel}</span>
-      </div>
-    </div>
-  );
-}
-
-// Short day-month label for the sparkline axis endpoints. Parses the
-// ISO date locally (no Intl timezone pitfalls) so "21 Apr" renders
-// identically regardless of client locale.
-function formatDayMonth(iso: string): string {
-  const [, m, d] = iso.split('-').map(Number) as [number, number, number];
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${d} ${names[(m - 1) % 12]}`;
 }
 
 function AtRiskCard({ villages }: { villages: VillageActivity[] }) {
@@ -383,67 +373,14 @@ function TopVillagesCard({ villages }: { villages: VillageActivity[] }) {
   );
 }
 
-// Stars of the Month — two-column card (current vs previous). Each
-// column lists star students with their village. Empty columns
-// render an em-dash so the card still reads when one of the months
-// has no data yet (happens early in a fresh month).
-function StarsCard({
-  current,
-  previous,
-}: {
-  current: StarOfTheMonth[];
-  previous: StarOfTheMonth[];
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{t('home.stars.title')}</h3>
-        <span className="text-xs text-muted-fg">{t('home.stars.hint')}</span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <StarsColumn label={t('home.stars.this_month')} stars={current} />
-        <StarsColumn label={t('home.stars.last_month')} stars={previous} />
-      </div>
-    </div>
-  );
-}
-
-function StarsColumn({ label, stars }: { label: string; stars: StarOfTheMonth[] }) {
-  const { t } = useI18n();
-  return (
-    <div className="space-y-2">
-      <div className="text-xs font-medium text-muted-fg uppercase tracking-wide">
-        {label}
-      </div>
-      {stars.length === 0 ? (
-        <p className="text-sm text-muted-fg">{t('home.stars.empty')}</p>
-      ) : (
-        <ul className="space-y-1.5 text-sm">
-          {stars.map((s) => (
-            <li key={s.achievement_id} className="flex items-baseline gap-2">
-              <span aria-hidden="true">⭐</span>
-              <div className="min-w-0">
-                <div className="truncate">
-                  <span className="font-medium">{s.student_name}</span>
-                  <span className="text-muted-fg"> · {s.village_name}</span>
-                </div>
-                <div className="text-xs text-muted-fg truncate">{s.description}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// Village card — activity chip colour driven by days-since-last.
-// Now also shows the coordinator name under the cluster line so
-// back-office knows who to ping about a village without drilling in.
-function VillageCard({ v }: { v: VillageActivity }) {
-  const { t } = useI18n();
-  const days = v.days_since_last_session;
+// Hierarchy child tile — one per next-level node (zone, state,
+// region, district, cluster, or village). Clicking navigates
+// deeper. At village leaf (child.level === 'village') the link
+// goes to /village/:id — the detail surface — rather than a
+// further drill inside insights.
+function ChildTile({ child }: { child: HierarchyChild }) {
+  const { t, tPlural } = useI18n();
+  const days = child.days_since_last_session;
   let chipClass: string;
   let chipLabel: string;
   if (days === null) {
@@ -460,30 +397,43 @@ function VillageCard({ v }: { v: VillageActivity }) {
     chipLabel = t('home.card.days_ago', { days });
   }
 
+  const href =
+    child.level === 'village'
+      ? `/village/${child.id}`
+      : `/?level=${child.level}&id=${child.id}`;
+
   return (
     <Link
-      to={`/village/${v.village_id}`}
+      to={href}
       className="block bg-card hover:bg-card-hover border border-border rounded-lg p-4 transition-colors space-y-2"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="font-medium truncate">{v.village_name}</div>
+        <div className="font-medium truncate">{child.name}</div>
         <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${chipClass}`}>
           {chipLabel}
         </span>
       </div>
-      <div className="text-xs text-muted-fg">{v.cluster_name}</div>
-      <div className="text-xs text-muted-fg truncate">
-        {v.coordinator_name
-          ? t('home.card.vc', { name: v.coordinator_name })
-          : t('home.card.vc_unassigned')}
-      </div>
+      {child.level !== 'village' && (
+        <div className="text-xs text-muted-fg">
+          {tPlural('home.tile.villages', child.villages_count, {
+            n: child.villages_count,
+          })}
+        </div>
+      )}
+      {child.level === 'village' && (
+        <div className="text-xs text-muted-fg truncate">
+          {child.coordinator_name
+            ? t('home.card.vc', { name: child.coordinator_name })
+            : t('home.card.vc_unassigned')}
+        </div>
+      )}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
         <span className="text-muted-fg">
-          {t('home.card.children', { n: v.children_count })}
+          {t('home.card.children', { n: child.children_count })}
         </span>
-        {v.attendance_pct_week !== null && (
+        {child.attendance_pct_week !== null && (
           <span className="text-muted-fg">
-            · {t('home.card.week_attendance', { pct: v.attendance_pct_week })}
+            · {t('home.card.week_attendance', { pct: child.attendance_pct_week })}
           </span>
         )}
       </div>
