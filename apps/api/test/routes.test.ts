@@ -1787,6 +1787,92 @@ describe('dashboard consolidated (L2.5.3)', () => {
   });
 });
 
+describe('home insights — merged compare + drill', () => {
+  beforeEach(async () => { await resetDb(); });
+
+  it('carries the full KPI pack per child so tiles compare at a glance', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/insights', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      level: string;
+      child_level: string | null;
+      children: Array<{
+        level: string;
+        id: number;
+        name: string;
+        children_count: number;
+        attendance_pct_week: number | null;
+        images_this_month: number;
+        videos_this_month: number;
+        achievements_this_month: number;
+        villages_count: number;
+        coordinator_name: string | null;
+      }>;
+    };
+    expect(body.level).toBe('india');
+    expect(body.child_level).toBe('zone');
+    expect(body.children.length).toBeGreaterThanOrEqual(2);
+    for (const c of body.children) {
+      // Every field the desktop table renders must be present; shape
+      // check, not value check, so seed drift doesn't bite.
+      expect(typeof c.id).toBe('number');
+      expect(typeof c.name).toBe('string');
+      expect(typeof c.children_count).toBe('number');
+      expect(typeof c.images_this_month).toBe('number');
+      expect(typeof c.videos_this_month).toBe('number');
+      expect(typeof c.achievements_this_month).toBe('number');
+      expect(typeof c.villages_count).toBe('number');
+      expect(
+        c.attendance_pct_week === null || typeof c.attendance_pct_week === 'number',
+      ).toBe(true);
+    }
+  });
+
+  it('children rollups sum from the per-village numbers', async () => {
+    const token = await loginAs('super');
+    // At a cluster scope the children are villages, so the monthly
+    // counts on each child equal that village's raw per-month count.
+    // Drilling one level up (district) must sum to the same totals.
+    const resCluster = await cookieFetch(
+      '/api/insights?level=cluster&id=1',
+      token,
+    );
+    expect(resCluster.status).toBe(200);
+    const cluster = (await resCluster.json()) as {
+      children: Array<{
+        images_this_month: number;
+        videos_this_month: number;
+        achievements_this_month: number;
+      }>;
+    };
+    const sumImgs = cluster.children.reduce((a, c) => a + c.images_this_month, 0);
+    const sumVids = cluster.children.reduce((a, c) => a + c.videos_this_month, 0);
+    const sumAch = cluster.children.reduce((a, c) => a + c.achievements_this_month, 0);
+
+    const resDistrict = await cookieFetch(
+      '/api/insights?level=district&id=1',
+      token,
+    );
+    expect(resDistrict.status).toBe(200);
+    const district = (await resDistrict.json()) as {
+      children: Array<{
+        id: number;
+        images_this_month: number;
+        videos_this_month: number;
+        achievements_this_month: number;
+      }>;
+    };
+    // Bidar district in the seed has exactly one cluster (cluster 1),
+    // so the district's single child row must equal the sum of its
+    // cluster's village rows.
+    expect(district.children.length).toBe(1);
+    expect(district.children[0]!.images_this_month).toBe(sumImgs);
+    expect(district.children[0]!.videos_this_month).toBe(sumVids);
+    expect(district.children[0]!.achievements_this_month).toBe(sumAch);
+  });
+});
+
 describe('geo navigation (L2.5.2)', () => {
   beforeEach(async () => { await resetDb(); });
 

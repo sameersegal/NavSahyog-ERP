@@ -117,18 +117,7 @@ export function Home() {
       )}
 
       {data.children.length > 0 && childLabel && (
-        <section>
-          <h3 className="mb-2 text-sm font-semibold text-muted-fg uppercase tracking-wide">
-            {childLabel}
-          </h3>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data.children.map((ch) => (
-              <li key={`${ch.level}-${ch.id}`}>
-                <ChildTile child={ch} />
-              </li>
-            ))}
-          </ul>
-        </section>
+        <CompareChildren label={childLabel} children={data.children} />
       )}
 
       {data.children.length === 0 && data.child_level !== null && (
@@ -373,70 +362,197 @@ function TopVillagesCard({ villages }: { villages: VillageActivity[] }) {
   );
 }
 
-// Hierarchy child tile — one per next-level node (zone, state,
-// region, district, cluster, or village). Clicking navigates
-// deeper. At village leaf (child.level === 'village') the link
-// goes to /village/:id — the detail surface — rather than a
-// further drill inside insights.
-function ChildTile({ child }: { child: HierarchyChild }) {
-  const { t, tPlural } = useI18n();
-  const days = child.days_since_last_session;
-  let chipClass: string;
-  let chipLabel: string;
-  if (days === null) {
-    chipClass = 'bg-card-hover text-muted-fg';
-    chipLabel = t('home.card.never');
-  } else if (days === 0) {
-    chipClass = 'bg-primary/15 text-primary';
-    chipLabel = t('home.card.today');
-  } else if (days < AT_RISK_THRESHOLD_DAYS) {
-    chipClass = 'bg-card-hover text-fg';
-    chipLabel = t('home.card.days_ago', { days });
-  } else {
-    chipClass = 'bg-danger/10 text-danger';
-    chipLabel = t('home.card.days_ago', { days });
-  }
-
-  const href =
-    child.level === 'village'
-      ? `/village/${child.id}`
-      : `/?level=${child.level}&id=${child.id}`;
+// Child grid — one row per next-level node (zone / state / … /
+// village). Merged compare + drill-down surface: every row carries
+// the same KPI set the scope strip shows (children, attendance %,
+// images, videos, achievements, activity) so two siblings can be
+// compared horizontally without drilling, AND each row is a link
+// that drills deeper (or, at the village leaf, goes to
+// /village/:id — the detail surface).
+//
+// Desktop: table. Mobile (below sm): one card per row with the
+// KPIs as a 2-col dl grid. Same data either way; responsive layout
+// handles the reflow.
+function CompareChildren({
+  label,
+  children,
+}: {
+  label: string;
+  children: HierarchyChild[];
+}) {
+  const { t } = useI18n();
+  const childLevel = children[0]?.level;
+  if (!childLevel) return null;
+  const levelHeading =
+    childLevel === 'village'
+      ? t('home.compare.col.name.village')
+      : t(`home.compare.col.name.${childLevel}`);
 
   return (
+    <section className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="px-4 py-2 border-b border-border text-sm font-semibold text-muted-fg uppercase tracking-wide">
+        {label}
+      </div>
+
+      {/* Mobile card view (below sm). Each card links to the same
+          destination as its desktop-table row. */}
+      <ul className="sm:hidden divide-y divide-border">
+        {children.map((ch) => (
+          <li key={`${ch.level}-${ch.id}`}>
+            <ChildCard child={ch} />
+          </li>
+        ))}
+      </ul>
+
+      {/* Desktop / tablet table. overflow-x-auto as a fallback for
+          narrow breakpoints where the full 7-column layout wraps. */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-muted-fg">
+              <th className="px-4 py-2 font-normal">{levelHeading}</th>
+              <th className="px-4 py-2 font-normal text-right">
+                {t('home.compare.col.children')}
+              </th>
+              <th className="px-4 py-2 font-normal text-right">
+                {t('home.compare.col.attendance_week')}
+              </th>
+              <th className="px-4 py-2 font-normal text-right">
+                {t('home.compare.col.images_month')}
+              </th>
+              <th className="px-4 py-2 font-normal text-right">
+                {t('home.compare.col.videos_month')}
+              </th>
+              <th className="px-4 py-2 font-normal text-right">
+                {t('home.compare.col.achievements_month')}
+              </th>
+              <th className="px-4 py-2 font-normal text-right">
+                {t('home.compare.col.activity')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {children.map((ch) => (
+              <ChildRow key={`${ch.level}-${ch.id}`} child={ch} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// Tailwind classes for the activity chip. Same palette the prior
+// card used, extracted so the mobile card + the desktop table row
+// stay in sync.
+function activityChip(
+  days: number | null,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): { cls: string; label: string } {
+  if (days === null) {
+    return { cls: 'bg-card-hover text-muted-fg', label: t('home.card.never') };
+  }
+  if (days === 0) {
+    return { cls: 'bg-primary/15 text-primary', label: t('home.card.today') };
+  }
+  if (days < AT_RISK_THRESHOLD_DAYS) {
+    return { cls: 'bg-card-hover text-fg', label: t('home.card.days_ago', { days }) };
+  }
+  return { cls: 'bg-danger/10 text-danger', label: t('home.card.days_ago', { days }) };
+}
+
+function childHref(child: HierarchyChild): string {
+  return child.level === 'village'
+    ? `/village/${child.id}`
+    : `/?level=${child.level}&id=${child.id}`;
+}
+
+// Desktop row. The entire row is the click target (not just the
+// name cell) — matches the drilldown table in Dashboard.tsx so the
+// interaction model reads the same way.
+function ChildRow({ child }: { child: HierarchyChild }) {
+  const { t, tPlural } = useI18n();
+  const navigate = useNavigate();
+  const chip = activityChip(child.days_since_last_session, t);
+  const subline =
+    child.level === 'village'
+      ? child.coordinator_name
+        ? t('home.card.vc', { name: child.coordinator_name })
+        : t('home.card.vc_unassigned')
+      : tPlural('home.tile.villages', child.villages_count, {
+          n: child.villages_count,
+        });
+  return (
+    <tr
+      onClick={() => navigate(childHref(child))}
+      className="border-t border-border cursor-pointer hover:bg-card-hover"
+    >
+      <td className="px-4 py-2">
+        <Link
+          to={childHref(child)}
+          className="font-medium text-primary hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {child.name}
+        </Link>
+        <div className="text-xs text-muted-fg truncate">{subline}</div>
+      </td>
+      <td className="px-4 py-2 text-right tabular-nums">{child.children_count}</td>
+      <td className="px-4 py-2 text-right tabular-nums">
+        {child.attendance_pct_week === null ? '—' : `${child.attendance_pct_week}%`}
+      </td>
+      <td className="px-4 py-2 text-right tabular-nums">{child.images_this_month}</td>
+      <td className="px-4 py-2 text-right tabular-nums">{child.videos_this_month}</td>
+      <td className="px-4 py-2 text-right tabular-nums">{child.achievements_this_month}</td>
+      <td className="px-4 py-2 text-right">
+        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${chip.cls}`}>
+          {chip.label}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+// Mobile card. Same data as the desktop row, stacked — the stat
+// grid reads as a definition list so screen readers pick up the
+// label/value pairs in order.
+function ChildCard({ child }: { child: HierarchyChild }) {
+  const { t, tPlural } = useI18n();
+  const chip = activityChip(child.days_since_last_session, t);
+  const subline =
+    child.level === 'village'
+      ? child.coordinator_name
+        ? t('home.card.vc', { name: child.coordinator_name })
+        : t('home.card.vc_unassigned')
+      : tPlural('home.tile.villages', child.villages_count, {
+          n: child.villages_count,
+        });
+  return (
     <Link
-      to={href}
-      className="block bg-card hover:bg-card-hover border border-border rounded-lg p-4 transition-colors space-y-2"
+      to={childHref(child)}
+      className="block px-4 py-3 min-h-[44px] hover:bg-card-hover"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="font-medium truncate">{child.name}</div>
-        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${chipClass}`}>
-          {chipLabel}
+        <div className="font-medium text-primary truncate">{child.name}</div>
+        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${chip.cls}`}>
+          {chip.label}
         </span>
       </div>
-      {child.level !== 'village' && (
-        <div className="text-xs text-muted-fg">
-          {tPlural('home.tile.villages', child.villages_count, {
-            n: child.villages_count,
-          })}
-        </div>
-      )}
-      {child.level === 'village' && (
-        <div className="text-xs text-muted-fg truncate">
-          {child.coordinator_name
-            ? t('home.card.vc', { name: child.coordinator_name })
-            : t('home.card.vc_unassigned')}
-        </div>
-      )}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
-        <span className="text-muted-fg">
-          {t('home.card.children', { n: child.children_count })}
-        </span>
-        {child.attendance_pct_week !== null && (
-          <span className="text-muted-fg">
-            · {t('home.card.week_attendance', { pct: child.attendance_pct_week })}
-          </span>
-        )}
-      </div>
+      <div className="text-xs text-muted-fg truncate">{subline}</div>
+      <dl className="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-muted-fg">{t('home.compare.col.children')}</dt>
+        <dd className="text-right tabular-nums">{child.children_count}</dd>
+        <dt className="text-muted-fg">{t('home.compare.col.attendance_week')}</dt>
+        <dd className="text-right tabular-nums">
+          {child.attendance_pct_week === null ? '—' : `${child.attendance_pct_week}%`}
+        </dd>
+        <dt className="text-muted-fg">{t('home.compare.col.images_month')}</dt>
+        <dd className="text-right tabular-nums">{child.images_this_month}</dd>
+        <dt className="text-muted-fg">{t('home.compare.col.videos_month')}</dt>
+        <dd className="text-right tabular-nums">{child.videos_this_month}</dd>
+        <dt className="text-muted-fg">{t('home.compare.col.achievements_month')}</dt>
+        <dd className="text-right tabular-nums">{child.achievements_this_month}</dd>
+      </dl>
     </Link>
   );
 }

@@ -26,6 +26,13 @@ export type BreadcrumbCrumb = {
 // carries coordinator_name so the tile reads as a village card;
 // higher up coordinator_name is null and the tile summarises a
 // subtree.
+//
+// Each child carries the same KPI set the scope strip shows, so
+// Home's child grid doubles as a side-by-side comparison surface
+// (L2.5.4 — merge compare + drill-down). Monthly counters
+// (`images_this_month`, `videos_this_month`, `achievements_this_month`)
+// cover the IST calendar month `today` falls in. Soft-deleted
+// media rows are excluded, same rule as the scope-level KPIs.
 export type HierarchyChild = {
   level: GeoLevel;
   id: number;
@@ -47,6 +54,15 @@ export type HierarchyChild = {
   // Villages under this subtree. Always 1 at the village leaf;
   // larger at higher levels — handy context on zone / state tiles.
   villages_count: number;
+  // Images uploaded for this subtree in the current IST calendar
+  // month. Soft-deleted media excluded.
+  images_this_month: number;
+  // Videos uploaded for this subtree in the current IST calendar
+  // month. Soft-deleted media excluded.
+  videos_this_month: number;
+  // Achievements (any type: SoM / gold / silver) recorded for
+  // students in this subtree in the current IST calendar month.
+  achievements_this_month: number;
 };
 
 // Weekly-bucket sparkline carried inline on each KPI tile. 12
