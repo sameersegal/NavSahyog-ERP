@@ -43,19 +43,6 @@ export type VillageActivity = {
   at_risk: boolean;
 };
 
-// A Star of the Month row rolled up for the home / dashboard card.
-// Current + previous month lists are computed separately so the card
-// can render "Last month" even when the current month has none yet.
-export type StarOfTheMonth = {
-  achievement_id: number;
-  student_id: number;
-  student_name: string;
-  village_id: number;
-  village_name: string;
-  date: string;                    // IST 'YYYY-MM-DD'
-  description: string;
-};
-
 // One day on the rolling 90-day attendance sparkline. `pct` is null
 // when the day had zero marks in the user's scope (so the sparkline
 // can render gaps instead of pretending zero).
@@ -94,10 +81,6 @@ export type InsightsResponse = {
   // the current IST calendar month across the user's scope. Drives
   // the yes/no KPI tile on the home dashboard.
   som_declared_this_month: boolean;
-  // Stars of the Month — current and previous calendar months.
-  // Empty arrays when the month has no SoMs yet.
-  stars_current_month: StarOfTheMonth[];
-  stars_prev_month: StarOfTheMonth[];
 };
 
 export type StreakResponse = {

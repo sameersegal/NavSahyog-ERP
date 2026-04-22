@@ -31,7 +31,6 @@ export type {
   AttendanceSparkPoint,
   InsightKpi,
   InsightsResponse,
-  StarOfTheMonth,
   StreakResponse,
   VillageActivity,
 } from './insights';

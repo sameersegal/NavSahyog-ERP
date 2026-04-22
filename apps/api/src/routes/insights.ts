@@ -23,7 +23,6 @@ import {
   type AttendanceSparkPoint,
   type InsightKpi,
   type InsightsResponse,
-  type StarOfTheMonth,
   type VillageActivity,
 } from '@navsahyog/shared';
 import type { Bindings, SessionUser, Variables } from '../types';
@@ -280,41 +279,6 @@ async function dailyAttendance(
   return out;
 }
 
-// Stars of the Month for a given calendar month. Returns at most
-// `limit` rows, ordered by date descending so the freshest star
-// surfaces first on the card. Joined with student + village so the
-// UI has everything it needs in one payload.
-async function starsForMonth(
-  db: D1Database,
-  ids: number[],
-  monthPrefix: string,
-  limit = 10,
-): Promise<StarOfTheMonth[]> {
-  if (ids.length === 0) return [];
-  const placeholders = ids.map(() => '?').join(',');
-  const rs = await db
-    .prepare(
-      `SELECT a.id AS achievement_id,
-              st.id AS student_id,
-              st.first_name || ' ' || st.last_name AS student_name,
-              v.id AS village_id,
-              v.name AS village_name,
-              a.date AS date,
-              a.description AS description
-         FROM achievement a
-         JOIN student st ON st.id = a.student_id
-         JOIN village v ON v.id = st.village_id
-        WHERE v.id IN (${placeholders})
-          AND a.type = 'som'
-          AND a.date LIKE ? || '%'
-        ORDER BY a.date DESC, a.id DESC
-        LIMIT ?`,
-    )
-    .bind(...ids, monthPrefix, limit)
-    .all<StarOfTheMonth>();
-  return rs.results;
-}
-
 function deltaTrend(current: number, prev: number | null): {
   delta: number | null;
   trend: 'up' | 'down' | 'flat' | null;
@@ -393,8 +357,6 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     videosPrevMonth,
     dailyAtt,
     somDeclared,
-    starsCurrent,
-    starsPrev,
   ] = await Promise.all([
     overallAttendancePct(c.env.DB, ids, weekStart, today),
     overallAttendancePct(c.env.DB, ids, prevWeekStart, prevWeekEnd),
@@ -406,8 +368,6 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     mediaInMonth(c.env.DB, ids, 'video', prevMonthPrefix),
     dailyAttendance(c.env.DB, ids, spark90Start, today),
     somDeclaredInMonth(c.env.DB, ids, monthPrefix),
-    starsForMonth(c.env.DB, ids, monthPrefix),
-    starsForMonth(c.env.DB, ids, prevMonthPrefix),
   ]);
 
   const totalChildren = cores.reduce((a, v) => a + v.children_count, 0);
@@ -505,8 +465,6 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     all_villages: allVillages,
     attendance_90d: attendance90d,
     som_declared_this_month: somDeclared,
-    stars_current_month: starsCurrent,
-    stars_prev_month: starsPrev,
   };
   return c.json(body);
 });

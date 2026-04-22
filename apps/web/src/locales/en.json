@@ -73,11 +73,6 @@
   "home.spark.hint_avg": "{avg}% average · rolling daily %",
   "home.spark.aria": "90-day attendance sparkline",
   "home.spark.today": "today",
-  "home.stars.title": "Stars of the Month",
-  "home.stars.hint": "current vs previous",
-  "home.stars.this_month": "This month",
-  "home.stars.last_month": "Last month",
-  "home.stars.empty": "No star yet this month.",
 
   "village.header.vc": "VC {name}",
   "village.header.vc_unassigned": "No VC assigned",

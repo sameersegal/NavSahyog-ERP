@@ -23,7 +23,6 @@ import {
   type AttendanceSparkPoint,
   type InsightKpi,
   type InsightsResponse,
-  type StarOfTheMonth,
   type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
@@ -66,9 +65,6 @@ export function Home() {
     return null;
   }
 
-  const starsAvailable =
-    data.stars_current_month.length > 0 || data.stars_prev_month.length > 0;
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
@@ -96,13 +92,6 @@ export function Home() {
             <TopVillagesCard villages={data.top_villages} />
           )}
         </div>
-      )}
-
-      {starsAvailable && (
-        <StarsCard
-          current={data.stars_current_month}
-          previous={data.stars_prev_month}
-        />
       )}
 
       <section>
@@ -379,61 +368,6 @@ function TopVillagesCard({ villages }: { villages: VillageActivity[] }) {
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-// Stars of the Month — two-column card (current vs previous). Each
-// column lists star students with their village. Empty columns
-// render an em-dash so the card still reads when one of the months
-// has no data yet (happens early in a fresh month).
-function StarsCard({
-  current,
-  previous,
-}: {
-  current: StarOfTheMonth[];
-  previous: StarOfTheMonth[];
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{t('home.stars.title')}</h3>
-        <span className="text-xs text-muted-fg">{t('home.stars.hint')}</span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <StarsColumn label={t('home.stars.this_month')} stars={current} />
-        <StarsColumn label={t('home.stars.last_month')} stars={previous} />
-      </div>
-    </div>
-  );
-}
-
-function StarsColumn({ label, stars }: { label: string; stars: StarOfTheMonth[] }) {
-  const { t } = useI18n();
-  return (
-    <div className="space-y-2">
-      <div className="text-xs font-medium text-muted-fg uppercase tracking-wide">
-        {label}
-      </div>
-      {stars.length === 0 ? (
-        <p className="text-sm text-muted-fg">{t('home.stars.empty')}</p>
-      ) : (
-        <ul className="space-y-1.5 text-sm">
-          {stars.map((s) => (
-            <li key={s.achievement_id} className="flex items-baseline gap-2">
-              <span aria-hidden="true">⭐</span>
-              <div className="min-w-0">
-                <div className="truncate">
-                  <span className="font-medium">{s.student_name}</span>
-                  <span className="text-muted-fg"> · {s.village_name}</span>
-                </div>
-                <div className="text-xs text-muted-fg truncate">{s.description}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
