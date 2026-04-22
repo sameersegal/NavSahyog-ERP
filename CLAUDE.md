@@ -34,11 +34,23 @@ this.
 ## Current project state
 
 - Requirements v1 draft complete across all 11 sections.
-- Awaiting stakeholder review via `review-findings-v1.md`.
-- **No code has landed yet.** First vertical slice (per
-  `requirements/appendix-status-and-next-steps.md`) will be
-  `/auth/login` + `/api/children`, unblocked by the B1–B3
-  decisions in the review doc.
+  Resolved decisions live in `requirements/decisions.md`;
+  open items in `requirements/review-findings-v1.md`.
+- **MVP ladder in flight** against dummy data (lab-only,
+  no real PII). Canonical status is `mvp/README.md` and
+  the per-level files. At the time of writing:
+  - **L1 landed** — multi-role skeleton, themes, en + hi
+    i18n (PRs #18–#21).
+  - **L2 landed** end-to-end — full write loop + drill-down
+    dashboards with CSV + media pipeline on local R2
+    (PRs #22–#25, covering L2.0–L2.4).
+  - **L2.5 landed** — mobile-first dashboard polish +
+    §3.6.2 consolidated fold, closing L3.1 early (PR #31).
+- **Up next: L3** (Master Creations + secondary screens,
+  §3.8.1–§3.8.7). L4 (offline) and L5 (auth + compliance)
+  remain not started; L5 is gated on the decision to move
+  past dummy data.
+- Demo-recording guide: `mvp/demo-script.md`.
 
 ## Repo map
 
@@ -48,9 +60,21 @@ this.
 ├── CLAUDE.md                                 ← you are here
 ├── NSF-App-Process-Document-English.txt      ← onboarding doc (authoritative for workflows)
 ├── Navshayog-4.5.2.apk                       ← the vendor app being replaced
+├── apps/
+│   ├── web/                                  ← React + Vite PWA on Cloudflare Pages
+│   └── api/                                  ← Cloudflare Worker (routes + D1 + R2 + KV)
+├── db/                                       ← D1 schema + migrations + seed
+├── packages/                                 ← shared TS packages (types, utils)
+├── scripts/                                  ← Playwright capture scripts, i18n check
+├── mvp/
+│   ├── README.md                             ← MVP ladder (canonical MVP status)
+│   ├── level-1.md  …  level-5.md             ← per-level scope + status
+│   ├── demo-script.md                        ← TTS-narrated demo recording guide
+│   └── screenshots/                          ← per-level UI captures for PR bodies
 └── requirements/
     ├── README.md                             ← index
     ├── 01-overview.md  …  11-cloudflare-mapping.md
+    ├── decisions.md                          ← resolved decisions, dated
     ├── appendix-status-and-next-steps.md
     └── review-findings-v1.md                 ← active issue list
 ```
