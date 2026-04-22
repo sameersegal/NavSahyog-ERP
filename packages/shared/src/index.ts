@@ -28,12 +28,12 @@ export {
   isDashboardMetric,
 } from './dashboard';
 export type {
-  AttendanceTrendPoint,
+  BreadcrumbCrumb,
+  HierarchyChild,
   InsightKpi,
   InsightsResponse,
-  StarOfTheMonth,
   StreakResponse,
   VillageActivity,
 } from './insights';
-export { AT_RISK_THRESHOLD_DAYS } from './insights';
+export { AT_RISK_THRESHOLD_DAYS, KPI_SPARK_POINTS } from './insights';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';

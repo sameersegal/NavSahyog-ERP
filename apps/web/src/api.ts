@@ -26,10 +26,10 @@ export type {
   GeoLevel,
 } from '@navsahyog/shared';
 export type {
-  AttendanceTrendPoint,
+  BreadcrumbCrumb,
+  HierarchyChild,
   InsightKpi,
   InsightsResponse,
-  StarOfTheMonth,
   StreakResponse,
   VillageActivity,
 } from '@navsahyog/shared';
@@ -39,6 +39,7 @@ export {
   isIsoDate,
   isClockTime,
   AT_RISK_THRESHOLD_DAYS,
+  KPI_SPARK_POINTS,
   DASHBOARD_METRICS,
   GEO_LEVELS,
   isDashboardMetric,
@@ -251,7 +252,15 @@ export const api = {
   // need the response body on the client).
   dashboardDrilldownCsvUrl: (opts: DrilldownQuery) =>
     `/api/dashboard/drilldown.csv?${drilldownQs(opts)}`,
-  insights: () => req<InsightsResponse>('/api/insights'),
+  insights: (opts: { level?: GeoLevel; id?: number | null } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.level) qs.set('level', opts.level);
+    if (opts.id !== undefined && opts.id !== null) qs.set('id', String(opts.id));
+    const suffix = qs.toString();
+    return req<InsightsResponse>(
+      `/api/insights${suffix ? `?${suffix}` : ''}`,
+    );
+  },
   streaks: () => req<StreakResponse>('/api/streaks/me'),
   // L2.5.2 — dashboard scope navigation. Both endpoints are already
   // scope-filtered server-side via villageIdsInScope(), so the

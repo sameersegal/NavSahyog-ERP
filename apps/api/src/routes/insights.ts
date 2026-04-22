@@ -18,12 +18,24 @@ import { requireAuth } from '../auth';
 import { requireCap } from '../policy';
 import { villageIdsInScope } from '../scope';
 import { todayIstDate } from '../lib/time';
+import { err } from '../lib/errors';
+import {
+  breadcrumbFor,
+  childLevelOf,
+  effectiveVillages,
+  GEO_JOIN,
+  isGeoLevel,
+  LEVEL_ALIAS,
+  type GeoLevel,
+  type NonRootLevel,
+} from '../lib/geo';
 import {
   AT_RISK_THRESHOLD_DAYS,
-  type AttendanceTrendPoint,
+  KPI_SPARK_POINTS,
+  type BreadcrumbCrumb,
+  type HierarchyChild,
   type InsightKpi,
   type InsightsResponse,
-  type StarOfTheMonth,
   type VillageActivity,
 } from '@navsahyog/shared';
 import type { Bindings, SessionUser, Variables } from '../types';
@@ -52,17 +64,78 @@ function daysBetween(from: string, to: string): number {
   return Math.round((tMs - fMs) / 86_400_000);
 }
 
-async function scopeLabelFor(
+// Human-readable label for the current drill position. "India" at
+// the root, otherwise the entity's own name (e.g. "Bidar Cluster
+// 1"). Called after scope validation, so the (level, id) pair is
+// known to resolve.
+async function scopeLabelAt(
   db: D1Database,
-  user: SessionUser,
+  level: GeoLevel,
+  id: number | null,
 ): Promise<string> {
-  if (user.scope_level === 'global' || user.scope_id === null) return 'India';
-  const table = user.scope_level;
+  if (level === 'india' || id === null) return 'India';
   const row = await db
-    .prepare(`SELECT name FROM ${table} WHERE id = ?`)
-    .bind(user.scope_id)
+    .prepare(`SELECT name FROM ${level} WHERE id = ?`)
+    .bind(id)
     .first<{ name: string }>();
   return row?.name ?? 'India';
+}
+
+// Resolve the user's default drill position — their scope floor.
+// Super admins (scope_level='global') land at india; every other
+// role lands at the entity their role is rooted under (a cluster
+// admin at their cluster, a VC at their village). The Home page
+// starts the drill from this point unless the URL asks deeper.
+function scopeFloorFor(
+  user: SessionUser,
+): { level: GeoLevel; id: number | null } {
+  if (user.scope_level === 'global' || user.scope_id === null) {
+    return { level: 'india', id: null };
+  }
+  return { level: user.scope_level as GeoLevel, id: user.scope_id };
+}
+
+// Resolve + validate the (level, id) the caller asked for. Falls
+// back to the user's scope floor when params are absent. Returns
+// 'bad_request' for malformed input, 'out_of_scope' when the
+// requested subtree doesn't intersect the user's scope.
+type ResolvedDrill =
+  | { level: GeoLevel; id: number | null; effective: number[] }
+  | { error: 'bad_request' | 'out_of_scope' };
+
+async function resolveDrill(
+  db: D1Database,
+  user: SessionUser,
+  scopeIds: number[],
+  qLevel: string | undefined,
+  qId: string | undefined,
+): Promise<ResolvedDrill> {
+  let level: GeoLevel;
+  let id: number | null;
+  if (qLevel === undefined && qId === undefined) {
+    const floor = scopeFloorFor(user);
+    level = floor.level;
+    id = floor.id;
+  } else {
+    if (!isGeoLevel(qLevel)) return { error: 'bad_request' };
+    if (qLevel === 'india') {
+      if (qId !== undefined) return { error: 'bad_request' };
+      level = 'india';
+      id = null;
+    } else {
+      if (qId === undefined) return { error: 'bad_request' };
+      const parsed = Number(qId);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return { error: 'bad_request' };
+      }
+      level = qLevel;
+      id = parsed;
+    }
+  }
+
+  const effective = await effectiveVillages(db, scopeIds, level, id);
+  if (effective === 'out_of_scope') return { error: 'out_of_scope' };
+  return { level, id, effective };
 }
 
 type VillageCore = {
@@ -247,74 +320,136 @@ async function mediaInMonth(
   return row?.n ?? 0;
 }
 
-// Attendance % across a whole calendar month, for the trend card.
-// Returns null when the month had no marks (so the trend line can
-// show a gap rather than pretend zero).
-type TrendRaw = {
-  pct: number | null;
-  sessions: number;
-};
-async function attendanceForMonth(
+// Per-day attendance counts across a window, keyed by 'YYYY-MM-DD'.
+// Returning the pair (not the already-divided %) lets the caller
+// roll days into weekly buckets correctly — (present/total) is not
+// commutative with SUM.
+async function dailyAttendanceCounts(
   db: D1Database,
   ids: number[],
-  monthPrefix: string,
-): Promise<TrendRaw> {
-  if (ids.length === 0) return { pct: null, sessions: 0 };
+  from: string,
+  to: string,
+): Promise<Map<string, { present: number; total: number }>> {
+  const out = new Map<string, { present: number; total: number }>();
+  if (ids.length === 0) return out;
   const placeholders = ids.map(() => '?').join(',');
-  const row = await db
+  const rs = await db
     .prepare(
-      `SELECT COUNT(DISTINCT s.id) AS sessions,
+      `SELECT s.date AS date,
               SUM(CASE WHEN m.present = 1 THEN 1 ELSE 0 END) AS present,
               COUNT(m.id) AS total
          FROM attendance_session s
          LEFT JOIN attendance_mark m ON m.session_id = s.id
         WHERE s.village_id IN (${placeholders})
-          AND s.date LIKE ? || '%'`,
+          AND s.date BETWEEN ? AND ?
+        GROUP BY s.date`,
     )
-    .bind(...ids, monthPrefix)
-    .first<{ sessions: number; present: number | null; total: number | null }>();
-  const sessions = row?.sessions ?? 0;
-  const total = row?.total ?? 0;
-  if (total === 0) return { pct: null, sessions };
-  return {
-    pct: Math.round(((row?.present ?? 0) / total) * 100),
-    sessions,
-  };
+    .bind(...ids, from, to)
+    .all<{ date: string; present: number | null; total: number | null }>();
+  for (const r of rs.results) {
+    out.set(r.date, { present: r.present ?? 0, total: r.total ?? 0 });
+  }
+  return out;
 }
 
-// Stars of the Month for a given calendar month. Returns at most
-// `limit` rows, ordered by date descending so the freshest star
-// surfaces first on the card. Joined with student + village so the
-// UI has everything it needs in one payload.
-async function starsForMonth(
+// Per-day achievement count across a window, keyed by 'YYYY-MM-DD'.
+async function dailyAchievementCounts(
   db: D1Database,
   ids: number[],
-  monthPrefix: string,
-  limit = 10,
-): Promise<StarOfTheMonth[]> {
-  if (ids.length === 0) return [];
+  from: string,
+  to: string,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
   const placeholders = ids.map(() => '?').join(',');
   const rs = await db
     .prepare(
-      `SELECT a.id AS achievement_id,
-              st.id AS student_id,
-              st.first_name || ' ' || st.last_name AS student_name,
-              v.id AS village_id,
-              v.name AS village_name,
-              a.date AS date,
-              a.description AS description
+      `SELECT a.date AS date, COUNT(*) AS n
          FROM achievement a
          JOIN student st ON st.id = a.student_id
-         JOIN village v ON v.id = st.village_id
-        WHERE v.id IN (${placeholders})
-          AND a.type = 'som'
-          AND a.date LIKE ? || '%'
-        ORDER BY a.date DESC, a.id DESC
-        LIMIT ?`,
+        WHERE st.village_id IN (${placeholders})
+          AND a.date BETWEEN ? AND ?
+        GROUP BY a.date`,
     )
-    .bind(...ids, monthPrefix, limit)
-    .all<StarOfTheMonth>();
-  return rs.results;
+    .bind(...ids, from, to)
+    .all<{ date: string; n: number }>();
+  for (const r of rs.results) out.set(r.date, r.n);
+  return out;
+}
+
+// Per-day media count for a given kind. `captured_at` is a UTC
+// epoch; we convert to a 'YYYY-MM-DD' key via strftime so the
+// series is a day-keyed Map matching the attendance / achievement
+// shape. Soft-deleted rows (deleted_at NOT NULL) are excluded.
+async function dailyMediaCounts(
+  db: D1Database,
+  ids: number[],
+  kind: 'image' | 'video',
+  fromIso: string,
+  toIso: string,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      `SELECT strftime('%Y-%m-%d', captured_at, 'unixepoch') AS date,
+              COUNT(*) AS n
+         FROM media
+        WHERE village_id IN (${placeholders})
+          AND kind = ?
+          AND deleted_at IS NULL
+          AND strftime('%Y-%m-%d', captured_at, 'unixepoch') BETWEEN ? AND ?
+        GROUP BY date`,
+    )
+    .bind(...ids, kind, fromIso, toIso)
+    .all<{ date: string; n: number }>();
+  for (const r of rs.results) out.set(r.date, r.n);
+  return out;
+}
+
+// Week index for a day within the 12-week sparkline window ending
+// today. 0 = oldest week, KPI_SPARK_POINTS-1 = current week. Returns
+// null for days outside the window (including future days).
+function weekIndexOf(dateIso: string, todayIso: string): number | null {
+  const diff = daysBetween(dateIso, todayIso); // ≥0 when dateIso ≤ todayIso
+  if (diff < 0 || diff >= KPI_SPARK_POINTS * 7) return null;
+  return KPI_SPARK_POINTS - 1 - Math.floor(diff / 7);
+}
+
+// 12-week rollup of a per-day count Map. Each bucket is a 7-day sum.
+// Counts default to 0 — "no images this week" is a real zero, not a
+// gap; the sparkline renders as the floor rather than a break.
+function rollSparkCount(
+  daily: Map<string, number>,
+  today: string,
+): Array<number | null> {
+  const buckets: Array<number | null> = new Array(KPI_SPARK_POINTS).fill(0);
+  for (const [date, n] of daily) {
+    const wi = weekIndexOf(date, today);
+    if (wi !== null) buckets[wi] = (buckets[wi] as number) + n;
+  }
+  return buckets;
+}
+
+// 12-week rollup of a per-day (present, total) Map into weekly %s.
+// A week with zero marks returns null so the sparkline draws a gap
+// rather than pretending 0% — "no session" and "everyone absent"
+// are very different signals.
+function rollSparkPct(
+  daily: Map<string, { present: number; total: number }>,
+  today: string,
+): Array<number | null> {
+  const pres = new Array(KPI_SPARK_POINTS).fill(0);
+  const tot = new Array(KPI_SPARK_POINTS).fill(0);
+  for (const [date, { present, total }] of daily) {
+    const wi = weekIndexOf(date, today);
+    if (wi !== null) {
+      pres[wi] += present;
+      tot[wi] += total;
+    }
+  }
+  return tot.map((t, i) => (t === 0 ? null : Math.round((pres[i] / t) * 100)));
 }
 
 function deltaTrend(current: number, prev: number | null): {
@@ -338,27 +473,229 @@ function addMonths(fromIso: string, months: number): string {
   return `${ny}-${String(nm).padStart(2, '0')}-01`;
 }
 
+// Maps each in-scope village to its ancestor at the given child
+// level (e.g. child_level='zone' → village_id → zone id/name). A
+// single walk up GEO_JOIN per call; results join cleanly with the
+// per-village cores + weekly maps used for the rest of the page.
+async function villageAncestors(
+  db: D1Database,
+  ids: number[],
+  childLevel: NonRootLevel,
+): Promise<Map<number, { id: number; name: string }>> {
+  const out = new Map<number, { id: number; name: string }>();
+  if (ids.length === 0) return out;
+  const alias = LEVEL_ALIAS[childLevel];
+  const placeholders = ids.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      `SELECT v.id AS village_id, ${alias}.id AS child_id, ${alias}.name AS child_name
+       ${GEO_JOIN}
+       WHERE v.id IN (${placeholders})`,
+    )
+    .bind(...ids)
+    .all<{ village_id: number; child_id: number; child_name: string }>();
+  for (const r of rs.results) {
+    out.set(r.village_id, { id: r.child_id, name: r.child_name });
+  }
+  return out;
+}
+
+// Roll per-village cores + weekly activity into HierarchyChild
+// tiles keyed at the target child level. Village leaves use each
+// village as its own "child" and carry coordinator_name; higher
+// levels sum villages_count, children_count, sessions, marks, and
+// take the max last_session_date. A zero at higher levels stays
+// meaningful — "this zone ran nothing this week" is the actionable
+// signal, not noise.
+function buildHierarchyChildren(
+  today: string,
+  childLevel: NonRootLevel,
+  cores: VillageCore[],
+  weekly: Map<number, VillageWeekly>,
+  ancestors: Map<number, { id: number; name: string }>,
+): HierarchyChild[] {
+  if (childLevel === 'village') {
+    return cores.map((core) => {
+      const w = weekly.get(core.id);
+      const marksTotal = w?.marks_total ?? 0;
+      const marksPresent = w?.marks_present ?? 0;
+      const pct =
+        marksTotal > 0 ? Math.round((marksPresent / marksTotal) * 100) : null;
+      const days =
+        w?.last_session_date != null
+          ? daysBetween(w.last_session_date, today)
+          : null;
+      return {
+        level: 'village',
+        id: core.id,
+        name: core.name,
+        children_count: core.children_count,
+        sessions_this_week: w?.sessions_this_week ?? 0,
+        attendance_pct_week: pct,
+        days_since_last_session: days,
+        at_risk: days === null ? true : days >= AT_RISK_THRESHOLD_DAYS,
+        coordinator_name: core.coordinator_name,
+        villages_count: 1,
+      };
+    });
+  }
+
+  // Higher levels: fold villages under their shared ancestor.
+  type Bucket = {
+    id: number;
+    name: string;
+    villages_count: number;
+    children_count: number;
+    sessions_this_week: number;
+    marks_present: number;
+    marks_total: number;
+    last_session_date: string | null;
+  };
+  const buckets = new Map<number, Bucket>();
+  for (const core of cores) {
+    const anc = ancestors.get(core.id);
+    if (!anc) continue;
+    let b = buckets.get(anc.id);
+    if (!b) {
+      b = {
+        id: anc.id,
+        name: anc.name,
+        villages_count: 0,
+        children_count: 0,
+        sessions_this_week: 0,
+        marks_present: 0,
+        marks_total: 0,
+        last_session_date: null,
+      };
+      buckets.set(anc.id, b);
+    }
+    b.villages_count += 1;
+    b.children_count += core.children_count;
+    const w = weekly.get(core.id);
+    if (w) {
+      b.sessions_this_week += w.sessions_this_week ?? 0;
+      b.marks_present += w.marks_present ?? 0;
+      b.marks_total += w.marks_total ?? 0;
+      if (
+        w.last_session_date !== null &&
+        (b.last_session_date === null || w.last_session_date > b.last_session_date)
+      ) {
+        b.last_session_date = w.last_session_date;
+      }
+    }
+  }
+  return Array.from(buckets.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((b) => {
+      const pct =
+        b.marks_total > 0
+          ? Math.round((b.marks_present / b.marks_total) * 100)
+          : null;
+      const days =
+        b.last_session_date !== null
+          ? daysBetween(b.last_session_date, today)
+          : null;
+      return {
+        level: childLevel,
+        id: b.id,
+        name: b.name,
+        children_count: b.children_count,
+        sessions_this_week: b.sessions_this_week,
+        attendance_pct_week: pct,
+        days_since_last_session: days,
+        at_risk: days === null ? true : days >= AT_RISK_THRESHOLD_DAYS,
+        coordinator_name: null,
+        villages_count: b.villages_count,
+      };
+    });
+}
+
+// Share of in-scope villages with at least one Star of the Month
+// declared in the given calendar month, as a whole-number
+// percentage (0–100). The denominator is every village in scope
+// (including villages that never ran anything this month) so the
+// tile reads as "how close to 100% declared are we?" — ops wants
+// the signal that stragglers exist, not just that somebody
+// somewhere in scope remembered.
+async function somDeclaredPctInMonth(
+  db: D1Database,
+  ids: number[],
+  monthPrefix: string,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(',');
+  const row = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT st.village_id) AS declared
+         FROM achievement a
+         JOIN student st ON st.id = a.student_id
+        WHERE st.village_id IN (${placeholders})
+          AND a.type = 'som'
+          AND a.date LIKE ? || '%'`,
+    )
+    .bind(...ids, monthPrefix)
+    .first<{ declared: number }>();
+  const declared = row?.declared ?? 0;
+  return Math.round((declared / ids.length) * 100);
+}
+
 insights.get('/', requireCap('dashboard.read'), async (c) => {
   const user = c.get('user');
-  const ids = await villageIdsInScope(c.env.DB, user);
+  const scopeIds = await villageIdsInScope(c.env.DB, user);
+
+  // Drill-down params — optional. Default to the user's scope floor
+  // (india for super admin, cluster for cluster admin, etc.). The
+  // URL never exceeds the user's scope: `effectiveVillages` gates
+  // any attempt to drill into another subtree.
+  const drill = await resolveDrill(
+    c.env.DB,
+    user,
+    scopeIds,
+    c.req.query('level'),
+    c.req.query('id'),
+  );
+  if ('error' in drill) {
+    if (drill.error === 'out_of_scope') {
+      return err(c, 'forbidden', 403, 'out of scope');
+    }
+    return err(c, 'bad_request', 400, 'invalid level/id');
+  }
+  const { level, id, effective: ids } = drill;
+
   const today = todayIstDate();
   const weekStart = addDays(today, -6); // 7-day window inclusive
   const prevWeekStart = addDays(today, -13);
   const prevWeekEnd = addDays(today, -7);
   const monthPrefix = today.slice(0, 7);
   const prevMonthPrefix = addMonths(today, -1).slice(0, 7);
-  const prevPrevMonthPrefix = addMonths(today, -2).slice(0, 7);
+  // 12-week sparkline window, inclusive of both endpoints.
+  const sparkStart = addDays(today, -(KPI_SPARK_POINTS * 7 - 1));
 
-  const [scopeLabel, cores, weekly] = await Promise.all([
-    scopeLabelFor(c.env.DB, user),
+  // Child level (one step below the current drill position). Null
+  // means village leaf — tiles deep-link to /village/:id rather than
+  // drilling further inside insights.
+  const childLevel = childLevelOf(level);
+
+  const [scopeLabel, crumbs, cores, weekly, ancestors] = await Promise.all([
+    scopeLabelAt(c.env.DB, level, id),
+    breadcrumbFor(c.env.DB, level, id),
     villageCores(c.env.DB, ids),
     villageWeekly(c.env.DB, ids, prevWeekStart, today),
+    childLevel && childLevel !== 'village'
+      ? villageAncestors(c.env.DB, ids, childLevel)
+      : Promise.resolve(new Map<number, { id: number; name: string }>()),
   ]);
 
   const allVillages = cores.map((v) => buildActivity(today, v, weekly.get(v.id)));
+  const children: HierarchyChild[] =
+    childLevel === null
+      ? []
+      : buildHierarchyChildren(today, childLevel, cores, weekly, ancestors);
 
-  // KPI + trend + stars all fan out in parallel — D1 queries are
-  // cheap individually but serialising them adds up on slow links.
+  // KPI values + 12-week spark series fan out in parallel — D1
+  // queries are cheap individually but serialising them adds up on
+  // slow links. Spark queries return per-day counts across the
+  // 84-day window; we roll into weekly buckets in JS.
   const [
     attThisWeek,
     attPrevWeek,
@@ -368,11 +705,11 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     imagesPrevMonth,
     videosThisMonth,
     videosPrevMonth,
-    trendThis,
-    trendPrev,
-    trendPrevPrev,
-    starsCurrent,
-    starsPrev,
+    dailyAtt,
+    dailyAch,
+    dailyImg,
+    dailyVid,
+    somDeclaredPct,
   ] = await Promise.all([
     overallAttendancePct(c.env.DB, ids, weekStart, today),
     overallAttendancePct(c.env.DB, ids, prevWeekStart, prevWeekEnd),
@@ -382,12 +719,17 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     mediaInMonth(c.env.DB, ids, 'image', prevMonthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', monthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', prevMonthPrefix),
-    attendanceForMonth(c.env.DB, ids, monthPrefix),
-    attendanceForMonth(c.env.DB, ids, prevMonthPrefix),
-    attendanceForMonth(c.env.DB, ids, prevPrevMonthPrefix),
-    starsForMonth(c.env.DB, ids, monthPrefix),
-    starsForMonth(c.env.DB, ids, prevMonthPrefix),
+    dailyAttendanceCounts(c.env.DB, ids, sparkStart, today),
+    dailyAchievementCounts(c.env.DB, ids, sparkStart, today),
+    dailyMediaCounts(c.env.DB, ids, 'image', sparkStart, today),
+    dailyMediaCounts(c.env.DB, ids, 'video', sparkStart, today),
+    somDeclaredPctInMonth(c.env.DB, ids, monthPrefix),
   ]);
+
+  const attendanceSpark = rollSparkPct(dailyAtt, today);
+  const achievementSpark = rollSparkCount(dailyAch, today);
+  const imageSpark = rollSparkCount(dailyImg, today);
+  const videoSpark = rollSparkCount(dailyVid, today);
 
   const totalChildren = cores.reduce((a, v) => a + v.children_count, 0);
   const atRiskCount = allVillages.filter((v) => v.at_risk).length;
@@ -409,6 +751,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: null,
       trend: null,
       hint: null,
+      // Headcount isn't a weekly series — skip the spark.
+      spark: null,
     },
     {
       label: 'attendance_week',
@@ -416,6 +760,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: attDelta.delta,
       trend: attDelta.trend,
       hint: attPrevWeek === null ? null : 'vs_prev_week',
+      spark: attendanceSpark,
     },
     {
       label: 'images_month',
@@ -423,6 +768,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: imgDelta.delta,
       trend: imgDelta.trend,
       hint: imagesPrevMonth === 0 && imagesThisMonth === 0 ? null : 'vs_prev_month',
+      spark: imageSpark,
     },
     {
       label: 'videos_month',
@@ -430,6 +776,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: vidDelta.delta,
       trend: vidDelta.trend,
       hint: videosPrevMonth === 0 && videosThisMonth === 0 ? null : 'vs_prev_month',
+      spark: videoSpark,
     },
     {
       label: 'achievements_month',
@@ -437,6 +784,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: achDelta.delta,
       trend: achDelta.trend,
       hint: achPrevMonth === null ? null : 'vs_prev_month',
+      spark: achievementSpark,
     },
     {
       label: 'at_risk',
@@ -446,6 +794,10 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       // always reads green on the client.
       trend: atRiskCount === 0 ? 'up' : atRiskCount > allVillages.length / 3 ? 'down' : 'flat',
       hint: null,
+      // At-risk is derived from today's state (days_since_last_session);
+      // reconstructing its weekly history would need a per-week scan
+      // that isn't worth the complexity right now.
+      spark: null,
     },
   ];
 
@@ -467,23 +819,17 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       return bd - ad;
     });
 
-  // Trend entries arrive oldest-first so the UI can render left-to-
-  // right without re-sorting.
-  const attendanceTrend: AttendanceTrendPoint[] = [
-    { month: prevPrevMonthPrefix, pct: trendPrevPrev.pct, sessions: trendPrevPrev.sessions },
-    { month: prevMonthPrefix,     pct: trendPrev.pct,     sessions: trendPrev.sessions },
-    { month: monthPrefix,         pct: trendThis.pct,     sessions: trendThis.sessions },
-  ];
-
   const body: InsightsResponse = {
     scope_label: scopeLabel,
+    level,
+    id,
+    crumbs,
+    child_level: childLevel,
+    children,
     kpis,
     top_villages: topVillages,
     at_risk_villages: atRiskVillages,
-    all_villages: allVillages,
-    attendance_trend: attendanceTrend,
-    stars_current_month: starsCurrent,
-    stars_prev_month: starsPrev,
+    som_declared_pct: somDeclaredPct,
   };
   return c.json(body);
 });
