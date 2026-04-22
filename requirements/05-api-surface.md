@@ -170,16 +170,12 @@ Replaces the vendor's `getAttendanceStatusby{Level}`,
 `ListDatewise…`, `ListRangewise…`, `ListClusterWiseStarOfMonth`,
 `ClusterWiseStarOfPreviousMonth`, etc.
 
-### 5.12 Content — `/api/notices`, `/api/reference-links`, `/api/quick-links`, `/api/about`
+### 5.12 Content
 
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/api/notices?scope_level=&scope_id=&active=true` | Scope-resolved list. |
-| `POST` / `PATCH` / `DELETE` | `/api/notices[/:uuid]` | Scope-gated. |
-| `GET` / `POST` / `PATCH` / `DELETE` | `/api/reference-links[/:uuid]` | |
-| `GET` / `POST` / `PATCH` / `DELETE` | `/api/quick-links[/:uuid]` | Combined phone + video. |
-| `GET` | `/api/about` | Current version. |
-| `POST` | `/api/about` | Super Admin — creates a new version. |
+**Cancelled — decisions.md D15.** `/api/notices`,
+`/api/reference-links`, `/api/quick-links`, and `/api/about` are
+removed together with §3.8.2–§3.8.5 and the underlying tables
+(§4.3.8). Section number retained for stable cross-references.
 
 ### 5.13 Settings
 

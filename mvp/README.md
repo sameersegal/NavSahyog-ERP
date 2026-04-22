@@ -33,10 +33,16 @@ both docs can evolve independently.
 |---|---|---|
 | 1 | Multi-role skeleton, one cluster | [`level-1.md`](./level-1.md) |
 | 2 | Full write loop + full drill-down dashboards | [`level-2.md`](./level-2.md) |
+| 2.4b | Media-pipeline follow-ups (thumbnails, transcode, multipart, EXIF GPS, AWS4) | [`level-2.4b.md`](./level-2.4b.md) |
 | 2.5 | Dashboard polish (mobile-first) + §3.6.2 fold | [`level-2.5.md`](./level-2.5.md) |
-| 3 | Master CRUD + secondary screens | [`level-3.md`](./level-3.md) |
+| 3 | Master CRUD + Profile | [`level-3.md`](./level-3.md) |
 | 4 | Offline mode | [`level-4.md`](./level-4.md) |
 | 5 | Auth + compliance hardening (gated on approach decision) | [`level-5.md`](./level-5.md) |
+
+**L2.4b is pending**, not landed — the L2.4 shipped with a deferred
+backlog (decisions.md D7–D11) that's easy to forget when reading
+the ladder top-to-bottom. Listing it here makes the pending scope
+visible without reshuffling L2.4's status.
 
 ## Rules
 

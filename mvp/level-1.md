@@ -44,11 +44,13 @@ role / scope model on the smallest possible feature surface.
   localStorage and applied via a `data-theme` attribute on
   `<html>`; all surfaces read HSL CSS vars so adding a fourth is
   a one-file change. Exposed on Login and in the user menu.
-- **Language switcher (§3.8.6).** en + hi catalogs shipped, exposed
-  on Login and in the user menu. Pulled into L1 early because the
-  cost was low and the field-staff UI is Hindi-first. Adding more
-  languages is a two-step change (drop a `locales/<code>.json` and
-  register it in `apps/web/src/i18n.tsx`).
+- **Language toggle (en + hi).** Catalogs shipped, exposed on Login
+  and in the user menu. Pulled into L1 early because the cost was
+  low and the field-staff UI is Hindi-first. Adding more languages
+  is a two-step change (drop a `locales/<code>.json` and register
+  it in `apps/web/src/i18n.tsx`). The dedicated §3.8.6 Language
+  switcher screen was cancelled in decisions.md D15; the in-menu
+  toggle is the only switcher affordance.
 
 ## Explicitly deferred
 
@@ -56,8 +58,10 @@ role / scope model on the smallest possible feature surface.
 - Achievements (§3.5).
 - Consolidated dashboard (§3.6.2).
 - Master Creations (§3.8.7).
-- Notices, Reference links, Quick links, About Us, Profile
-  (§3.8.1–§3.8.5).
+- Profile (§3.8.1) — L3.
+- *(Notice board §3.8.2, About Us §3.8.3, Reference links §3.8.4,
+  Quick Phone / Quick Video §3.8.5, Language switcher screen §3.8.6
+  — cancelled in decisions.md D15.)*
 - Offline mode, IndexedDB outbox (§3.7, §6).
 - Password hashing, lockout, OTP, forced change (§3.1.2–§3.1.4).
 - CSV export (§3.6.3).

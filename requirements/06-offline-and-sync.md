@@ -18,9 +18,9 @@ Per §3.7, only three workflows run offline:
 - Add achievement (`POST /api/achievements`)
 - Capture image / video / voice note (media upload — §7)
 
-Everything else (login, dashboards, master edits, graduation,
-notices) requires online mode. Offline mode shows a banner and
-disables those menu items.
+Everything else (login, dashboards, master edits, graduation)
+requires online mode. Offline mode shows a banner and disables
+those menu items.
 
 Reads while offline are served from a **local cache** of the data
 needed by these three workflows:

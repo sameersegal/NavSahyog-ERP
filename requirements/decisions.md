@@ -9,6 +9,29 @@ justification.
 
 ---
 
+## 2026-04-22 — L3 re-scoping + media-backlog visibility
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D15 | **Cancel §3.8.2–§3.8.6 (Notice board, About Us, Reference links, Quick Phone / Quick Video, Language switcher screen).** None of these were load-bearing for a NavSahyog workflow — they were vendor-platform carryover. Broadcasts, static org info, curated links, and contact numbers are distributed out-of-band (email / WhatsApp). The in-menu language toggle already ships in L2.5; a dedicated switcher screen adds nothing. L3 shrinks to Master Creations (§3.8.7) + Profile (§3.8.1). Section numbers in §3.8 stay (CLAUDE.md numbering rule); bodies replaced with "Cancelled — D15" notes. | Earlier L3 scope that listed all five as "secondary screens" (mvp/level-3.md prior to 2026-04-22). |
+| D16 | **L2.4b media-pipeline backlog promoted to a visible row on the MVP ladder.** The follow-on work (P1 — ffmpeg.wasm transcode + R2 multipart; P2 — `media-derive` Queues consumer + thumbnails + EXIF GPS; P3 — AWS4 presigned URLs + MP4/Matroska GPS sidecar) was tracked in `mvp/level-2.4b.md` but not in `mvp/README.md`, so it was easy to miss as "pending scope". Row added between L2.5 and L3; no content change to `level-2.4b.md` itself. | `mvp/README.md` ladder that skipped L2.4b. |
+
+### Follow-on spec / mvp cleanups (same commit as D15 + D16)
+
+- `requirements/03-functional.md` §3.8 — bodies of §3.8.2–§3.8.6 replaced with "Cancelled — D15" notes; §3.8.1 and §3.8.7 updated to reflect the trimmed master list (no more `notices`, `reference_link`, `quick_link`, `about_us` under Master Creations).
+- `requirements/04-data-model.md` §4.2 — four content-table rows flipped from **Keep** to **Drop**; §4.3.8 body replaced with a "Cancelled" note (header retained); §4.4 summary drops table count from 21 to 17.
+- `requirements/05-api-surface.md` §5.12 — `/api/notices`, `/api/reference-links`, `/api/quick-links`, `/api/about` all removed; section header retained.
+- `requirements/06-offline-and-sync.md` — "notices" dropped from the online-only list.
+- `requirements/08-non-functional.md` — `user.preferred_language` for "OTP / notice delivery" rewritten as "OTP delivery" (notice delivery cancelled); soft-delete scope drops `notice`, `reference_link`, `quick_link`.
+- `requirements/09-compliance.md` §9.6 — i18n open item updated to note the switcher screen is cancelled; in-menu toggle is the only affordance.
+- `requirements/10-migration.md` §10.5 — content-hub migration block rewritten as "not migrated"; §10.8 broadcast step + §10.10 risk row reworded to "out-of-band".
+- `requirements/review-findings-v1.md` U3 — marked "Resolved by D15".
+- `mvp/level-3.md` — re-titled "Master CRUD + Profile"; scope reduced accordingly; media-pipeline backlog linked from "Explicitly deferred".
+- `mvp/level-1.md` / `mvp/level-2.md` / `mvp/level-2.5.md` — "Explicitly deferred" rows pointing at §3.8.1–§3.8.6 reshaped to call out Profile → L3 and D15's cancellation of the rest.
+- `mvp/README.md` — ladder gains an **L2.4b** row linking to `level-2.4b.md` so the media-pipeline backlog is visible at a glance (D16).
+
+---
+
 ## 2026-04-21 — L2.5 scoping (dashboard polish + §3.6.2 fold)
 
 | # | Decision | Supersedes |

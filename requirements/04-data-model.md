@@ -58,10 +58,10 @@ is the canonical reference.
 | `attendance`, `attendanceOffline` | **Merge** into `attendance_session` + `attendance_mark`. Offline state lives in the client outbox, not a server table. |
 | `achievement` | **Keep.** |
 | `event_image`, `event_image_offline`, `event_video`, `event_video_offline` | **Merge** into a single `media` table (kind = `image` / `video` / `audio`). |
-| `aboutus` | **Keep**, renamed `about_us`. |
-| `notification` | **Keep**, renamed `notice`. |
-| `referencelink` | **Keep**, renamed `reference_link`. |
-| `quickPhoneLinks`, `quickVideoLinks` | **Merge** into `quick_link` (kind = `phone` / `video`). |
+| `aboutus` | **Drop** — decisions.md D15. §3.8.3 cancelled. |
+| `notification` | **Drop** — decisions.md D15. §3.8.2 cancelled; broadcasts go out-of-band. |
+| `referencelink` | **Drop** — decisions.md D15. §3.8.4 cancelled. |
+| `quickPhoneLinks`, `quickVideoLinks` | **Drop** — decisions.md D15. §3.8.5 cancelled; quick actions go out-of-band. |
 | `legacy_settings` | **Drop.** Retention out-of-system; other knobs are Worker env vars (decisions.md D1). |
 | *(new)* | `audit_log` — append-only (§9.4). |
 
@@ -220,26 +220,10 @@ Indexes: `(village_id, captured_at)`, `tag_event_id`,
 
 #### 4.3.8 Content
 
-**`notice`** — formerly `notification`.
-- `id`, `uuid`, `title`, `body`,
-  `scope_level TEXT` / `scope_id INTEGER` (same semantics as
-  `user.scope_*`; null scope_id + `scope_level='global'` = all
-  users).
-- `published_at INTEGER`, `expires_at INTEGER`
-- *audit columns*
-
-**`reference_link`** — curated external links.
-- `id`, `uuid`, `title`, `url`, `description`, `category`,
-  *audit*.
-
-**`quick_link`** — phone/video quick actions merged.
-- `id`, `uuid`, `kind TEXT CHECK (kind IN ('phone','video'))`,
-  `label`, `target TEXT` (phone number or video URL),
-  `role TEXT` (for phone: role of the contact), *audit*.
-
-**`about_us`** — singleton, versioned.
-- `id`, `body TEXT NOT NULL`, *audit*. Super Admin writes a new
-  row; clients fetch the latest non-deleted row.
+**Cancelled — decisions.md D15.** The four content-hub tables
+(`notice`, `reference_link`, `quick_link`, `about_us`) were
+dropped together with §3.8.2–§3.8.6. Section number retained so
+existing cross-references (§5.12, §8.4, etc.) still resolve.
 
 **No `app_settings` table.** The vendor's `legacy_settings` has no
 bespoke equivalent. Runtime tunables (session TTL, OTP TTL, default
@@ -265,16 +249,18 @@ handled out-of-system (see §9.3, decisions.md D1/D4).
 
 ### 4.4 Summary
 
-- **21 tables** in the bespoke schema (vendor had 35).
+- **17 tables** in the bespoke schema (vendor had 35).
 - Removed: `ngo_features`, `role_permission`, `teacher_roles`,
   `teacher_roles_assign`, `country`, `territory`, `taluk`,
   `MembershipType`, `village_pgm_status`, `student_pgm_status`,
   `teacher_pgm_status`, `eventsNew`, `attendanceOffline`,
   `event_image_offline`, `event_video_offline`, `legacy_settings`
-  (no bespoke equivalent — decisions.md D1).
+  (no bespoke equivalent — decisions.md D1), and the four
+  content-hub tables `notification`, `aboutus`, `referencelink`,
+  `quickPhoneLinks` + `quickVideoLinks` (§3.8.2–§3.8.5 cancelled —
+  decisions.md D15).
 - Merged: `teacher` + `login_user_data` → `user`;
-  `event_image` + `event_video` (+ offline pairs) → `media`;
-  `quickPhoneLinks` + `quickVideoLinks` → `quick_link`.
+  `event_image` + `event_video` (+ offline pairs) → `media`.
 - Added: `audit_log`.
 
 ### 4.5 Open items

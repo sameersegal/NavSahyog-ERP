@@ -19,7 +19,8 @@ observability, reliability, accessibility, and browser support.
   No runtime language editor — changes ship via deploy.
 - **Persistence**: user's chosen language is stored in `session`
   (IndexedDB §6.2) and echoed on the server as
-  `user.preferred_language` for OTP / notice delivery.
+  `user.preferred_language` for OTP delivery. (Notice delivery
+  was cancelled with §3.8.2 in decisions.md D15.)
 - **String externalisation rule**: no user-facing string ever
   lives in component code. Enforced by a lint rule
   (`eslint-plugin-i18next/no-literal-string`) and a CI grep for
@@ -146,7 +147,7 @@ Soft delete (`deleted_at` + `deleted_by`, §4.1) applies to:
 - `user`, `student`, `school`, `village`, `cluster`, `district`,
   `region`, `state`, `zone`.
 - `event`, `qualification`, `achievement`,
-  `attendance_session`, `notice`, `reference_link`, `quick_link`.
+  `attendance_session`.
 - `media` (row soft-deleted on user action — see §7.7; R2 object lifecycle is out-of-system).
 
 Never soft-deleted (hard delete only):
