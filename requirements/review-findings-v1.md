@@ -201,8 +201,12 @@ files link to it.
 ### U3 — Language-switcher conflict
 - §3.8.6 stores language in both KV (server) and localStorage (client).
 - No rule for which wins on conflict.
-- **Fix.** _"Server value wins on login; client overrides are
-  persisted on the next authenticated request."_
+- **Resolved by D15** (§3.8.6 screen cancelled). The in-menu
+  toggle writes to `localStorage`; `user.preferred_language` is
+  still echoed on login for OTP delivery. Original fix retained
+  for when/if the preference round-trips via the session claim:
+  _"Server value wins on login; client overrides are persisted on
+  the next authenticated request."_
 
 ### U4 — `scope_id` has no DB-level FK
 - §4.3.1 — enforced in application code only.

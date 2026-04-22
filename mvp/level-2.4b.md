@@ -2,14 +2,17 @@
 
 [← Level 2](./level-2.md) · [Index](./README.md)
 
+**Status:** pending. Promoted to a visible row on the MVP ladder
+in decisions.md D16 so it doesn't orphan when L2 closes.
+
 Follow-up work deferred during L2.4 per `requirements/decisions.md`
 D7–D11. L2.4 shipped a single-PUT media pipeline with a uniform
 50 MiB cap across photo, voice-note, and video so the capture UX
-could stay whole. This file tracks what the decisions pushed out —
-so it doesn't orphan when L2 closes.
+could stay whole. This file tracks what the decisions pushed out.
 
-**This doc is not part of the spec.** It's a working list. Mark
-items `fixed in <commit/PR>` as they land.
+**This doc is a working list, not the spec.** Mark items
+`fixed in <commit/PR>` as they land; when everything here ships,
+the file becomes the L2.4b status record like any other level doc.
 
 ## Priorities at a glance
 

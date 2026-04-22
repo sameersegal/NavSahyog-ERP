@@ -193,7 +193,8 @@ All in the L2.5.1 PR, since they describe the whole L2.5 arc:
 - Offline (§3.7, §6) — L4.
 - Auth hardening, compliance (§9) — L5.
 - Master Creations (§3.8.7) — L3.
-- Secondary screens (§3.8.1–§3.8.6) — L3.
+- Profile (§3.8.1) — L3.
+- *(§3.8.2–§3.8.6 cancelled in decisions.md D15.)*
 - Consolidated-as-separate-route — cancelled (decisions.md D12).
 
 ## Notes

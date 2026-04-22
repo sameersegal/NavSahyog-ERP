@@ -250,7 +250,10 @@ user-facing contract.
 
 ### 3.8 Secondary screens
 
-Parity with the vendor app; keep them minimal.
+Parity with the vendor app, trimmed hard. Only Profile and Master
+Creations remain; the five content-hub sub-screens were cancelled
+in decisions.md D15 (vendor-platform carryover — none of them
+serve a workflow a NavSahyog user can't accomplish out-of-band).
 
 #### 3.8.1 Profile
 - Read-only: name, user ID, date of joining, role, assigned geo
@@ -258,40 +261,42 @@ Parity with the vendor app; keep them minimal.
   user's AF).
 
 #### 3.8.2 Notice board
-- List of notices (title, body, posted-by, posted-on), most-recent
-  first. Scope-filtered (a notice can be global, zone-wide,
-  state-wide, … down to village).
-- Super Admins and scoped admins can post new notices within their
-  scope.
+- **Cancelled — decisions.md D15.** Ops-to-staff broadcasts happen
+  out-of-band (WhatsApp, email). Section header retained for stable
+  cross-references; the `notice` table, `/api/notices` surface, and
+  §6.1 offline notices flag are all removed.
 
 #### 3.8.3 About Us
-- Static content, editable by Super Admin. Versioned (show
-  last-updated date).
+- **Cancelled — decisions.md D15.** The `about_us` table and
+  `/api/about` route are removed. Org information lives on the
+  NavSahyog website, not inside the ERP.
 
 #### 3.8.4 Reference links
-- Curated external links (e.g. government schemes, training
-  material). Fields: title, url, description, category.
+- **Cancelled — decisions.md D15.** The `reference_link` table and
+  `/api/reference-links` surface are removed. Curated links live
+  out-of-band.
 
 #### 3.8.5 Quick Phone / Quick Video links
-- Quick Phone: one-tap dial entries (role, name, phone). Quick
-  Video: embedded or linked training videos.
-- Managed by Super Admin.
+- **Cancelled — decisions.md D15.** The `quick_link` table and
+  `/api/quick-links` surface are removed. Contact numbers and
+  training videos are distributed out-of-band.
 
 #### 3.8.6 Language switcher
-- In the side menu. Persists per user (both in KV session and in
-  `localStorage` for offline). **Default set: en + hi** — stakeholder
-  decision, April 2026 (supersedes the earlier "en + kn + ta"
-  placeholder). Additional languages (kn, ta, …) can be added by
-  dropping a `locales/<code>.json` catalog and registering it in
-  the client i18n module; no other code changes required.
+- **Cancelled as a dedicated screen — decisions.md D15.** The
+  i18n module stays (en + hi ship in L2.5); the language toggle
+  lives in the existing user menu, not as its own secondary screen.
+  Adding a language remains a matter of dropping a
+  `locales/<code>.json` catalog and registering it in the client
+  i18n module.
 
 #### 3.8.7 Master Creations (Super Admin only)
 - Consolidated CRUD for each master (villages, schools, events,
-  activities, qualifications, roles, reference links, quick links,
-  notices, users). Not a generic table editor — one dedicated
-  screen per master, with only the fields the bespoke app actually
-  uses. No "app settings" screen — retention is out-of-system; other
-  tunables are Worker env vars (decisions.md D1).
+  activities, qualifications, roles, users). Not a generic table
+  editor — one dedicated screen per master, with only the fields
+  the bespoke app actually uses. Content-hub masters (`notice`,
+  `reference_link`, `quick_link`, `about_us`) were cancelled in
+  D15 and do not appear. No "app settings" screen — retention is
+  out-of-system; other tunables are Worker env vars (D1).
 
 ---
 

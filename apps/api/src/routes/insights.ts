@@ -377,6 +377,62 @@ async function dailyAchievementCounts(
   return out;
 }
 
+// Per-village media count for a given kind + calendar month.
+// Keyed by village_id so the per-child rollup can fold these in
+// alongside the weekly attendance map. `captured_at` is a UTC
+// epoch; IST calendar-month prefix via strftime. Soft-deleted
+// rows excluded.
+async function perVillageMediaInMonth(
+  db: D1Database,
+  ids: number[],
+  kind: 'image' | 'video',
+  monthPrefix: string,
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      `SELECT village_id, COUNT(*) AS n FROM media
+        WHERE village_id IN (${placeholders})
+          AND kind = ?
+          AND deleted_at IS NULL
+          AND strftime('%Y-%m', captured_at, 'unixepoch') = ?
+        GROUP BY village_id`,
+    )
+    .bind(...ids, kind, monthPrefix)
+    .all<{ village_id: number; n: number }>();
+  for (const r of rs.results) out.set(r.village_id, r.n);
+  return out;
+}
+
+// Per-village achievement count for a calendar month (any type —
+// SoM / gold / silver rolled together; the ops question the child
+// tile answers is "did anything get celebrated here this month?",
+// not the type mix). Folded the same way as media.
+async function perVillageAchievementsInMonth(
+  db: D1Database,
+  ids: number[],
+  monthPrefix: string,
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      `SELECT st.village_id AS village_id, COUNT(*) AS n
+         FROM achievement a
+         JOIN student st ON st.id = a.student_id
+        WHERE st.village_id IN (${placeholders})
+          AND a.date LIKE ? || '%'
+        GROUP BY st.village_id`,
+    )
+    .bind(...ids, monthPrefix)
+    .all<{ village_id: number; n: number }>();
+  for (const r of rs.results) out.set(r.village_id, r.n);
+  return out;
+}
+
 // Per-day media count for a given kind. `captured_at` is a UTC
 // epoch; we convert to a 'YYYY-MM-DD' key via strftime so the
 // series is a day-keyed Map matching the attendance / achievement
@@ -507,12 +563,21 @@ async function villageAncestors(
 // take the max last_session_date. A zero at higher levels stays
 // meaningful — "this zone ran nothing this week" is the actionable
 // signal, not noise.
+//
+// Monthly counters (images / videos / achievements) come in as
+// per-village maps and fold the same way as weekly marks. These
+// power the "compare at a glance" columns on Home's child grid —
+// each child tile carries the same KPIs the scope strip shows, so
+// two siblings can be compared horizontally without drilling.
 function buildHierarchyChildren(
   today: string,
   childLevel: NonRootLevel,
   cores: VillageCore[],
   weekly: Map<number, VillageWeekly>,
   ancestors: Map<number, { id: number; name: string }>,
+  imagesByVillage: Map<number, number>,
+  videosByVillage: Map<number, number>,
+  achievementsByVillage: Map<number, number>,
 ): HierarchyChild[] {
   if (childLevel === 'village') {
     return cores.map((core) => {
@@ -536,6 +601,9 @@ function buildHierarchyChildren(
         at_risk: days === null ? true : days >= AT_RISK_THRESHOLD_DAYS,
         coordinator_name: core.coordinator_name,
         villages_count: 1,
+        images_this_month: imagesByVillage.get(core.id) ?? 0,
+        videos_this_month: videosByVillage.get(core.id) ?? 0,
+        achievements_this_month: achievementsByVillage.get(core.id) ?? 0,
       };
     });
   }
@@ -550,6 +618,9 @@ function buildHierarchyChildren(
     marks_present: number;
     marks_total: number;
     last_session_date: string | null;
+    images_this_month: number;
+    videos_this_month: number;
+    achievements_this_month: number;
   };
   const buckets = new Map<number, Bucket>();
   for (const core of cores) {
@@ -566,11 +637,17 @@ function buildHierarchyChildren(
         marks_present: 0,
         marks_total: 0,
         last_session_date: null,
+        images_this_month: 0,
+        videos_this_month: 0,
+        achievements_this_month: 0,
       };
       buckets.set(anc.id, b);
     }
     b.villages_count += 1;
     b.children_count += core.children_count;
+    b.images_this_month += imagesByVillage.get(core.id) ?? 0;
+    b.videos_this_month += videosByVillage.get(core.id) ?? 0;
+    b.achievements_this_month += achievementsByVillage.get(core.id) ?? 0;
     const w = weekly.get(core.id);
     if (w) {
       b.sessions_this_week += w.sessions_this_week ?? 0;
@@ -606,6 +683,9 @@ function buildHierarchyChildren(
         at_risk: days === null ? true : days >= AT_RISK_THRESHOLD_DAYS,
         coordinator_name: null,
         villages_count: b.villages_count,
+        images_this_month: b.images_this_month,
+        videos_this_month: b.videos_this_month,
+        achievements_this_month: b.achievements_this_month,
       };
     });
 }
@@ -676,7 +756,16 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
   // drilling further inside insights.
   const childLevel = childLevelOf(level);
 
-  const [scopeLabel, crumbs, cores, weekly, ancestors] = await Promise.all([
+  const [
+    scopeLabel,
+    crumbs,
+    cores,
+    weekly,
+    ancestors,
+    imagesByVillage,
+    videosByVillage,
+    achievementsByVillage,
+  ] = await Promise.all([
     scopeLabelAt(c.env.DB, level, id),
     breadcrumbFor(c.env.DB, level, id),
     villageCores(c.env.DB, ids),
@@ -684,13 +773,34 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     childLevel && childLevel !== 'village'
       ? villageAncestors(c.env.DB, ids, childLevel)
       : Promise.resolve(new Map<number, { id: number; name: string }>()),
+    // Per-village monthly counts feed the child-grid comparison
+    // columns. Fanned out in parallel alongside the other reads —
+    // three small GROUP BY queries, cheap in D1.
+    childLevel !== null
+      ? perVillageMediaInMonth(c.env.DB, ids, 'image', monthPrefix)
+      : Promise.resolve(new Map<number, number>()),
+    childLevel !== null
+      ? perVillageMediaInMonth(c.env.DB, ids, 'video', monthPrefix)
+      : Promise.resolve(new Map<number, number>()),
+    childLevel !== null
+      ? perVillageAchievementsInMonth(c.env.DB, ids, monthPrefix)
+      : Promise.resolve(new Map<number, number>()),
   ]);
 
   const allVillages = cores.map((v) => buildActivity(today, v, weekly.get(v.id)));
   const children: HierarchyChild[] =
     childLevel === null
       ? []
-      : buildHierarchyChildren(today, childLevel, cores, weekly, ancestors);
+      : buildHierarchyChildren(
+          today,
+          childLevel,
+          cores,
+          weekly,
+          ancestors,
+          imagesByVillage,
+          videosByVillage,
+          achievementsByVillage,
+        );
 
   // KPI values + 12-week spark series fan out in parallel — D1
   // queries are cheap individually but serialising them adds up on

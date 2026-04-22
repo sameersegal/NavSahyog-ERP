@@ -51,7 +51,9 @@
 ### 9.6 Open items for stakeholder confirmation
 - [x] Which languages are actually in field use? **Resolved April
       2026: en + hi for launch; additional languages added on
-      demand via the i18n catalogs. See §3.8.6.**
+      demand via the i18n catalogs. The dedicated language-switcher
+      screen (§3.8.6) was cancelled in D15; the toggle lives in the
+      existing user menu.**
 - [ ] Are `Territory` and `Taluk` geo levels populated in production
       data?
 - [ ] Audit-log retention period.

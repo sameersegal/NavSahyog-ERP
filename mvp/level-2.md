@@ -48,9 +48,10 @@ PR; the whole thing rolls up to one "L2" status line when 2.4 lands.
 
 ## Explicitly deferred
 
-- Consolidated dashboard (§3.6.2) — L3.
+- Consolidated dashboard (§3.6.2) — folded into §3.6.1 in L2.5.3 (D12).
 - Master Creations (§3.8.7) — L3.
-- Secondary screens (§3.8.1–§3.8.6) — L3.
+- Profile (§3.8.1) — L3.
+- *(§3.8.2–§3.8.6 cancelled in decisions.md D15.)*
 - Offline (§3.7, §6) — L4.
 - Auth hardening (§3.1.2–§3.1.4) — L5.
 - Audit log, compliance (§9) — L5.

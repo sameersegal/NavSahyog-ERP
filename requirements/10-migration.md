@@ -151,12 +151,11 @@ straightforward copies (`name → name`) are omitted.
   cron. Showcase / legal-hold preservation is an operational
   convention on the bucket.
 
-**Content** — `aboutus`, `notification`, `referencelink`,
-`quickPhoneLinks`, `quickVideoLinks`:
+**Content** — not migrated (decisions.md D15; §3.8.2–§3.8.5
+cancelled):
 
-- Drop `CorpId`; filter to NavSahyog.
-- `quickPhoneLinks` + `quickVideoLinks` → `quick_link` with
-  `kind`.
+- `aboutus`, `notification`, `referencelink`, `quickPhoneLinks`,
+  `quickVideoLinks` — no target tables in the bespoke schema.
 - `legacy_settings`: **not migrated** (decisions.md D1). Reviewed
   once as a reference for the bespoke app's Worker env-var
   defaults (session TTL, OTP TTL, default language); the values
@@ -169,7 +168,10 @@ straightforward copies (`name → name`) are omitted.
   `village_pgm_status` (merged), `teacher_roles`,
   `teacher_roles_assign` (merged), `student_pgm_status` (merged),
   `teacher_pgm_status` (merged), `eventsNew` (deduped),
-  all `*Offline` tables (merged with their canonical pairs).
+  all `*Offline` tables (merged with their canonical pairs),
+  `aboutus` / `notification` / `referencelink` /
+  `quickPhoneLinks` / `quickVideoLinks` (D15 — content hub
+  cancelled).
 
 ### 10.6 Media bytes backfill
 
@@ -228,8 +230,9 @@ During the planned 15-minute window:
 3. Run P6 verification on production.
 4. Flip DNS for `app.navsahyog.org` and `api.navsahyog.org` to
    Cloudflare.
-5. Send a broadcast notification (§3.8.2) to all users: new app
-   URL + login-first-time-with-same-user-id instructions.
+5. Broadcast the cut-over to all users out-of-band (email /
+   WhatsApp — the in-app §3.8.2 notice board was cancelled in D15):
+   new app URL + login-first-time-with-same-user-id instructions.
 6. Monitor dashboards (§8.8) for 4 hours at 100 % trace sampling.
 
 ### 10.9 Dual-run & decommission
@@ -256,7 +259,7 @@ During the planned 15-minute window:
 | `territory` / `taluk` rows populated | Hierarchy gap in target | Dynamic decision at P1 based on count; if populated, keep the levels and extend §2.2 + §4.3.2. |
 | Vendor media URL stops resolving mid-P5 | Partial media corpus | Checkpointed per object; resumable. Any unresolved media stays in `vendor_missing` list for manual chase. |
 | Dashboard parity off by > 0.5 % | Trust in new system eroded | Block cut-over; diff report drills to row-level. §10.7 enforces this. |
-| Field users confused by new login URL | Support burden spike | Broadcast notice + in-vendor-app banner for 30 days before cut-over; AF-led training refresh per cluster. |
+| Field users confused by new login URL | Support burden spike | Out-of-band broadcast (email / WhatsApp) + in-vendor-app banner for 30 days before cut-over; AF-led training refresh per cluster. |
 
 ### 10.11 Open items
 
