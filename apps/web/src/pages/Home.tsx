@@ -5,21 +5,30 @@
 //     and redirect to that village. Saves a wasted tap every time
 //     they log in (VCs are the most frequent users, in the field,
 //     one-handed).
-//   * Everyone else → KPI strip (each numeric tile carries its own
-//     inline 12-week sparkline; the SoM tile shows % declared) +
-//     insight cards (at-risk / top-this-week) + a village grid
-//     annotated with coordinator name + activity chip.
+//   * Everyone else → breadcrumb trail from India down to the
+//     current drill position + KPI strip (scoped to the drill) +
+//     insight cards (at-risk / top-this-week) + a grid of child
+//     tiles at the next hierarchy level. Click a zone tile → see
+//     states; click a state → see regions; etc. At cluster scope
+//     the tiles are villages and navigate to /village/:id.
 //
-// Data comes from /api/insights (scope-filtered). That single call
-// replaces the old /api/villages fetch and carries everything the
-// page needs — per-KPI sparks, deltas, village activity — so the
-// home screen renders with one round-trip.
+// Drill position is URL-backed (`?level=&id=`) so refresh /
+// deep-link / back-button all preserve scope. An operator can
+// share a link like "home at Karnataka zone" and it opens there.
+//
+// Data comes from /api/insights, scope-filtered server-side. That
+// single round-trip carries crumbs + children + KPIs + sparks +
+// top/at-risk cards — the home screen renders with one request.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AT_RISK_THRESHOLD_DAYS,
   api,
+  isGeoLevel,
+  type BreadcrumbCrumb,
+  type GeoLevel,
+  type HierarchyChild,
   type InsightKpi,
   type InsightsResponse,
   type VillageActivity,
@@ -31,48 +40,67 @@ export function Home() {
   const { t, tPlural } = useI18n();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Parse ?level=&id= once per URL change. Bad params fail closed
+  // to "no drill override" — the server will resolve to the user's
+  // scope floor instead of erroring the whole page.
+  const drill = useMemo(() => {
+    const rawLevel = searchParams.get('level');
+    const rawId = searchParams.get('id');
+    if (!rawLevel) return {};
+    if (!isGeoLevel(rawLevel)) return {};
+    if (rawLevel === 'india') return { level: rawLevel };
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) return {};
+    return { level: rawLevel, id };
+  }, [searchParams]);
+
   useEffect(() => {
+    setData(null);
+    setError(null);
     api
-      .insights()
+      .insights(drill)
       .then((r) => setData(r))
       .catch((e) => setError(e instanceof Error ? e.message : 'failed'));
-  }, []);
+  }, [drill.level, drill.id]);
 
-  // Single-village fast path — redirect as soon as we know. This
-  // usually lands with the insights response; the grid flashes for
-  // one frame at most.
-  const autoRedirectVillage = useMemo(() => {
-    if (!user || user.scope_level !== 'village') return null;
-    if (!data || data.all_villages.length !== 1) return null;
-    return data.all_villages[0]!.village_id;
-  }, [user, data]);
-
+  // Single-village VC shortcut — redirect before the page even
+  // paints. The server would return a village-leaf view with empty
+  // children, but VCs rarely want to read stats; they want to mark
+  // attendance. Skipping the intermediate render saves a tap.
+  const vcSingleVillage =
+    user?.scope_level === 'village' ? user.scope_id : null;
   useEffect(() => {
-    if (autoRedirectVillage !== null) {
-      navigate(`/village/${autoRedirectVillage}`, { replace: true });
+    if (vcSingleVillage !== null) {
+      navigate(`/village/${vcSingleVillage}`, { replace: true });
     }
-  }, [autoRedirectVillage, navigate]);
+  }, [vcSingleVillage, navigate]);
 
   if (error) return <p className="text-danger">{error}</p>;
   if (!data) return <p className="text-muted-fg">{t('common.loading')}</p>;
-  if (autoRedirectVillage !== null) {
-    // Render nothing while the redirect is resolving — the grid
-    // would flash on slow connections otherwise.
-    return null;
-  }
+  if (vcSingleVillage !== null) return null;
+
+  const childLabel =
+    data.child_level && data.children.length > 0
+      ? tPlural(
+          `home.children.${data.child_level}`,
+          data.children.length,
+          { n: data.children.length },
+        )
+      : null;
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs crumbs={data.crumbs} />
+
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold">
           {t('home.heading', { scope: data.scope_label })}
         </h2>
-        <p className="text-sm text-muted-fg">
-          {t('home.subheading')}
-        </p>
+        <p className="text-sm text-muted-fg">{t('home.subheading')}</p>
       </header>
 
       <KpiStrip kpis={data.kpis} somDeclaredPct={data.som_declared_pct} />
@@ -88,24 +116,62 @@ export function Home() {
         </div>
       )}
 
-      <section>
-        <h3 className="mb-2 text-sm font-semibold text-muted-fg uppercase tracking-wide">
-          {tPlural('home.villages', data.all_villages.length)}
-        </h3>
-        {data.all_villages.length === 0 ? (
-          <p className="text-muted-fg">{t('home.empty')}</p>
-        ) : (
+      {data.children.length > 0 && childLabel && (
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-muted-fg uppercase tracking-wide">
+            {childLabel}
+          </h3>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data.all_villages.map((v) => (
-              <li key={v.village_id}>
-                <VillageCard v={v} />
+            {data.children.map((ch) => (
+              <li key={`${ch.level}-${ch.id}`}>
+                <ChildTile child={ch} />
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
+
+      {data.children.length === 0 && data.child_level !== null && (
+        <p className="text-muted-fg">{t('home.empty')}</p>
+      )}
     </div>
   );
+}
+
+// Breadcrumb trail from India down to the current drill position.
+// Every crumb except the last is a link back to that level. Plain
+// text chevrons between crumbs so the row reads on a phone without
+// any icon font. Hidden entirely at the scope floor (no navigation
+// to do) for users who can't drill further up anyway.
+function Breadcrumbs({ crumbs }: { crumbs: BreadcrumbCrumb[] }) {
+  if (crumbs.length < 2) return null;
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-fg"
+    >
+      {crumbs.map((c, i) => {
+        const last = i === crumbs.length - 1;
+        return (
+          <span key={`${c.level}-${c.id ?? 'root'}`} className="flex items-baseline gap-2">
+            {last ? (
+              <span className="text-fg font-medium">{c.name}</span>
+            ) : (
+              <Link to={crumbHref(c)} className="text-primary hover:underline">
+                {c.name}
+              </Link>
+            )}
+            {!last && <span aria-hidden="true">›</span>}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+function crumbHref(c: BreadcrumbCrumb): string {
+  if (c.level === 'india') return '/';
+  return `/?level=${c.level}&id=${c.id}`;
 }
 
 // KPI strip. On mobile the tiles stack in a single column so each
@@ -307,12 +373,14 @@ function TopVillagesCard({ villages }: { villages: VillageActivity[] }) {
   );
 }
 
-// Village card — activity chip colour driven by days-since-last.
-// Now also shows the coordinator name under the cluster line so
-// back-office knows who to ping about a village without drilling in.
-function VillageCard({ v }: { v: VillageActivity }) {
-  const { t } = useI18n();
-  const days = v.days_since_last_session;
+// Hierarchy child tile — one per next-level node (zone, state,
+// region, district, cluster, or village). Clicking navigates
+// deeper. At village leaf (child.level === 'village') the link
+// goes to /village/:id — the detail surface — rather than a
+// further drill inside insights.
+function ChildTile({ child }: { child: HierarchyChild }) {
+  const { t, tPlural } = useI18n();
+  const days = child.days_since_last_session;
   let chipClass: string;
   let chipLabel: string;
   if (days === null) {
@@ -329,30 +397,43 @@ function VillageCard({ v }: { v: VillageActivity }) {
     chipLabel = t('home.card.days_ago', { days });
   }
 
+  const href =
+    child.level === 'village'
+      ? `/village/${child.id}`
+      : `/?level=${child.level}&id=${child.id}`;
+
   return (
     <Link
-      to={`/village/${v.village_id}`}
+      to={href}
       className="block bg-card hover:bg-card-hover border border-border rounded-lg p-4 transition-colors space-y-2"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="font-medium truncate">{v.village_name}</div>
+        <div className="font-medium truncate">{child.name}</div>
         <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${chipClass}`}>
           {chipLabel}
         </span>
       </div>
-      <div className="text-xs text-muted-fg">{v.cluster_name}</div>
-      <div className="text-xs text-muted-fg truncate">
-        {v.coordinator_name
-          ? t('home.card.vc', { name: v.coordinator_name })
-          : t('home.card.vc_unassigned')}
-      </div>
+      {child.level !== 'village' && (
+        <div className="text-xs text-muted-fg">
+          {tPlural('home.tile.villages', child.villages_count, {
+            n: child.villages_count,
+          })}
+        </div>
+      )}
+      {child.level === 'village' && (
+        <div className="text-xs text-muted-fg truncate">
+          {child.coordinator_name
+            ? t('home.card.vc', { name: child.coordinator_name })
+            : t('home.card.vc_unassigned')}
+        </div>
+      )}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
         <span className="text-muted-fg">
-          {t('home.card.children', { n: v.children_count })}
+          {t('home.card.children', { n: child.children_count })}
         </span>
-        {v.attendance_pct_week !== null && (
+        {child.attendance_pct_week !== null && (
           <span className="text-muted-fg">
-            · {t('home.card.week_attendance', { pct: v.attendance_pct_week })}
+            · {t('home.card.week_attendance', { pct: child.attendance_pct_week })}
           </span>
         )}
       </div>

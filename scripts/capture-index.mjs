@@ -71,6 +71,18 @@ async function main() {
       await page.goto(BASE + '/');
       await page.waitForLoadState('networkidle');
       await shot(page, 'desktop-super');
+      // Drill: India → zone 1 → its first state. Seed has zone 1
+      // (Karnataka / Tamil Nadu) with state 1 underneath; these
+      // URLs always resolve in the lab fixture.
+      await page.goto(BASE + '/?level=zone&id=1');
+      await page.waitForLoadState('networkidle');
+      await shot(page, 'desktop-super-zone');
+      await page.goto(BASE + '/?level=state&id=1');
+      await page.waitForLoadState('networkidle');
+      await shot(page, 'desktop-super-state');
+      await page.goto(BASE + '/?level=district&id=1');
+      await page.waitForLoadState('networkidle');
+      await shot(page, 'desktop-super-district');
       await context.close();
     }
     {

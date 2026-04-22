@@ -10,6 +10,45 @@
 // stays in one place (the operational data) and there's nothing to
 // backfill or keep in sync.
 
+import type { GeoLevel } from './dashboard';
+
+// One step on the breadcrumb trail from India down to a drill
+// position. `id` is null at the india root. Shared so the dashboard
+// drill-down and the home drill-down both speak the same shape.
+export type BreadcrumbCrumb = {
+  level: GeoLevel;
+  id: number | null;
+  name: string;
+};
+
+// A hierarchy child below the current drill position — the payload
+// behind each child tile on Home. At cluster → village the shape
+// carries coordinator_name so the tile reads as a village card;
+// higher up coordinator_name is null and the tile summarises a
+// subtree.
+export type HierarchyChild = {
+  level: GeoLevel;
+  id: number;
+  name: string;
+  // Non-graduated students across the subtree under this node.
+  children_count: number;
+  // Total attendance sessions the subtree ran in the last 7 days.
+  sessions_this_week: number;
+  // Whole-number attendance % over the last 7 days across the
+  // subtree. Null when no marks were recorded.
+  attendance_pct_week: number | null;
+  // Days since the most recent attendance session anywhere under
+  // this subtree. Null when the subtree has never logged one.
+  days_since_last_session: number | null;
+  at_risk: boolean;
+  // Village-leaf only; null otherwise. Lets the tile show the VC's
+  // name so ops knows who to ping without drilling further.
+  coordinator_name: string | null;
+  // Villages under this subtree. Always 1 at the village leaf;
+  // larger at higher levels — handy context on zone / state tiles.
+  villages_count: number;
+};
+
 // Weekly-bucket sparkline carried inline on each KPI tile. 12
 // entries, oldest first, newest = the bucket ending today. Nulls
 // render as gaps — a week with no sessions shouldn't read as 0%.
@@ -61,20 +100,31 @@ export const AT_RISK_THRESHOLD_DAYS = 4;
 export type InsightsResponse = {
   // "India", "Bidar Cluster 1", etc. Drives the KPI strip heading.
   scope_label: string;
-  // Scope-filtered counts: children, villages in scope, attendance %
-  // this week, images uploaded this month, videos uploaded this month,
-  // achievements this month, at-risk count. Empty list for users with
-  // no villages in scope (shouldn't happen outside test fixtures).
+  // Current drill position. At the user's scope floor this matches
+  // their role's scope_level / scope_id. `id` is null only at the
+  // india root (available to global users).
+  level: GeoLevel;
+  id: number | null;
+  // Breadcrumb trail from india → current, oldest-first. Clients
+  // render clickable crumbs so an operator can walk back up.
+  crumbs: BreadcrumbCrumb[];
+  // Next-level nodes to render as drill-down tiles. Ordered by
+  // name. `child_level` is null at the village leaf — clicking a
+  // leaf tile deep-links to /village/:id rather than drilling inside
+  // insights.
+  child_level: GeoLevel | null;
+  children: HierarchyChild[];
+  // KPIs scoped to the current drill position: children, attendance
+  // % this week, images uploaded this month, videos uploaded this
+  // month, achievements this month, at-risk count.
   kpis: InsightKpi[];
-  // Up to 5 villages with the best attendance % this week. Empty
-  // when the user's scope has no villages or no sessions.
+  // Up to 5 villages with the best attendance % this week within
+  // the current drill subtree. Always villages (not clusters /
+  // zones) — surfacing individual villages is what ops acts on.
   top_villages: VillageActivity[];
-  // Every village in scope with days_since_last_session >= threshold,
-  // ordered most-lapsed first. May be empty.
+  // Every village under the current drill position with
+  // days_since_last_session >= threshold, most-lapsed first.
   at_risk_villages: VillageActivity[];
-  // Every village in scope, ordered alphabetically. Powers the home
-  // village grid (replaces the old /api/villages call there).
-  all_villages: VillageActivity[];
   // Share of in-scope villages that have declared at least one
   // Star of the Month in the current IST calendar month, expressed
   // as a whole-number percentage (0–100). 0 when the scope has no

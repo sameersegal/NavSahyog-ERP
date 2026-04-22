@@ -28,6 +28,8 @@ export {
   isDashboardMetric,
 } from './dashboard';
 export type {
+  BreadcrumbCrumb,
+  HierarchyChild,
   InsightKpi,
   InsightsResponse,
   StreakResponse,
