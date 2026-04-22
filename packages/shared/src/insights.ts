@@ -77,10 +77,12 @@ export type InsightsResponse = {
   // oldest → newest, always exactly 90 entries (missing days return
   // `{ date, pct: null }`).
   attendance_90d: AttendanceSparkPoint[];
-  // True when at least one Star of the Month has been declared in
-  // the current IST calendar month across the user's scope. Drives
-  // the yes/no KPI tile on the home dashboard.
-  som_declared_this_month: boolean;
+  // Share of in-scope villages that have declared at least one
+  // Star of the Month in the current IST calendar month, expressed
+  // as a whole-number percentage (0–100). 0 when the scope has no
+  // villages. Drives the SoM KPI tile on the home dashboard — ops
+  // wants to see "how close to 100% declared are we?" at a glance.
+  som_declared_pct: number;
 };
 
 export type StreakResponse = {

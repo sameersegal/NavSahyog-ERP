@@ -300,29 +300,33 @@ function addMonths(fromIso: string, months: number): string {
   return `${ny}-${String(nm).padStart(2, '0')}-01`;
 }
 
-// Has the user's scope declared at least one Star of the Month in
-// the given calendar month? Boolean, cheap (indexed EXISTS), drives
-// the yes/no KPI tile on the home dashboard.
-async function somDeclaredInMonth(
+// Share of in-scope villages with at least one Star of the Month
+// declared in the given calendar month, as a whole-number
+// percentage (0–100). The denominator is every village in scope
+// (including villages that never ran anything this month) so the
+// tile reads as "how close to 100% declared are we?" — ops wants
+// the signal that stragglers exist, not just that somebody
+// somewhere in scope remembered.
+async function somDeclaredPctInMonth(
   db: D1Database,
   ids: number[],
   monthPrefix: string,
-): Promise<boolean> {
-  if (ids.length === 0) return false;
+): Promise<number> {
+  if (ids.length === 0) return 0;
   const placeholders = ids.map(() => '?').join(',');
   const row = await db
     .prepare(
-      `SELECT 1 AS hit
+      `SELECT COUNT(DISTINCT st.village_id) AS declared
          FROM achievement a
          JOIN student st ON st.id = a.student_id
         WHERE st.village_id IN (${placeholders})
           AND a.type = 'som'
-          AND a.date LIKE ? || '%'
-        LIMIT 1`,
+          AND a.date LIKE ? || '%'`,
     )
     .bind(...ids, monthPrefix)
-    .first<{ hit: number }>();
-  return row !== null;
+    .first<{ declared: number }>();
+  const declared = row?.declared ?? 0;
+  return Math.round((declared / ids.length) * 100);
 }
 
 insights.get('/', requireCap('dashboard.read'), async (c) => {
@@ -356,7 +360,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     videosThisMonth,
     videosPrevMonth,
     dailyAtt,
-    somDeclared,
+    somDeclaredPct,
   ] = await Promise.all([
     overallAttendancePct(c.env.DB, ids, weekStart, today),
     overallAttendancePct(c.env.DB, ids, prevWeekStart, prevWeekEnd),
@@ -367,7 +371,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     mediaInMonth(c.env.DB, ids, 'video', monthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', prevMonthPrefix),
     dailyAttendance(c.env.DB, ids, spark90Start, today),
-    somDeclaredInMonth(c.env.DB, ids, monthPrefix),
+    somDeclaredPctInMonth(c.env.DB, ids, monthPrefix),
   ]);
 
   const totalChildren = cores.reduce((a, v) => a + v.children_count, 0);
@@ -464,7 +468,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     at_risk_villages: atRiskVillages,
     all_villages: allVillages,
     attendance_90d: attendance90d,
-    som_declared_this_month: somDeclared,
+    som_declared_pct: somDeclaredPct,
   };
   return c.json(body);
 });

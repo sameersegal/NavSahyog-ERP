@@ -5,10 +5,10 @@
 //     and redirect to that village. Saves a wasted tap every time
 //     they log in (VCs are the most frequent users, in the field,
 //     one-handed).
-//   * Everyone else → KPI strip (includes Star-of-the-Month yes/no)
-//     + 90-day attendance sparkline + insight cards (at-risk /
-//     top-this-week / stars-of-the-month) + a village grid
-//     annotated with coordinator name + activity chip.
+//   * Everyone else → KPI strip (includes % of villages that have
+//     declared a Star of the Month this month) + 90-day attendance
+//     sparkline + insight cards (at-risk / top-this-week) + a
+//     village grid annotated with coordinator name + activity chip.
 //
 // Data comes from /api/insights (scope-filtered). That single call
 // replaces the old /api/villages fetch and carries everything the
@@ -76,10 +76,7 @@ export function Home() {
         </p>
       </header>
 
-      <KpiStrip
-        kpis={data.kpis}
-        somDeclared={data.som_declared_this_month}
-      />
+      <KpiStrip kpis={data.kpis} somDeclaredPct={data.som_declared_pct} />
 
       <AttendanceSparkline points={data.attendance_90d} />
 
@@ -116,20 +113,20 @@ export function Home() {
 
 // KPI strip. On mobile the tiles stack in a single column so each
 // metric reads as its own line; desktop packs the same seven tiles
-// (six numeric + SOM yes/no) into a single row.
+// (six numeric + SOM %) into a single row.
 function KpiStrip({
   kpis,
-  somDeclared,
+  somDeclaredPct,
 }: {
   kpis: InsightKpi[];
-  somDeclared: boolean;
+  somDeclaredPct: number;
 }) {
   return (
     <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
       {kpis.map((k) => (
         <KpiTile key={k.label} k={k} />
       ))}
-      <SomDeclaredTile declared={somDeclared} />
+      <SomDeclaredTile pct={somDeclaredPct} />
     </section>
   );
 }
@@ -164,20 +161,22 @@ function KpiTile({ k }: { k: InsightKpi }) {
   );
 }
 
-// Star-of-the-Month declaration tile — a yes/no signal rather than
-// a count. Ops uses this to confirm at a glance that the monthly
-// recognition ritual has been run for the current calendar month.
-function SomDeclaredTile({ declared }: { declared: boolean }) {
+// Star-of-the-Month declaration tile — share of in-scope villages
+// that have declared one this month. Tone flips to primary only at
+// 100% so partial coverage still reads as "work to do"; 0% reads
+// as danger so ops sees the miss at a glance.
+function SomDeclaredTile({ pct }: { pct: number }) {
   const { t } = useI18n();
-  const tone = declared ? 'text-primary' : 'text-danger';
+  const tone =
+    pct >= 100 ? 'text-primary'
+    : pct === 0 ? 'text-danger'
+    : 'text-fg';
   return (
     <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-1">
       <div className="text-xs text-muted-fg uppercase tracking-wide">
         {t('home.kpi.som_declared')}
       </div>
-      <div className={`text-2xl font-semibold ${tone}`}>
-        {declared ? t('home.kpi.som_declared.yes') : t('home.kpi.som_declared.no')}
-      </div>
+      <div className={`text-2xl font-semibold ${tone}`}>{pct}%</div>
       <div className="text-xs text-muted-fg">
         {t('home.kpi.som_declared.hint')}
       </div>
