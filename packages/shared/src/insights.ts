@@ -10,6 +10,11 @@
 // stays in one place (the operational data) and there's nothing to
 // backfill or keep in sync.
 
+// Weekly-bucket sparkline carried inline on each KPI tile. 12
+// entries, oldest first, newest = the bucket ending today. Nulls
+// render as gaps — a week with no sessions shouldn't read as 0%.
+export const KPI_SPARK_POINTS = 12;
+
 export type InsightKpi = {
   label: string;
   value: number;
@@ -21,6 +26,11 @@ export type InsightKpi = {
   trend: 'up' | 'down' | 'flat' | null;
   // Optional tooltip text; e.g. "vs last week".
   hint: string | null;
+  // 12 weekly points (oldest → newest). Null entries render as gaps.
+  // `null` (the whole field) means this KPI has no sensible time
+  // series (e.g. today's children headcount, today's at-risk rollup)
+  // and the client skips the inline sparkline.
+  spark: Array<number | null> | null;
 };
 
 export type VillageActivity = {
@@ -41,14 +51,6 @@ export type VillageActivity = {
   days_since_last_session: number | null;
   // True when days_since_last_session >= AT_RISK_THRESHOLD_DAYS.
   at_risk: boolean;
-};
-
-// One day on the rolling 90-day attendance sparkline. `pct` is null
-// when the day had zero marks in the user's scope (so the sparkline
-// can render gaps instead of pretending zero).
-export type AttendanceSparkPoint = {
-  date: string;                    // IST 'YYYY-MM-DD'
-  pct: number | null;
 };
 
 // Drives the "at-risk" chip and the insight card. 4 days means "no
@@ -73,10 +75,6 @@ export type InsightsResponse = {
   // Every village in scope, ordered alphabetically. Powers the home
   // village grid (replaces the old /api/villages call there).
   all_villages: VillageActivity[];
-  // Rolling 90-day attendance sparkline for the whole scope. Ordered
-  // oldest → newest, always exactly 90 entries (missing days return
-  // `{ date, pct: null }`).
-  attendance_90d: AttendanceSparkPoint[];
   // Share of in-scope villages that have declared at least one
   // Star of the Month in the current IST calendar month, expressed
   // as a whole-number percentage (0–100). 0 when the scope has no

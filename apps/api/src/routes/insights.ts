@@ -20,7 +20,7 @@ import { villageIdsInScope } from '../scope';
 import { todayIstDate } from '../lib/time';
 import {
   AT_RISK_THRESHOLD_DAYS,
-  type AttendanceSparkPoint,
+  KPI_SPARK_POINTS,
   type InsightKpi,
   type InsightsResponse,
   type VillageActivity,
@@ -246,16 +246,17 @@ async function mediaInMonth(
   return row?.n ?? 0;
 }
 
-// Daily attendance % across a date range. Returns a dense array of
-// 'YYYY-MM-DD' → pct, with pct=null for days that had zero marks,
-// so the sparkline can render gaps rather than a flat-zero floor.
-async function dailyAttendance(
+// Per-day attendance counts across a window, keyed by 'YYYY-MM-DD'.
+// Returning the pair (not the already-divided %) lets the caller
+// roll days into weekly buckets correctly — (present/total) is not
+// commutative with SUM.
+async function dailyAttendanceCounts(
   db: D1Database,
   ids: number[],
   from: string,
   to: string,
-): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
+): Promise<Map<string, { present: number; total: number }>> {
+  const out = new Map<string, { present: number; total: number }>();
   if (ids.length === 0) return out;
   const placeholders = ids.map(() => '?').join(',');
   const rs = await db
@@ -272,11 +273,109 @@ async function dailyAttendance(
     .bind(...ids, from, to)
     .all<{ date: string; present: number | null; total: number | null }>();
   for (const r of rs.results) {
-    const total = r.total ?? 0;
-    if (total === 0) continue;
-    out.set(r.date, Math.round(((r.present ?? 0) / total) * 100));
+    out.set(r.date, { present: r.present ?? 0, total: r.total ?? 0 });
   }
   return out;
+}
+
+// Per-day achievement count across a window, keyed by 'YYYY-MM-DD'.
+async function dailyAchievementCounts(
+  db: D1Database,
+  ids: number[],
+  from: string,
+  to: string,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      `SELECT a.date AS date, COUNT(*) AS n
+         FROM achievement a
+         JOIN student st ON st.id = a.student_id
+        WHERE st.village_id IN (${placeholders})
+          AND a.date BETWEEN ? AND ?
+        GROUP BY a.date`,
+    )
+    .bind(...ids, from, to)
+    .all<{ date: string; n: number }>();
+  for (const r of rs.results) out.set(r.date, r.n);
+  return out;
+}
+
+// Per-day media count for a given kind. `captured_at` is a UTC
+// epoch; we convert to a 'YYYY-MM-DD' key via strftime so the
+// series is a day-keyed Map matching the attendance / achievement
+// shape. Soft-deleted rows (deleted_at NOT NULL) are excluded.
+async function dailyMediaCounts(
+  db: D1Database,
+  ids: number[],
+  kind: 'image' | 'video',
+  fromIso: string,
+  toIso: string,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      `SELECT strftime('%Y-%m-%d', captured_at, 'unixepoch') AS date,
+              COUNT(*) AS n
+         FROM media
+        WHERE village_id IN (${placeholders})
+          AND kind = ?
+          AND deleted_at IS NULL
+          AND strftime('%Y-%m-%d', captured_at, 'unixepoch') BETWEEN ? AND ?
+        GROUP BY date`,
+    )
+    .bind(...ids, kind, fromIso, toIso)
+    .all<{ date: string; n: number }>();
+  for (const r of rs.results) out.set(r.date, r.n);
+  return out;
+}
+
+// Week index for a day within the 12-week sparkline window ending
+// today. 0 = oldest week, KPI_SPARK_POINTS-1 = current week. Returns
+// null for days outside the window (including future days).
+function weekIndexOf(dateIso: string, todayIso: string): number | null {
+  const diff = daysBetween(dateIso, todayIso); // ≥0 when dateIso ≤ todayIso
+  if (diff < 0 || diff >= KPI_SPARK_POINTS * 7) return null;
+  return KPI_SPARK_POINTS - 1 - Math.floor(diff / 7);
+}
+
+// 12-week rollup of a per-day count Map. Each bucket is a 7-day sum.
+// Counts default to 0 — "no images this week" is a real zero, not a
+// gap; the sparkline renders as the floor rather than a break.
+function rollSparkCount(
+  daily: Map<string, number>,
+  today: string,
+): Array<number | null> {
+  const buckets: Array<number | null> = new Array(KPI_SPARK_POINTS).fill(0);
+  for (const [date, n] of daily) {
+    const wi = weekIndexOf(date, today);
+    if (wi !== null) buckets[wi] = (buckets[wi] as number) + n;
+  }
+  return buckets;
+}
+
+// 12-week rollup of a per-day (present, total) Map into weekly %s.
+// A week with zero marks returns null so the sparkline draws a gap
+// rather than pretending 0% — "no session" and "everyone absent"
+// are very different signals.
+function rollSparkPct(
+  daily: Map<string, { present: number; total: number }>,
+  today: string,
+): Array<number | null> {
+  const pres = new Array(KPI_SPARK_POINTS).fill(0);
+  const tot = new Array(KPI_SPARK_POINTS).fill(0);
+  for (const [date, { present, total }] of daily) {
+    const wi = weekIndexOf(date, today);
+    if (wi !== null) {
+      pres[wi] += present;
+      tot[wi] += total;
+    }
+  }
+  return tot.map((t, i) => (t === 0 ? null : Math.round((pres[i] / t) * 100)));
 }
 
 function deltaTrend(current: number, prev: number | null): {
@@ -338,7 +437,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
   const prevWeekEnd = addDays(today, -7);
   const monthPrefix = today.slice(0, 7);
   const prevMonthPrefix = addMonths(today, -1).slice(0, 7);
-  const spark90Start = addDays(today, -89); // 90-day window inclusive
+  // 12-week sparkline window, inclusive of both endpoints.
+  const sparkStart = addDays(today, -(KPI_SPARK_POINTS * 7 - 1));
 
   const [scopeLabel, cores, weekly] = await Promise.all([
     scopeLabelFor(c.env.DB, user),
@@ -348,8 +448,10 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
 
   const allVillages = cores.map((v) => buildActivity(today, v, weekly.get(v.id)));
 
-  // KPI + sparkline + stars all fan out in parallel — D1 queries are
-  // cheap individually but serialising them adds up on slow links.
+  // KPI values + 12-week spark series fan out in parallel — D1
+  // queries are cheap individually but serialising them adds up on
+  // slow links. Spark queries return per-day counts across the
+  // 84-day window; we roll into weekly buckets in JS.
   const [
     attThisWeek,
     attPrevWeek,
@@ -360,6 +462,9 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     videosThisMonth,
     videosPrevMonth,
     dailyAtt,
+    dailyAch,
+    dailyImg,
+    dailyVid,
     somDeclaredPct,
   ] = await Promise.all([
     overallAttendancePct(c.env.DB, ids, weekStart, today),
@@ -370,9 +475,17 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     mediaInMonth(c.env.DB, ids, 'image', prevMonthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', monthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', prevMonthPrefix),
-    dailyAttendance(c.env.DB, ids, spark90Start, today),
+    dailyAttendanceCounts(c.env.DB, ids, sparkStart, today),
+    dailyAchievementCounts(c.env.DB, ids, sparkStart, today),
+    dailyMediaCounts(c.env.DB, ids, 'image', sparkStart, today),
+    dailyMediaCounts(c.env.DB, ids, 'video', sparkStart, today),
     somDeclaredPctInMonth(c.env.DB, ids, monthPrefix),
   ]);
+
+  const attendanceSpark = rollSparkPct(dailyAtt, today);
+  const achievementSpark = rollSparkCount(dailyAch, today);
+  const imageSpark = rollSparkCount(dailyImg, today);
+  const videoSpark = rollSparkCount(dailyVid, today);
 
   const totalChildren = cores.reduce((a, v) => a + v.children_count, 0);
   const atRiskCount = allVillages.filter((v) => v.at_risk).length;
@@ -394,6 +507,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: null,
       trend: null,
       hint: null,
+      // Headcount isn't a weekly series — skip the spark.
+      spark: null,
     },
     {
       label: 'attendance_week',
@@ -401,6 +516,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: attDelta.delta,
       trend: attDelta.trend,
       hint: attPrevWeek === null ? null : 'vs_prev_week',
+      spark: attendanceSpark,
     },
     {
       label: 'images_month',
@@ -408,6 +524,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: imgDelta.delta,
       trend: imgDelta.trend,
       hint: imagesPrevMonth === 0 && imagesThisMonth === 0 ? null : 'vs_prev_month',
+      spark: imageSpark,
     },
     {
       label: 'videos_month',
@@ -415,6 +532,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: vidDelta.delta,
       trend: vidDelta.trend,
       hint: videosPrevMonth === 0 && videosThisMonth === 0 ? null : 'vs_prev_month',
+      spark: videoSpark,
     },
     {
       label: 'achievements_month',
@@ -422,6 +540,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: achDelta.delta,
       trend: achDelta.trend,
       hint: achPrevMonth === null ? null : 'vs_prev_month',
+      spark: achievementSpark,
     },
     {
       label: 'at_risk',
@@ -431,6 +550,10 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       // always reads green on the client.
       trend: atRiskCount === 0 ? 'up' : atRiskCount > allVillages.length / 3 ? 'down' : 'flat',
       hint: null,
+      // At-risk is derived from today's state (days_since_last_session);
+      // reconstructing its weekly history would need a per-week scan
+      // that isn't worth the complexity right now.
+      spark: null,
     },
   ];
 
@@ -452,22 +575,12 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       return bd - ad;
     });
 
-  // Sparkline entries arrive oldest-first so the UI renders left-to-
-  // right without re-sorting. Dense 90-day window: every calendar
-  // day gets an entry, `pct: null` on days with no marks.
-  const attendance90d: AttendanceSparkPoint[] = [];
-  for (let i = 89; i >= 0; i--) {
-    const day = addDays(today, -i);
-    attendance90d.push({ date: day, pct: dailyAtt.get(day) ?? null });
-  }
-
   const body: InsightsResponse = {
     scope_label: scopeLabel,
     kpis,
     top_villages: topVillages,
     at_risk_villages: atRiskVillages,
     all_villages: allVillages,
-    attendance_90d: attendance90d,
     som_declared_pct: somDeclaredPct,
   };
   return c.json(body);

@@ -26,7 +26,6 @@ export type {
   GeoLevel,
 } from '@navsahyog/shared';
 export type {
-  AttendanceSparkPoint,
   InsightKpi,
   InsightsResponse,
   StreakResponse,
@@ -38,6 +37,7 @@ export {
   isIsoDate,
   isClockTime,
   AT_RISK_THRESHOLD_DAYS,
+  KPI_SPARK_POINTS,
   DASHBOARD_METRICS,
   GEO_LEVELS,
   isDashboardMetric,

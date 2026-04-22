@@ -66,12 +66,6 @@
   "home.card.week_attendance": "इस हफ़्ते {pct}%",
   "home.card.vc": "वीसी {name}",
   "home.card.vc_unassigned": "कोई वीसी नियुक्त नहीं",
-  "home.spark.title": "उपस्थिति · 90 दिन",
-  "home.spark.hint": "दैनिक %",
-  "home.spark.hint_avg": "{avg}% औसत · दैनिक %",
-  "home.spark.aria": "90 दिनों की उपस्थिति स्पार्कलाइन",
-  "home.spark.today": "आज",
-
   "village.header.vc": "वीसी {name}",
   "village.header.vc_unassigned": "कोई वीसी नियुक्त नहीं",
 

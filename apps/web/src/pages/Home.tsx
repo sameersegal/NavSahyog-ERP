@@ -5,22 +5,21 @@
 //     and redirect to that village. Saves a wasted tap every time
 //     they log in (VCs are the most frequent users, in the field,
 //     one-handed).
-//   * Everyone else → KPI strip (includes % of villages that have
-//     declared a Star of the Month this month) + 90-day attendance
-//     sparkline + insight cards (at-risk / top-this-week) + a
-//     village grid annotated with coordinator name + activity chip.
+//   * Everyone else → KPI strip (each numeric tile carries its own
+//     inline 12-week sparkline; the SoM tile shows % declared) +
+//     insight cards (at-risk / top-this-week) + a village grid
+//     annotated with coordinator name + activity chip.
 //
 // Data comes from /api/insights (scope-filtered). That single call
 // replaces the old /api/villages fetch and carries everything the
-// page needs — sparkline points, KPI deltas, stars, village
-// activity — so the home screen renders with one round-trip.
+// page needs — per-KPI sparks, deltas, village activity — so the
+// home screen renders with one round-trip.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AT_RISK_THRESHOLD_DAYS,
   api,
-  type AttendanceSparkPoint,
   type InsightKpi,
   type InsightsResponse,
   type VillageActivity,
@@ -77,8 +76,6 @@ export function Home() {
       </header>
 
       <KpiStrip kpis={data.kpis} somDeclaredPct={data.som_declared_pct} />
-
-      <AttendanceSparkline points={data.attendance_90d} />
 
       {(data.at_risk_villages.length > 0 || data.top_villages.length > 1) && (
         <div className="grid gap-3 md:grid-cols-2">
@@ -157,7 +154,69 @@ function KpiTile({ k }: { k: InsightKpi }) {
           {k.hint ? ' · ' + t(`home.kpi.hint.${k.hint}`) : ''}
         </div>
       )}
+      {k.spark && <TileSpark points={k.spark} isPct={isPct} />}
     </div>
+  );
+}
+
+// Inline 12-week sparkline inside a KPI tile. No axis, no dots, no
+// legend — the tile's big number is the headline; the spark is just
+// silhouette. `isPct`=true pins the y-axis to 0–100 so attendance
+// sparks compare meaningfully across scopes; count sparks (images,
+// videos, achievements) autoscale to their own max so a scope with
+// 2 uploads/week still reads as a shape.
+function TileSpark({
+  points,
+  isPct,
+}: {
+  points: Array<number | null>;
+  isPct: boolean;
+}) {
+  const observed = points.filter((v): v is number => v !== null);
+  if (observed.length === 0) return null;
+
+  const W = 120;
+  const H = 24;
+  const padX = 1;
+  const padY = 2;
+  const n = points.length;
+  const max = isPct ? 100 : Math.max(1, ...observed);
+  const xFor = (i: number) =>
+    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
+  const yFor = (v: number) =>
+    padY + ((max - v) * (H - 2 * padY)) / (max === 0 ? 1 : max);
+
+  // Build the polyline with 'M' gap-breaks so null weeks draw as
+  // broken segments rather than a false bridge to zero.
+  let d = '';
+  let penDown = false;
+  for (let i = 0; i < n; i++) {
+    const p = points[i];
+    if (p === null || p === undefined) {
+      penDown = false;
+      continue;
+    }
+    const cmd = penDown ? 'L' : 'M';
+    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p).toFixed(1)} `;
+    penDown = true;
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="w-full h-6 mt-1"
+      aria-hidden="true"
+    >
+      <path
+        d={d.trim()}
+        fill="none"
+        className="stroke-primary"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -182,129 +241,6 @@ function SomDeclaredTile({ pct }: { pct: number }) {
       </div>
     </div>
   );
-}
-
-// 90-day attendance sparkline. Renders as an SVG polyline so it
-// survives sunlight theme and low-power devices. Days with no marks
-// are drawn as a gap (null break) rather than a zero floor, so an
-// empty day reads as "no session" not "0% attendance".
-function AttendanceSparkline({ points }: { points: AttendanceSparkPoint[] }) {
-  const { t } = useI18n();
-  if (points.every((p) => p.pct === null)) return null;
-
-  const W = 600;
-  const H = 80;
-  const padX = 4;
-  const padY = 6;
-  const n = points.length;
-  // y maps 0..100 → bottom..top of the drawable area. Max is pinned
-  // at 100 so attendance is comparable across sparkline renders
-  // across scopes and days; a partial-scope 80% shouldn't look like
-  // a "peak" just because the local max happened to be 82%.
-  const xFor = (i: number) =>
-    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
-  const yFor = (pct: number) => padY + ((100 - pct) * (H - 2 * padY)) / 100;
-
-  // Build the polyline with gaps. An 'M' starts a new subpath after
-  // any run of null days so the line never falsely bridges missing
-  // sessions.
-  let d = '';
-  let penDown = false;
-  for (let i = 0; i < n; i++) {
-    const p = points[i]!;
-    if (p.pct === null) {
-      penDown = false;
-      continue;
-    }
-    const cmd = penDown ? 'L' : 'M';
-    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p.pct).toFixed(1)} `;
-    penDown = true;
-  }
-
-  // Dots on days with marks — visually anchors the line and helps on
-  // scopes that run infrequently (one session every few days).
-  const dots = points
-    .map((p, i) => (p.pct === null ? null : { i, pct: p.pct }))
-    .filter((x): x is { i: number; pct: number } => x !== null);
-
-  const observed = points
-    .map((p) => p.pct)
-    .filter((v): v is number => v !== null);
-  const latest = observed[observed.length - 1];
-  const avg = observed.length === 0
-    ? null
-    : Math.round(observed.reduce((a, b) => a + b, 0) / observed.length);
-
-  const startLabel = formatDayMonth(points[0]!.date);
-  const endLabel = formatDayMonth(points[n - 1]!.date);
-
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{t('home.spark.title')}</h3>
-        <span className="text-xs text-muted-fg">
-          {avg === null
-            ? t('home.spark.hint')
-            : t('home.spark.hint_avg', { avg })}
-        </span>
-      </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={t('home.spark.aria', { n })}
-        preserveAspectRatio="none"
-        className="w-full h-20"
-      >
-        {/* 50% reference line — a visual guide without a full axis. */}
-        <line
-          x1={padX}
-          x2={W - padX}
-          y1={yFor(50)}
-          y2={yFor(50)}
-          className="stroke-border"
-          strokeDasharray="3 4"
-          strokeWidth={1}
-        />
-        <path
-          d={d.trim()}
-          fill="none"
-          className="stroke-primary"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {dots.map(({ i, pct }) => (
-          <circle
-            key={i}
-            cx={xFor(i)}
-            cy={yFor(pct)}
-            r={1.8}
-            className="fill-primary"
-          />
-        ))}
-      </svg>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-fg">
-        <span>{startLabel}</span>
-        <span>
-          {latest !== undefined && (
-            <span className="text-fg font-medium">{latest}%</span>
-          )}
-          {latest !== undefined ? ' · ' : ''}
-          {t('home.spark.today')}
-        </span>
-        <span>{endLabel}</span>
-      </div>
-    </div>
-  );
-}
-
-// Short day-month label for the sparkline axis endpoints. Parses the
-// ISO date locally (no Intl timezone pitfalls) so "21 Apr" renders
-// identically regardless of client locale.
-function formatDayMonth(iso: string): string {
-  const [, m, d] = iso.split('-').map(Number) as [number, number, number];
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${d} ${names[(m - 1) % 12]}`;
 }
 
 function AtRiskCard({ villages }: { villages: VillageActivity[] }) {

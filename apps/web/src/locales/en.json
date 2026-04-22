@@ -66,12 +66,6 @@
   "home.card.week_attendance": "{pct}% this week",
   "home.card.vc": "VC {name}",
   "home.card.vc_unassigned": "No VC assigned",
-  "home.spark.title": "Attendance · 90 days",
-  "home.spark.hint": "rolling daily %",
-  "home.spark.hint_avg": "{avg}% average · rolling daily %",
-  "home.spark.aria": "90-day attendance sparkline",
-  "home.spark.today": "today",
-
   "village.header.vc": "VC {name}",
   "village.header.vc_unassigned": "No VC assigned",
 

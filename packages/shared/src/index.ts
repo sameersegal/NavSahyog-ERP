@@ -28,11 +28,10 @@ export {
   isDashboardMetric,
 } from './dashboard';
 export type {
-  AttendanceSparkPoint,
   InsightKpi,
   InsightsResponse,
   StreakResponse,
   VillageActivity,
 } from './insights';
-export { AT_RISK_THRESHOLD_DAYS } from './insights';
+export { AT_RISK_THRESHOLD_DAYS, KPI_SPARK_POINTS } from './insights';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';
