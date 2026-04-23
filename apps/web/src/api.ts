@@ -30,6 +30,7 @@ export type {
   HierarchyChild,
   InsightKpi,
   InsightsResponse,
+  KpiDot,
   StreakResponse,
   VillageActivity,
 } from '@navsahyog/shared';
@@ -39,7 +40,8 @@ export {
   isIsoDate,
   isClockTime,
   AT_RISK_THRESHOLD_DAYS,
-  KPI_SPARK_POINTS,
+  KPI_DOT_DAYS,
+  KPI_DOT_WEEKS,
   DASHBOARD_METRICS,
   GEO_LEVELS,
   isDashboardMetric,

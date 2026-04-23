@@ -65,10 +65,20 @@ export type HierarchyChild = {
   achievements_this_month: number;
 };
 
-// Weekly-bucket sparkline carried inline on each KPI tile. 12
-// entries, oldest first, newest = the bucket ending today. Nulls
-// render as gaps — a week with no sessions shouldn't read as 0%.
-export const KPI_SPARK_POINTS = 12;
+// 12-week dot grid carried inline on each KPI tile. The client lays
+// out 12 rows × 7 columns (Mon–Sun), newest week on top. The array
+// is the 84 daily classifications flattened oldest→newest: index 0
+// is the Monday of the oldest week, index 83 is the Sunday of the
+// current week. Future days in the current week (after today IST)
+// are always 'empty' so the grid stays rectangular.
+export const KPI_DOT_WEEKS = 12;
+export const KPI_DOT_DAYS = KPI_DOT_WEEKS * 7; // 84
+
+// Per-day classification. 'empty' = no activity / no session; 'good'
+// = meets the configured threshold; 'bad' = below threshold. The
+// rules that decide which bucket a day falls into live server-side
+// in KPI_RULES_JSON (see requirements/kpi-rules.md).
+export type KpiDot = 'good' | 'empty' | 'bad';
 
 export type InsightKpi = {
   label: string;
@@ -81,11 +91,10 @@ export type InsightKpi = {
   trend: 'up' | 'down' | 'flat' | null;
   // Optional tooltip text; e.g. "vs last week".
   hint: string | null;
-  // 12 weekly points (oldest → newest). Null entries render as gaps.
-  // `null` (the whole field) means this KPI has no sensible time
-  // series (e.g. today's children headcount, today's at-risk rollup)
-  // and the client skips the inline sparkline.
-  spark: Array<number | null> | null;
+  // 84 daily classifications (oldest Monday → newest Sunday). Null
+  // means this KPI has no sensible daily series (e.g. today's
+  // children headcount) and the client skips the dot grid.
+  dots: KpiDot[] | null;
 };
 
 export type VillageActivity = {
@@ -112,6 +121,48 @@ export type VillageActivity = {
 // activity since the Monday session" when today is Friday — tight
 // enough to catch real gaps, loose enough to not flag weekends.
 export const AT_RISK_THRESHOLD_DAYS = 4;
+
+// Per-KPI classification rule. Lives server-side (Worker env var
+// `KPI_RULES_JSON`) so ops can retune thresholds without a client
+// release. See requirements/kpi-rules.md for the full semantics.
+//
+// `metric` picks which daily series the rule reads:
+//   - 'pct'            — weekly attendance %: a day is scored only
+//                        when a session was held that day. Value =
+//                        (present / total) * 100.
+//   - 'count'          — daily count (images / videos / achievements).
+//   - 'inverse_count'  — lower is better (at-risk villages).
+//
+// `empty_when` tells the classifier when a day renders grey:
+//   - 'no_session' — attendance session with marks is required; days
+//                    without one are grey regardless of the other
+//                    series (used for media + attendance KPIs).
+//   - 'zero'       — a day with a value of 0 is grey; any positive
+//                    value is classified by the thresholds (used for
+//                    achievements — absence isn't "bad").
+//   - 'never'      — never grey; the value always classifies (used
+//                    for at-risk).
+export type KpiRule = {
+  metric: 'pct' | 'count' | 'inverse_count';
+  good_gte?: number;
+  bad_lt?: number;
+  good_lte?: number;
+  bad_gt?: number;
+  empty_when: 'no_session' | 'zero' | 'never';
+};
+
+// Default rules shipped with the code. Used when KPI_RULES_JSON is
+// unset or a label is missing from it. Kept in shared/ so client
+// and server describe the same defaults.
+export const DEFAULT_KPI_RULES: Record<string, KpiRule | null> = {
+  attendance_week: { metric: 'pct', good_gte: 70, bad_lt: 70, empty_when: 'no_session' },
+  images_month: { metric: 'count', good_gte: 1, bad_lt: 1, empty_when: 'no_session' },
+  videos_month: { metric: 'count', good_gte: 1, bad_lt: 1, empty_when: 'no_session' },
+  achievements_month: { metric: 'count', good_gte: 1, bad_lt: 1, empty_when: 'zero' },
+  at_risk: { metric: 'inverse_count', good_lte: 0, bad_gt: 0, empty_when: 'never' },
+  // Headcount is a census — no dot grid.
+  children: null,
+};
 
 export type InsightsResponse = {
   // "India", "Bidar Cluster 1", etc. Drives the KPI strip heading.

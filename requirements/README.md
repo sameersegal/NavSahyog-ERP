@@ -36,6 +36,7 @@ preserved in prose so inline cross-references still make sense.
 |---|---|
 | [`review-findings-v1.md`](./review-findings-v1.md) | First-pass critical review. Blockers, gaps, over/under-specification, and factual issues flagged for the team meeting. Resolve these before implementation begins. |
 | [`decisions.md`](./decisions.md) | Durable record of decisions that have amended the spec. Each row lists what changed and which spec sections moved with it. |
+| [`kpi-rules.md`](./kpi-rules.md) | Per-KPI classification rules that drive the dot-grid visualisation on the Home tiles. Rules live in the `KPI_RULES_JSON` Worker env var so ops can retune them without a code release. |
 
 ## Consolidated open items
 

@@ -25,6 +25,20 @@ ALLOWED_ORIGINS = "http://localhost:5173"
 # the real secret ships via `wrangler secret put`.
 MEDIA_PRESIGN_SECRET = "dev-only-change-me"
 
+# KPI dot-grid classification rules (see requirements/kpi-rules.md).
+# Any label missing from this JSON falls back to DEFAULT_KPI_RULES in
+# packages/shared/src/insights.ts. Set per-env via `wrangler secret
+# put KPI_RULES_JSON --env <env>` when the defaults need tuning
+# without a code release. Keep the shape in sync with the KpiRule
+# type; a parse error is logged + ignored (defaults win).
+KPI_RULES_JSON = """{
+  "attendance_week":    {"metric":"pct",           "good_gte":70, "bad_lt":70, "empty_when":"no_session"},
+  "images_month":       {"metric":"count",         "good_gte":1,  "bad_lt":1,  "empty_when":"no_session"},
+  "videos_month":       {"metric":"count",         "good_gte":1,  "bad_lt":1,  "empty_when":"no_session"},
+  "achievements_month": {"metric":"count",         "good_gte":1,  "bad_lt":1,  "empty_when":"zero"},
+  "at_risk":            {"metric":"inverse_count", "good_lte":0,  "bad_gt":0,  "empty_when":"never"}
+}"""
+
 # Workers Static Assets — serves the built web bundle from the same
 # Worker that serves /api and /auth, so everything is same-origin.
 # Fixes the cross-origin session-cookie + relative-media-URL

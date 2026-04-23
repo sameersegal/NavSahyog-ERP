@@ -32,8 +32,15 @@ export type {
   HierarchyChild,
   InsightKpi,
   InsightsResponse,
+  KpiDot,
+  KpiRule,
   StreakResponse,
   VillageActivity,
 } from './insights';
-export { AT_RISK_THRESHOLD_DAYS, KPI_SPARK_POINTS } from './insights';
+export {
+  AT_RISK_THRESHOLD_DAYS,
+  DEFAULT_KPI_RULES,
+  KPI_DOT_DAYS,
+  KPI_DOT_WEEKS,
+} from './insights';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';

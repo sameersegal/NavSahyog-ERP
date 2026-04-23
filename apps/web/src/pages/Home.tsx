@@ -17,13 +17,14 @@
 // share a link like "home at Karnataka zone" and it opens there.
 //
 // Data comes from /api/insights, scope-filtered server-side. That
-// single round-trip carries crumbs + children + KPIs + sparks +
+// single round-trip carries crumbs + children + KPIs + dot grids +
 // top/at-risk cards — the home screen renders with one request.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AT_RISK_THRESHOLD_DAYS,
+  KPI_DOT_WEEKS,
   api,
   isGeoLevel,
   type BreadcrumbCrumb,
@@ -31,6 +32,7 @@ import {
   type HierarchyChild,
   type InsightKpi,
   type InsightsResponse,
+  type KpiDot,
   type VillageActivity,
 } from '../api';
 import { useAuth } from '../auth';
@@ -209,69 +211,60 @@ function KpiTile({ k }: { k: InsightKpi }) {
           {k.hint ? ' · ' + t(`home.kpi.hint.${k.hint}`) : ''}
         </div>
       )}
-      {k.spark && <TileSpark points={k.spark} isPct={isPct} />}
+      {k.dots && <DotGrid dots={k.dots} label={k.label} />}
     </div>
   );
 }
 
-// Inline 12-week sparkline inside a KPI tile. No axis, no dots, no
-// legend — the tile's big number is the headline; the spark is just
-// silhouette. `isPct`=true pins the y-axis to 0–100 so attendance
-// sparks compare meaningfully across scopes; count sparks (images,
-// videos, achievements) autoscale to their own max so a scope with
-// 2 uploads/week still reads as a shape.
-function TileSpark({
-  points,
-  isPct,
-}: {
-  points: Array<number | null>;
-  isPct: boolean;
-}) {
-  const observed = points.filter((v): v is number => v !== null);
-  if (observed.length === 0) return null;
-
-  const W = 120;
-  const H = 24;
-  const padX = 1;
-  const padY = 2;
-  const n = points.length;
-  const max = isPct ? 100 : Math.max(1, ...observed);
-  const xFor = (i: number) =>
-    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
-  const yFor = (v: number) =>
-    padY + ((max - v) * (H - 2 * padY)) / (max === 0 ? 1 : max);
-
-  // Build the polyline with 'M' gap-breaks so null weeks draw as
-  // broken segments rather than a false bridge to zero.
-  let d = '';
-  let penDown = false;
-  for (let i = 0; i < n; i++) {
-    const p = points[i];
-    if (p === null || p === undefined) {
-      penDown = false;
-      continue;
-    }
-    const cmd = penDown ? 'L' : 'M';
-    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p).toFixed(1)} `;
-    penDown = true;
+// 12-week × 7-day dot grid inside a KPI tile. The server hands us
+// 84 daily classifications oldest Monday → newest Sunday. We render
+// current week on top (reverse row order) with Mon → Sun columns so
+// ops scans left-to-right the way they read a calendar.
+//
+// Each dot is classified server-side under rules documented in
+// requirements/kpi-rules.md: green = meets threshold, red = below,
+// grey = no session / no signal. Keeping the rules on the server
+// (KPI_RULES_JSON env var) means ops can retune thresholds without
+// a client release.
+function DotGrid({ dots, label }: { dots: KpiDot[]; label: string }) {
+  const { t } = useI18n();
+  // Row 0 = current week (top); last row = 11 weeks ago. Within
+  // each row, column 0 = Monday.
+  const rows: KpiDot[][] = [];
+  for (let w = KPI_DOT_WEEKS - 1; w >= 0; w--) {
+    rows.push(dots.slice(w * 7, w * 7 + 7));
   }
+  const colHeads = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const toneFor = (d: KpiDot) =>
+    d === 'good'
+      ? 'bg-primary'
+      : d === 'bad'
+      ? 'bg-danger'
+      : 'bg-border';
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="w-full h-6 mt-1"
-      aria-hidden="true"
+    <div
+      className="mt-2"
+      role="img"
+      aria-label={t('home.kpi.dotgrid.alt', { metric: t(`home.kpi.${label}`) })}
     >
-      <path
-        d={d.trim()}
-        fill="none"
-        className="stroke-primary"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+      <div className="grid grid-cols-7 gap-[3px] text-[9px] text-muted-fg leading-none">
+        {colHeads.map((c, i) => (
+          <div key={i} className="text-center">{c}</div>
+        ))}
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-[3px]">
+        {rows.flatMap((row, ri) =>
+          row.map((dot, ci) => (
+            <span
+              key={`${ri}-${ci}`}
+              className={`h-2 w-2 rounded-full ${toneFor(dot)}`}
+              aria-hidden="true"
+            />
+          )),
+        )}
+      </div>
+    </div>
   );
 }
 

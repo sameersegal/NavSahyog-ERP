@@ -29,6 +29,12 @@ export type Bindings = {
   // BOTH are set via `wrangler secret put`. A no-op in dev / test.
   STAGING_BASIC_AUTH_USER?: string;
   STAGING_BASIC_AUTH_PASSWORD?: string;
+  // JSON blob of KPI classification rules (see
+  // requirements/kpi-rules.md). Parsed once per request; defaults
+  // from @navsahyog/shared fill in any missing labels. Keeping this
+  // as an env var (rather than a D1 table) matches the project-wide
+  // rule that runtime tunables live out-of-DB — see CLAUDE.md.
+  KPI_RULES_JSON?: string;
 };
 
 // The session-bound user — DB row shape, no computed capabilities.

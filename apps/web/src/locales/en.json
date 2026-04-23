@@ -66,6 +66,7 @@
   "home.kpi.som_declared.hint": "of villages declared this month",
   "home.kpi.hint.vs_prev_week": "vs prev week",
   "home.kpi.hint.vs_prev_month": "vs prev month",
+  "home.kpi.dotgrid.alt": "{metric} — last 12 weeks, one dot per day",
   "home.at_risk.title": "Needs attention",
   "home.at_risk.threshold": "no session in {days}+ days",
   "home.at_risk.days": "{days}d ago",

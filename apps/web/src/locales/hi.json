@@ -66,6 +66,7 @@
   "home.kpi.som_declared.hint": "इस माह घोषित गाँवों का प्रतिशत",
   "home.kpi.hint.vs_prev_week": "पिछले हफ़्ते की तुलना में",
   "home.kpi.hint.vs_prev_month": "पिछले माह की तुलना में",
+  "home.kpi.dotgrid.alt": "{metric} — पिछले 12 हफ़्ते, प्रति दिन एक बिंदु",
   "home.at_risk.title": "ध्यान देने योग्य",
   "home.at_risk.threshold": "{days}+ दिनों से कोई सत्र नहीं",
   "home.at_risk.days": "{days}दिन पहले",

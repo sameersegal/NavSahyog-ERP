@@ -31,11 +31,15 @@ import {
 } from '../lib/geo';
 import {
   AT_RISK_THRESHOLD_DAYS,
-  KPI_SPARK_POINTS,
+  DEFAULT_KPI_RULES,
+  KPI_DOT_DAYS,
+  KPI_DOT_WEEKS,
   type BreadcrumbCrumb,
   type HierarchyChild,
   type InsightKpi,
   type InsightsResponse,
+  type KpiDot,
+  type KpiRule,
   type VillageActivity,
 } from '@navsahyog/shared';
 import type { Bindings, SessionUser, Variables } from '../types';
@@ -464,48 +468,112 @@ async function dailyMediaCounts(
   return out;
 }
 
-// Week index for a day within the 12-week sparkline window ending
-// today. 0 = oldest week, KPI_SPARK_POINTS-1 = current week. Returns
-// null for days outside the window (including future days).
-function weekIndexOf(dateIso: string, todayIso: string): number | null {
-  const diff = daysBetween(dateIso, todayIso); // ≥0 when dateIso ≤ todayIso
-  if (diff < 0 || diff >= KPI_SPARK_POINTS * 7) return null;
-  return KPI_SPARK_POINTS - 1 - Math.floor(diff / 7);
+// Day-of-week offset with Monday=0, Sunday=6 (IST calendar day).
+// The Home tile's dot grid lays out weeks as rows starting Monday,
+// so we anchor every window to Mondays regardless of what weekday
+// `today` is.
+function mondayIndex(isoDate: string): number {
+  const [y, m, d] = isoDate.split('-').map(Number) as [number, number, number];
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+  return (dow + 6) % 7; // 0=Mon..6=Sun
 }
 
-// 12-week rollup of a per-day count Map. Each bucket is a 7-day sum.
-// Counts default to 0 — "no images this week" is a real zero, not a
-// gap; the sparkline renders as the floor rather than a break.
-function rollSparkCount(
-  daily: Map<string, number>,
-  today: string,
-): Array<number | null> {
-  const buckets: Array<number | null> = new Array(KPI_SPARK_POINTS).fill(0);
-  for (const [date, n] of daily) {
-    const wi = weekIndexOf(date, today);
-    if (wi !== null) buckets[wi] = (buckets[wi] as number) + n;
+// Start date ('YYYY-MM-DD') of the 12-week dot grid window: the
+// Monday 11 weeks ago, so the last row ends on the upcoming Sunday.
+// Future days (after today IST) stay `empty` in the output grid.
+function dotGridStart(todayIso: string): string {
+  const offsetIntoCurrentWeek = mondayIndex(todayIso);
+  return addDays(todayIso, -(offsetIntoCurrentWeek + (KPI_DOT_WEEKS - 1) * 7));
+}
+
+// Zero-filled 84-day classification array. Future days + days with
+// no signal render grey. The caller overwrites good/bad cells as it
+// reads the per-day series.
+function emptyDotGrid(): KpiDot[] {
+  return new Array<KpiDot>(KPI_DOT_DAYS).fill('empty');
+}
+
+// Parse KPI_RULES_JSON once per request. Shape mismatches / parse
+// errors fall through to DEFAULT_KPI_RULES so a bad deploy can't
+// brick the home page; the error is console.warn'd so it shows up
+// in `wrangler tail`.
+function loadKpiRules(raw: string | undefined): Record<string, KpiRule | null> {
+  if (!raw) return DEFAULT_KPI_RULES;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, KpiRule | null>;
+    return { ...DEFAULT_KPI_RULES, ...parsed };
+  } catch (e) {
+    console.warn('KPI_RULES_JSON parse failed, using defaults', e);
+    return DEFAULT_KPI_RULES;
   }
-  return buckets;
 }
 
-// 12-week rollup of a per-day (present, total) Map into weekly %s.
-// A week with zero marks returns null so the sparkline draws a gap
-// rather than pretending 0% — "no session" and "everyone absent"
-// are very different signals.
-function rollSparkPct(
+// Classify a single day under a rule. Returns 'empty' for days
+// that the rule says don't count (no session, zero and empty_when
+// is 'zero', etc.). The caller pre-fills the grid with 'empty', so
+// this fn is only consulted on days where the series has any data
+// or the rule is 'never' empty.
+function classifyDay(rule: KpiRule, value: number, hasSession: boolean): KpiDot {
+  if (rule.empty_when === 'no_session' && !hasSession) return 'empty';
+  if (rule.empty_when === 'zero' && value === 0) return 'empty';
+
+  if (rule.metric === 'inverse_count') {
+    // Lower is better. `good_lte` is the safe ceiling; anything
+    // greater than `bad_gt` is red.
+    if (rule.good_lte !== undefined && value <= rule.good_lte) return 'good';
+    if (rule.bad_gt !== undefined && value > rule.bad_gt) return 'bad';
+    return 'empty';
+  }
+
+  // 'pct' + 'count' both use good_gte / bad_lt with higher-is-better.
+  if (rule.good_gte !== undefined && value >= rule.good_gte) return 'good';
+  if (rule.bad_lt !== undefined && value < rule.bad_lt) return 'bad';
+  return 'empty';
+}
+
+// Turn a per-day (present, total) attendance map into 84 day dots
+// under an attendance rule (metric: 'pct'). `total === 0` means no
+// session held that day → 'empty' when empty_when='no_session'.
+function classifyAttendanceDots(
+  rule: KpiRule,
   daily: Map<string, { present: number; total: number }>,
   today: string,
-): Array<number | null> {
-  const pres = new Array(KPI_SPARK_POINTS).fill(0);
-  const tot = new Array(KPI_SPARK_POINTS).fill(0);
-  for (const [date, { present, total }] of daily) {
-    const wi = weekIndexOf(date, today);
-    if (wi !== null) {
-      pres[wi] += present;
-      tot[wi] += total;
-    }
+): KpiDot[] {
+  const grid = emptyDotGrid();
+  const start = dotGridStart(today);
+  for (let i = 0; i < KPI_DOT_DAYS; i++) {
+    const date = addDays(start, i);
+    if (date > today) break; // future days stay empty
+    const d = daily.get(date);
+    const total = d?.total ?? 0;
+    const present = d?.present ?? 0;
+    const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+    grid[i] = classifyDay(rule, pct, total > 0);
   }
-  return tot.map((t, i) => (t === 0 ? null : Math.round((pres[i] / t) * 100)));
+  return grid;
+}
+
+// Turn a per-day count map into 84 day dots under a count rule. A
+// day counts as having a session if the attendance map has a total
+// that day (shared with the caller via `attendanceDaily`). This
+// matters for the media KPIs where "zero media today" only reads
+// red when a session actually happened.
+function classifyCountDots(
+  rule: KpiRule,
+  daily: Map<string, number>,
+  attendanceDaily: Map<string, { present: number; total: number }>,
+  today: string,
+): KpiDot[] {
+  const grid = emptyDotGrid();
+  const start = dotGridStart(today);
+  for (let i = 0; i < KPI_DOT_DAYS; i++) {
+    const date = addDays(start, i);
+    if (date > today) break;
+    const value = daily.get(date) ?? 0;
+    const hasSession = (attendanceDaily.get(date)?.total ?? 0) > 0;
+    grid[i] = classifyDay(rule, value, hasSession);
+  }
+  return grid;
 }
 
 function deltaTrend(current: number, prev: number | null): {
@@ -748,8 +816,11 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
   const prevWeekEnd = addDays(today, -7);
   const monthPrefix = today.slice(0, 7);
   const prevMonthPrefix = addMonths(today, -1).slice(0, 7);
-  // 12-week sparkline window, inclusive of both endpoints.
-  const sparkStart = addDays(today, -(KPI_SPARK_POINTS * 7 - 1));
+  // 12-week dot-grid window anchored to Mondays. Always starts on a
+  // Monday so rows line up even when `today` is mid-week; the
+  // trailing days after `today` stay 'empty'.
+  const dotStart = dotGridStart(today);
+  const kpiRules = loadKpiRules(c.env.KPI_RULES_JSON);
 
   // Child level (one step below the current drill position). Null
   // means village leaf — tiles deep-link to /village/:id rather than
@@ -802,10 +873,10 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
           achievementsByVillage,
         );
 
-  // KPI values + 12-week spark series fan out in parallel — D1
+  // KPI values + 84-day daily series fan out in parallel — D1
   // queries are cheap individually but serialising them adds up on
-  // slow links. Spark queries return per-day counts across the
-  // 84-day window; we roll into weekly buckets in JS.
+  // slow links. The daily series feed the per-KPI dot-grid
+  // classifier (see classifyAttendanceDots / classifyCountDots).
   const [
     attThisWeek,
     attPrevWeek,
@@ -829,17 +900,35 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
     mediaInMonth(c.env.DB, ids, 'image', prevMonthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', monthPrefix),
     mediaInMonth(c.env.DB, ids, 'video', prevMonthPrefix),
-    dailyAttendanceCounts(c.env.DB, ids, sparkStart, today),
-    dailyAchievementCounts(c.env.DB, ids, sparkStart, today),
-    dailyMediaCounts(c.env.DB, ids, 'image', sparkStart, today),
-    dailyMediaCounts(c.env.DB, ids, 'video', sparkStart, today),
+    dailyAttendanceCounts(c.env.DB, ids, dotStart, today),
+    dailyAchievementCounts(c.env.DB, ids, dotStart, today),
+    dailyMediaCounts(c.env.DB, ids, 'image', dotStart, today),
+    dailyMediaCounts(c.env.DB, ids, 'video', dotStart, today),
     somDeclaredPctInMonth(c.env.DB, ids, monthPrefix),
   ]);
 
-  const attendanceSpark = rollSparkPct(dailyAtt, today);
-  const achievementSpark = rollSparkCount(dailyAch, today);
-  const imageSpark = rollSparkCount(dailyImg, today);
-  const videoSpark = rollSparkCount(dailyVid, today);
+  // Classify each day under the per-KPI rule. Missing / null rules
+  // produce a null dots field so the client omits the grid.
+  const dotsFor = (label: string): KpiDot[] | null => {
+    const rule = kpiRules[label];
+    if (!rule) return null;
+    if (label === 'attendance_week') {
+      return classifyAttendanceDots(rule, dailyAtt, today);
+    }
+    if (label === 'images_month') {
+      return classifyCountDots(rule, dailyImg, dailyAtt, today);
+    }
+    if (label === 'videos_month') {
+      return classifyCountDots(rule, dailyVid, dailyAtt, today);
+    }
+    if (label === 'achievements_month') {
+      return classifyCountDots(rule, dailyAch, dailyAtt, today);
+    }
+    // Other labels (e.g. at_risk) don't have a natural daily series
+    // yet — reconstructing per-day at-risk state needs a separate
+    // scan that isn't worth it right now.
+    return null;
+  };
 
   const totalChildren = cores.reduce((a, v) => a + v.children_count, 0);
   const atRiskCount = allVillages.filter((v) => v.at_risk).length;
@@ -861,8 +950,8 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: null,
       trend: null,
       hint: null,
-      // Headcount isn't a weekly series — skip the spark.
-      spark: null,
+      // Headcount is a census — no dot grid.
+      dots: null,
     },
     {
       label: 'attendance_week',
@@ -870,7 +959,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: attDelta.delta,
       trend: attDelta.trend,
       hint: attPrevWeek === null ? null : 'vs_prev_week',
-      spark: attendanceSpark,
+      dots: dotsFor('attendance_week'),
     },
     {
       label: 'images_month',
@@ -878,7 +967,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: imgDelta.delta,
       trend: imgDelta.trend,
       hint: imagesPrevMonth === 0 && imagesThisMonth === 0 ? null : 'vs_prev_month',
-      spark: imageSpark,
+      dots: dotsFor('images_month'),
     },
     {
       label: 'videos_month',
@@ -886,7 +975,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: vidDelta.delta,
       trend: vidDelta.trend,
       hint: videosPrevMonth === 0 && videosThisMonth === 0 ? null : 'vs_prev_month',
-      spark: videoSpark,
+      dots: dotsFor('videos_month'),
     },
     {
       label: 'achievements_month',
@@ -894,7 +983,7 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       delta: achDelta.delta,
       trend: achDelta.trend,
       hint: achPrevMonth === null ? null : 'vs_prev_month',
-      spark: achievementSpark,
+      dots: dotsFor('achievements_month'),
     },
     {
       label: 'at_risk',
@@ -904,10 +993,9 @@ insights.get('/', requireCap('dashboard.read'), async (c) => {
       // always reads green on the client.
       trend: atRiskCount === 0 ? 'up' : atRiskCount > allVillages.length / 3 ? 'down' : 'flat',
       hint: null,
-      // At-risk is derived from today's state (days_since_last_session);
-      // reconstructing its weekly history would need a per-week scan
-      // that isn't worth the complexity right now.
-      spark: null,
+      // At-risk is derived from today's state; we don't have a
+      // per-day history query yet, so leave dots null.
+      dots: null,
     },
   ];
 
