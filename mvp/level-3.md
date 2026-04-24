@@ -16,7 +16,7 @@ as the default `/` for every authenticated user.
   role. Capability-gated composition: doer roles (any `.write`
   cap) see Greeting + Health Score + Today's Mission + Focus
   Areas + Capture FAB; observer roles (read-only) see Greeting +
-  Health Score + Focus Areas + Top-N compare snapshot. Time
+  Health Score + Focus Areas + full sibling-compare grid. Time
   filter is presets only (7D / 30D / MTD); custom range stays on
   `/dashboard`. See decisions.md D17–D20.
 - **Master Creations (§3.8.7).** Super Admin screens for:
@@ -55,7 +55,8 @@ and §5. The in-menu language toggle already ships with L2.5.
 3. A VC lands on `/` (not `/village/:id`) and sees Health Score +
    Today's Mission + Focus Areas + Capture FAB.
 4. A State Admin lands on `/` and sees Health Score + Focus Areas +
-   a 5-row Top-N compare snapshot; no Mission card, no FAB.
+   a full sibling-compare grid over their direct-child scopes; no
+   Mission card, no FAB.
 5. Switching the Home time preset (7D / 30D / MTD) issues exactly
    one `/api/dashboard/home` fetch and refreshes all blocks
    consistently.

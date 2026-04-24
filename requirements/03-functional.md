@@ -241,7 +241,7 @@ gate is not satisfied.
 | 2 | Health Score card | `dashboard.read` | all roles |
 | 3 | Today's Mission | any `.write` cap | doer roles |
 | 4 | Focus Areas (top-3) | `dashboard.read` | all roles |
-| 5 | Top-N compare snapshot (5 rows) | no `.write` cap | observer roles |
+| 5 | Sibling-compare grid (full) | no `.write` cap | observer roles |
 | 6 | Capture FAB (floating) | `media.write` or `attendance.write` | doer roles |
 
 A doer therefore sees 4 body blocks + FAB; an observer sees 4 body
@@ -275,13 +275,16 @@ excluding Mission's `kind` to avoid duplication. Each chip shows
 scope name + headline metric; tap deep-links to that scope on
 `/dashboard` with the preset preserved.
 
-**Top-N compare snapshot** (observer roles only; decisions.md D19).
-5-row table of the worst-performing **direct child scopes** in the
-user's scope by Health Score, preset-windowed. Columns: scope name,
-Health Score, trend. Row tap drills to that child on `/dashboard`.
-The full sibling-compare grid (every child, all metrics) remains on
-`/dashboard`; this snapshot is the shortcut for observer workflows
-that start from "who needs attention" rather than "browse".
+**Sibling-compare grid** (observer roles only; decisions.md D19).
+Full grid of every direct-child scope in the user's scope, one row
+per child, columns for each §3.6.2 KPI plus Health Score and trend.
+Preset-windowed. Sortable by any column; default sort is Health
+Score ascending so the worst-performing scopes surface first. Row
+tap drills to that child on `/dashboard` with preset preserved.
+The `/dashboard` drill-down is still the path for cross-level
+navigation (e.g. jumping from India to a specific Cluster) and for
+CSV export; Home is "start at your scope and see how your children
+are doing", `/dashboard` is "walk the hierarchy".
 
 **Capture FAB.** Floating bottom-right, one tap, pre-scoped to the
 user's current scope (VC: own village; AF / Cluster / Super: last
@@ -289,20 +292,22 @@ used, or prompt to pick). Opens the existing Capture sheet.
 
 **API.** `GET /api/dashboard/home?window=7d|30d|mtd&scope=<level>:<id>`
 returns `{scope, window, healthScore, mission?, focusAreas,
-compareTopN?}`. Gated by `requireCap('dashboard.read')`. `mission`
-is present iff the caller has any `.write` cap; `compareTopN` is
-present iff the caller has none.
+compareGrid?}`. Gated by `requireCap('dashboard.read')`. `mission`
+is present iff the caller has any `.write` cap; `compareGrid` is
+present iff the caller has none. `compareGrid` carries one row per
+direct-child scope with every §3.6.2 KPI + Health Score + trend.
 
 **Acceptance.**
 - A VC logs in and lands on `/`, **not** their village. The page
   shows Health Score + Mission + Focus Areas + Capture FAB.
 - A State Admin lands on `/` and sees Health Score + Focus Areas +
-  Top-N compare; no Mission card, no FAB.
+  a full sibling-compare grid over their direct-child scopes; no
+  Mission card, no FAB.
 - Switching the time preset triggers exactly one `/api/dashboard/home`
   fetch; all blocks refresh consistently.
-- Focus Areas and Top-N rows deep-link to `/dashboard` with scope
-  and preset preserved in URL state; the drill-down lands already
-  filtered.
+- Focus Areas and compare-grid rows deep-link to `/dashboard` with
+  scope and preset preserved in URL state; the drill-down lands
+  already filtered.
 - Capability shape, not role name, decides composition. Adding a
   new observer role in `packages/shared/src/capabilities.ts` (only
   `.read` caps) automatically gives it the observer Home with no
