@@ -19,6 +19,7 @@
 // catches anything too big.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
   api,
   can,
@@ -33,6 +34,7 @@ import {
   MAX_UPLOAD_BYTES,
   uploadMedia,
 } from '../lib/media';
+import { absoluteTime, relativeTime } from '../lib/date';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
@@ -40,7 +42,7 @@ const FIELD =
   'mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus';
 
 export function Capture() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user } = useAuth();
   const [villages, setVillages] = useState<Village[] | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
@@ -219,9 +221,27 @@ export function Capture() {
           />
         )}
 
-        {flash && <p className="text-sm text-primary">{flash}</p>}
         {err && <p className="text-sm text-danger">{err}</p>}
       </div>
+
+      {flash && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-card text-fg border border-border shadow-lg rounded-lg px-4 py-2 text-sm"
+        >
+          <span aria-hidden="true" className="text-primary">✓</span>
+          <span>{flash}</span>
+          <button
+            type="button"
+            onClick={() => setFlash(null)}
+            aria-label={t('common.dismiss')}
+            className="ml-2 text-muted-fg hover:text-fg"
+          >
+            <span aria-hidden="true" className="text-lg leading-none">×</span>
+          </button>
+        </div>
+      )}
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">{t('capture.recent')}</h2>
@@ -241,13 +261,23 @@ export function Capture() {
                   className="block aspect-square bg-bg flex items-center justify-center text-xs text-muted-fg"
                 >
                   {m.kind === 'image' ? (
-                    <img src={m.thumb_url} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={m.thumb_url}
+                      alt={t('media.alt', {
+                        kind: t('media.kind.image'),
+                        when: absoluteTime(m.captured_at, lang),
+                      })}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <span>{t(`media.kind.${m.kind}` as const)}</span>
                   )}
                 </a>
-                <div className="p-2 text-xs text-muted-fg truncate">
-                  {new Date(m.captured_at * 1000).toLocaleString()}
+                <div
+                  className="p-2 text-xs text-muted-fg truncate"
+                  title={absoluteTime(m.captured_at, lang)}
+                >
+                  {relativeTime(m.captured_at, lang)}
                 </div>
               </li>
             ))}
@@ -271,7 +301,15 @@ function PhotoCapture({ villageId, tagEventId, onUploaded, onError }: Sub) {
   const { t } = useI18n();
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  const [pending, setPending] = useState<{ file: File; previewUrl: string } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pending) URL.revokeObjectURL(pending.previewUrl);
+    };
+  }, [pending]);
+
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -279,17 +317,30 @@ function PhotoCapture({ villageId, tagEventId, onUploaded, onError }: Sub) {
       onError(new Error(t('media.error.too_big')));
       return;
     }
+    setPending({ file, previewUrl: URL.createObjectURL(file) });
+  }
+
+  function retake() {
+    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    setPending(null);
+    ref.current?.click();
+  }
+
+  async function upload() {
+    if (!pending) return;
     setBusy(true);
     try {
       const gps = await captureGps();
       await uploadMedia({
-        file,
+        file: pending.file,
         kind: 'image',
-        mime: canonicalMime(file.type) || 'image/jpeg',
+        mime: canonicalMime(pending.file.type) || 'image/jpeg',
         villageId,
         gps,
         tagEventId,
       });
+      URL.revokeObjectURL(pending.previewUrl);
+      setPending(null);
       onUploaded();
     } catch (e) {
       onError(e);
@@ -297,8 +348,9 @@ function PhotoCapture({ villageId, tagEventId, onUploaded, onError }: Sub) {
       setBusy(false);
     }
   }
+
   return (
-    <div>
+    <div className="space-y-3">
       <input
         ref={ref}
         type="file"
@@ -307,14 +359,42 @@ function PhotoCapture({ villageId, tagEventId, onUploaded, onError }: Sub) {
         className="hidden"
         onChange={onFile}
       />
-      <button
-        type="button"
-        onClick={() => ref.current?.click()}
-        disabled={busy}
-        className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm"
-      >
-        {busy ? t('media.uploading') : t('capture.action.pick')}
-      </button>
+      {pending ? (
+        <>
+          <img
+            src={pending.previewUrl}
+            alt={t('capture.preview.alt')}
+            className="w-full max-h-80 object-contain rounded bg-bg"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={upload}
+              disabled={busy}
+              className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm min-h-[44px]"
+            >
+              {busy ? t('media.uploading') : t('capture.action.upload')}
+            </button>
+            <button
+              type="button"
+              onClick={retake}
+              disabled={busy}
+              className="bg-card hover:bg-card-hover text-fg border border-border rounded px-4 py-2 text-sm min-h-[44px]"
+            >
+              {t('capture.action.retake')}
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => ref.current?.click()}
+          disabled={busy}
+          className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm min-h-[44px]"
+        >
+          {t('capture.action.pick')}
+        </button>
+      )}
     </div>
   );
 }
@@ -344,7 +424,7 @@ function RecordingCapture({
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ blob: Blob; mime: string; previewUrl: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -359,6 +439,14 @@ function RecordingCapture({
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
   }, []);
+
+  // Revoke the preview object URL on unmount / change so the
+  // blob can be freed.
+  useEffect(() => {
+    return () => {
+      if (pending) URL.revokeObjectURL(pending.previewUrl);
+    };
+  }, [pending]);
 
   // Re-bind the live video preview when the stream changes. Must
   // live in an effect (not directly in start()) because the <video>
@@ -381,7 +469,7 @@ function RecordingCapture({
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      rec.onstop = async () => {
+      rec.onstop = () => {
         const mime = canonicalMime(rec.mimeType) ||
           (mode === 'audio' ? 'audio/webm' : 'video/webm');
         const blob = new Blob(chunksRef.current, { type: mime });
@@ -392,24 +480,7 @@ function RecordingCapture({
           onError(new Error(t('media.error.too_big')));
           return;
         }
-        setPreviewUrl(URL.createObjectURL(blob));
-        setBusy(true);
-        try {
-          const gps = await captureGps();
-          await uploadMedia({
-            file: blob,
-            kind: mode,
-            mime,
-            villageId,
-            gps,
-            tagEventId,
-          });
-          onUploaded();
-        } catch (e) {
-          onError(e);
-        } finally {
-          setBusy(false);
-        }
+        setPending({ blob, mime, previewUrl: URL.createObjectURL(blob) });
       };
       rec.start();
       recorderRef.current = rec;
@@ -426,6 +497,34 @@ function RecordingCapture({
     setRecording(false);
   }
 
+  function retake() {
+    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    setPending(null);
+  }
+
+  async function upload() {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const gps = await captureGps();
+      await uploadMedia({
+        file: pending.blob,
+        kind: mode,
+        mime: pending.mime,
+        villageId,
+        gps,
+        tagEventId,
+      });
+      URL.revokeObjectURL(pending.previewUrl);
+      setPending(null);
+      onUploaded();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const actionLabel = mode === 'audio'
     ? t('capture.action.record_audio')
     : t('capture.action.record_video');
@@ -440,33 +539,51 @@ function RecordingCapture({
           className="w-full max-h-80 bg-black rounded"
         />
       )}
+      {pending && !recording && mode === 'audio' && (
+        <audio src={pending.previewUrl} controls className="h-8" />
+      )}
+      {pending && !recording && mode === 'video' && (
+        <video src={pending.previewUrl} controls className="w-full max-h-80 rounded" />
+      )}
       <div className="flex flex-wrap items-center gap-3">
-        {!recording ? (
+        {recording ? (
+          <button
+            type="button"
+            onClick={stop}
+            className="bg-danger text-primary-fg rounded px-4 py-2 text-sm min-h-[44px]"
+          >
+            {t('attendance.form.voice_note.stop', { s: elapsed })}
+          </button>
+        ) : pending ? (
+          <>
+            <button
+              type="button"
+              onClick={upload}
+              disabled={busy}
+              className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm min-h-[44px]"
+            >
+              {busy ? t('media.uploading') : t('capture.action.upload')}
+            </button>
+            <button
+              type="button"
+              onClick={retake}
+              disabled={busy}
+              className="bg-card hover:bg-card-hover text-fg border border-border rounded px-4 py-2 text-sm min-h-[44px]"
+            >
+              {t('capture.action.retake')}
+            </button>
+          </>
+        ) : (
           <button
             type="button"
             onClick={start}
             disabled={busy}
-            className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm"
+            className="bg-primary hover:bg-primary-hover disabled:opacity-60 text-primary-fg rounded px-4 py-2 text-sm min-h-[44px]"
           >
             {actionLabel}
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={stop}
-            className="bg-danger text-primary-fg rounded px-4 py-2 text-sm"
-          >
-            {t('attendance.form.voice_note.stop', { s: elapsed })}
-          </button>
         )}
-        {busy && <span className="text-xs text-muted-fg">{t('media.uploading')}</span>}
       </div>
-      {previewUrl && !recording && mode === 'audio' && (
-        <audio src={previewUrl} controls className="h-8" />
-      )}
-      {previewUrl && !recording && mode === 'video' && (
-        <video src={previewUrl} controls className="w-full max-h-80 rounded" />
-      )}
     </div>
   );
 }

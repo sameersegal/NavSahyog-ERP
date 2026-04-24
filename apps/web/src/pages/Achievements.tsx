@@ -7,6 +7,7 @@ import {
   type Child,
   type Village as VillageT,
 } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
@@ -40,6 +41,7 @@ export function Achievements() {
   const [children, setChildren] = useState<Child[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>({ kind: 'none' });
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     api
@@ -88,6 +90,9 @@ export function Achievements() {
     if (panel.kind !== 'edit' || !rows) return null;
     return rows.find((r) => r.id === panel.id) ?? null;
   }, [panel, rows]);
+
+  const hasActiveFilters =
+    villageId !== null || from !== '' || to !== '' || typeFilter !== '';
 
   return (
     <div className="space-y-4">
@@ -150,7 +155,27 @@ export function Achievements() {
       {!rows ? (
         <p className="text-muted-fg">{t('common.loading')}</p>
       ) : rows.length === 0 ? (
-        <p className="text-muted-fg">{t('achievements.empty')}</p>
+        <div className="text-muted-fg">
+          <p>
+            {hasActiveFilters
+              ? t('achievements.empty.filtered')
+              : t('achievements.empty')}
+          </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setVillageId(null);
+                setFrom('');
+                setTo('');
+                setTypeFilter('');
+              }}
+              className="mt-2 text-sm text-primary hover:underline"
+            >
+              {t('achievements.clear_filters')}
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="bg-card border border-border rounded divide-y divide-border">
           {rows.map((r) => (
@@ -166,19 +191,31 @@ export function Achievements() {
                     : { kind: 'edit', id: r.id },
                 )
               }
-              onDelete={async () => {
-                if (!confirm(t('achievements.confirm_delete'))) return;
-                try {
-                  await api.deleteAchievement(r.id);
-                  load();
-                } catch (e) {
-                  setErr(e instanceof Error ? e.message : 'failed');
-                }
-              }}
+              onDelete={() => setPendingDeleteId(r.id)}
             />
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title={t('achievements.confirm_delete.title')}
+        message={t('achievements.confirm_delete')}
+        confirmLabel={t('achievements.delete')}
+        destructive
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={async () => {
+          const id = pendingDeleteId;
+          setPendingDeleteId(null);
+          if (id === null) return;
+          try {
+            await api.deleteAchievement(id);
+            load();
+          } catch (e) {
+            setErr(e instanceof Error ? e.message : 'failed');
+          }
+        }}
+      />
     </div>
   );
 }
@@ -465,6 +502,7 @@ function AchievementForm(props: FormProps) {
             <span className="text-sm">{t('achievements.form.medal_count')}</span>
             <input
               type="number"
+              inputMode="numeric"
               min={1}
               className={FIELD}
               value={medalCount}
@@ -475,7 +513,18 @@ function AchievementForm(props: FormProps) {
         )}
       </div>
       <label className="block">
-        <span className="text-sm">{t('achievements.form.description')}</span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm">{t('achievements.form.description')}</span>
+          <span
+            className={
+              'text-xs ' +
+              (description.length >= 500 ? 'text-danger' : 'text-muted-fg')
+            }
+            aria-live="polite"
+          >
+            {description.length} / 500
+          </span>
+        </div>
         <textarea
           className={FIELD + ' min-h-[72px]'}
           value={description}

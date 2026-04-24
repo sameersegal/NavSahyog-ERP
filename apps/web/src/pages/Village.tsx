@@ -21,6 +21,8 @@ import {
   MAX_UPLOAD_BYTES,
   uploadMedia,
 } from '../lib/media';
+import { absoluteTime, relativeTime } from '../lib/date';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
@@ -47,7 +49,7 @@ export function Village() {
     });
   }, [villageId]);
 
-  if (!villageId) return <p>Invalid village.</p>;
+  if (!villageId) return <p>{t('village.invalid')}</p>;
 
   return (
     <div className="space-y-4">
@@ -618,6 +620,7 @@ function ChildForm(props: ChildFormProps) {
               value={fatherPhone}
               onChange={(e) => setFatherPhone(e.target.value)}
               type="tel"
+              inputMode="tel"
               autoComplete="off"
               placeholder="+91"
             />
@@ -644,6 +647,7 @@ function ChildForm(props: ChildFormProps) {
               value={motherPhone}
               onChange={(e) => setMotherPhone(e.target.value)}
               type="tel"
+              inputMode="tel"
               autoComplete="off"
               placeholder="+91"
             />
@@ -800,6 +804,7 @@ function AltContactFieldsSlot({
           value={altPhone}
           onChange={(e) => setAltPhone(e.target.value)}
           type="tel"
+          inputMode="tel"
           autoComplete="off"
           placeholder="+91"
           required={altRequired}
@@ -1578,11 +1583,12 @@ function SessionForm({
 // the raw bytes in a new tab — L2.4 has no thumbnail derivation yet
 // (decisions.md D11), so thumb_url points at the original object.
 function MediaTab({ villageId }: { villageId: number }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user } = useAuth();
   const canWrite = can(user, 'media.write');
   const [items, setItems] = useState<MediaWithUrls[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const load = useCallback(() => {
     setErr(null);
@@ -1593,8 +1599,10 @@ function MediaTab({ villageId }: { villageId: number }) {
 
   useEffect(() => { load(); }, [load]);
 
-  async function onDelete(id: number) {
-    if (!confirm(t('media.delete.confirm'))) return;
+  async function confirmDelete() {
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
+    if (id === null) return;
     try {
       const res = await fetch(`/api/media/${id}`, {
         method: 'DELETE', credentials: 'include',
@@ -1613,43 +1621,64 @@ function MediaTab({ villageId }: { villageId: number }) {
   }
 
   return (
-    <ul className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {items.map((m) => (
-        <li
-          key={m.id}
-          className="bg-card border border-border rounded overflow-hidden"
-        >
-          <a
-            href={m.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block aspect-square bg-bg flex items-center justify-center text-xs text-muted-fg"
+    <>
+      <ul className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {items.map((m) => (
+          <li
+            key={m.id}
+            className="bg-card border border-border rounded overflow-hidden"
           >
-            {m.kind === 'image' ? (
-              <img src={m.thumb_url} alt="" className="w-full h-full object-cover" />
-            ) : m.kind === 'video' ? (
-              <span>{t('media.kind.video')}</span>
-            ) : (
-              <span>{t('media.kind.audio')}</span>
-            )}
-          </a>
-          <div className="p-2 flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-fg truncate">
-              {new Date(m.captured_at * 1000).toLocaleString()}
-            </span>
-            {canWrite && (
-              <button
-                type="button"
-                onClick={() => onDelete(m.id)}
-                className="text-xs text-muted-fg hover:text-danger"
-                aria-label={t('media.delete')}
+            <a
+              href={m.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block aspect-square bg-bg flex items-center justify-center text-xs text-muted-fg"
+            >
+              {m.kind === 'image' ? (
+                <img
+                  src={m.thumb_url}
+                  alt={t('media.alt', {
+                    kind: t('media.kind.image'),
+                    when: absoluteTime(m.captured_at, lang),
+                  })}
+                  className="w-full h-full object-cover"
+                />
+              ) : m.kind === 'video' ? (
+                <span>{t('media.kind.video')}</span>
+              ) : (
+                <span>{t('media.kind.audio')}</span>
+              )}
+            </a>
+            <div className="p-2 flex items-center justify-between gap-2">
+              <span
+                className="text-xs text-muted-fg truncate"
+                title={absoluteTime(m.captured_at, lang)}
               >
-                ×
-              </button>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+                {relativeTime(m.captured_at, lang)}
+              </span>
+              {canWrite && (
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteId(m.id)}
+                  className="text-xs text-muted-fg hover:text-danger rounded p-1 focus:outline-none focus:ring-2 focus:ring-focus"
+                  aria-label={t('media.delete')}
+                >
+                  <span aria-hidden="true" className="text-lg leading-none">×</span>
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title={t('media.delete.title')}
+        message={t('media.delete.confirm')}
+        confirmLabel={t('media.delete')}
+        destructive
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={confirmDelete}
+      />
+    </>
   );
 }
