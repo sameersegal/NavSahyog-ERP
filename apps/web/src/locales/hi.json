@@ -9,6 +9,8 @@
   "auth.login.hint": "लैब बिल्ड। आज़माएँ {creds}।",
   "auth.login.user_id": "यूज़र आईडी",
   "auth.login.password": "पासवर्ड",
+  "auth.login.show_password": "पासवर्ड दिखाएँ",
+  "auth.login.hide_password": "पासवर्ड छुपाएँ",
   "auth.login.submit": "साइन इन करें",
   "auth.login.submitting": "साइन इन हो रहा है…",
   "auth.logout": "साइन आउट",
