@@ -9,6 +9,36 @@ justification.
 
 ---
 
+## 2026-04-24 — L3.x Field-Dashboard Home
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D17 | **Introduce §3.6.4 Field-Dashboard Home as the default landing for every authenticated user.** One route `/`, capability-gated composition: doer roles (any `.write` cap) see Greeting + Health Score + Today's Mission + Focus Areas + Capture FAB; observer roles (read-only, District+) see Greeting + Health Score + Focus Areas + Top-N compare snapshot. Same route, different blocks, decided server-side from the caller's capability set — not from role name. VCs with a single village no longer auto-redirect; they land on Home like everyone else. The previous `/` (India-level drill) moves to `/dashboard`. | Current `Home.tsx` which renders the India-level drill directly at `/` and auto-redirects single-village VCs to `/village/:id`. |
+| D18 | **Today's Mission is server-picked, doer-only.** Server ranks the four §3.6.2 gaps (attendance %, image %, video %, SoM coverage) as `(target − current) / target` over scope × preset and returns `{kind, current, target, copy}` for the largest. Rendered only for roles with any `.write` cap; observer roles skip the card entirely. Keeps the Home responsive to scope without an SA-curated content table. | Earlier option of a hand-curated weekly mission maintained via Master Creations. |
+| D19 | **Sibling-compare grid migrates off the doer Home to `/dashboard`; observer Home carries a 5-row Top-N snapshot instead.** The full side-by-side grid (every direct-child scope × every metric) stays on `/dashboard` for all roles. Observer Home shows the 5 worst-performing direct-child scopes by Health Score — the shortcut observers actually need — and a row tap drills to `/dashboard` with scope preserved. Doer Home has no compare block; its focus is the Mission + FAB action loop. | Earlier phrasing that moved the compare grid to `/dashboard` across the board (left observer Home without a compare affordance). |
+| D20 | **Home time filter is presets only: 7D (default) / 30D / MTD.** Custom from–to picker stays on `/dashboard`. One payload per preset switch; server returns trend deltas against the previous equivalent window (prev 7D, prev 30D, MTD of prior calendar month). Keeps Home scan-in-one-glance and saves an edge-cache key per arbitrary range. | §3.6.1 / §3.6.2's "two date icons" custom range applied to Home as well. |
+
+### Follow-on spec / mvp cleanups (same commit as D17–D20)
+
+- `requirements/03-functional.md` §3.6.4 added (new subsection;
+  §3.6.1–§3.6.3 left stable per CLAUDE.md numbering rule).
+- `mvp/level-3.md` — In scope gains a "Field-Dashboard Home
+  (§3.6.4)" bullet; acceptance list gains a doer-vs-observer
+  composition check; title broadened.
+- `mvp/README.md` — L3 theme line widened to name the Home.
+
+### Deliberately not pinned in spec (live in `defaults.md` when it lands)
+
+- Health Score weights across attendance / image / video / SoM.
+  Worker env vars; tuned out-of-spec per review-findings Medium.
+- Exact gap targets for Mission ranking (e.g. "image % target =
+  80"). Env vars; §3.6.2 defines the ratios, not the absolute
+  thresholds.
+- Top-N snapshot size (5). Constant in code; revisit once observer
+  roles are in the hands of real users.
+
+---
+
 ## 2026-04-22 — L3 re-scoping + media-backlog visibility
 
 | # | Decision | Supersedes |

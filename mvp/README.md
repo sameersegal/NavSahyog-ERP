@@ -35,7 +35,7 @@ both docs can evolve independently.
 | 2 | Full write loop + full drill-down dashboards | [`level-2.md`](./level-2.md) |
 | 2.4b | Media-pipeline follow-ups (thumbnails, transcode, multipart, EXIF GPS, AWS4) | [`level-2.4b.md`](./level-2.4b.md) |
 | 2.5 | Dashboard polish (mobile-first) + §3.6.2 fold | [`level-2.5.md`](./level-2.5.md) |
-| 3 | Master CRUD + Profile | [`level-3.md`](./level-3.md) |
+| 3 | Master CRUD + Profile + Field-Dashboard Home | [`level-3.md`](./level-3.md) |
 | 4 | Offline mode | [`level-4.md`](./level-4.md) |
 | 5 | Auth + compliance hardening (gated on approach decision) | [`level-5.md`](./level-5.md) |
 

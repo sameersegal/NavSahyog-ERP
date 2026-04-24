@@ -1,15 +1,24 @@
-# Level 3 — Master CRUD + Profile
+# Level 3 — Master CRUD + Profile + Field-Dashboard Home
 
 **Status:** not started. Requires L2 + L2.5 landed.
 
 ## Goal
 
-Close the remaining vendor-parity UI surface. After D15's
-cancellation of the content-hub screens, the level shrinks to
-Master Creations + a read-only Profile screen.
+Close the remaining vendor-parity UI surface and give every role a
+role-appropriate landing page. After D15's cancellation of the
+content-hub screens, the level carries Master Creations + a
+read-only Profile screen; D17–D20 add the new Field-Dashboard Home
+as the default `/` for every authenticated user.
 
 ## In scope
 
+- **Field-Dashboard Home (§3.6.4).** New default `/` for every
+  role. Capability-gated composition: doer roles (any `.write`
+  cap) see Greeting + Health Score + Today's Mission + Focus
+  Areas + Capture FAB; observer roles (read-only) see Greeting +
+  Health Score + Focus Areas + Top-N compare snapshot. Time
+  filter is presets only (7D / 30D / MTD); custom range stays on
+  `/dashboard`. See decisions.md D17–D20.
 - **Master Creations (§3.8.7).** Super Admin screens for:
   villages, schools, events / activities, users, qualifications.
   Each screen is dedicated (not a generic table editor). No "app
@@ -43,12 +52,19 @@ and §5. The in-menu language toggle already ships with L2.5.
    and it appears immediately in the VC / AF village picker.
 2. A VC can open their own Profile page and see name, role,
    joined-at, and assigned geo scope.
-3. *(App-settings acceptance criterion removed — see decisions.md
+3. A VC lands on `/` (not `/village/:id`) and sees Health Score +
+   Today's Mission + Focus Areas + Capture FAB.
+4. A State Admin lands on `/` and sees Health Score + Focus Areas +
+   a 5-row Top-N compare snapshot; no Mission card, no FAB.
+5. Switching the Home time preset (7D / 30D / MTD) issues exactly
+   one `/api/dashboard/home` fetch and refreshes all blocks
+   consistently.
+6. *(App-settings acceptance criterion removed — see decisions.md
    D1. Retention is out-of-system; there is no in-app knob.)*
-4. *(Consolidated-dashboard acceptance moved to L2.5.3 — see
+7. *(Consolidated-dashboard acceptance moved to L2.5.3 — see
    decisions.md D12. §3.6.2 now lives inside the drill-down
    dashboard, not a separate L3 screen.)*
-5. *(Notice / About / References / Quick / Language-switcher
+8. *(Notice / About / References / Quick / Language-switcher
    acceptance removed — cancelled in decisions.md D15.)*
 
 ## Notes
