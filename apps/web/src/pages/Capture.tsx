@@ -77,11 +77,25 @@ export function Capture() {
   }, [villageId]);
   useEffect(() => { loadRecent(); }, [loadRecent]);
 
+  const flashTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
+
   async function onUploaded() {
     setFlash(t('capture.success'));
     // Clear the flash after a beat so repeated captures don't stack
-    // messages. 3s matches the old attendance save toast.
-    setTimeout(() => setFlash(null), 3_000);
+    // messages. 3s matches the old attendance save toast. Cancel any
+    // in-flight timer so a quick second upload doesn't dismiss the
+    // new flash early, and so the timer doesn't fire after unmount.
+    if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => {
+      setFlash(null);
+      flashTimerRef.current = null;
+    }, 3_000);
     loadRecent();
   }
 
@@ -234,7 +248,13 @@ export function Capture() {
           <span>{flash}</span>
           <button
             type="button"
-            onClick={() => setFlash(null)}
+            onClick={() => {
+              if (flashTimerRef.current !== null) {
+                window.clearTimeout(flashTimerRef.current);
+                flashTimerRef.current = null;
+              }
+              setFlash(null);
+            }}
             aria-label={t('common.dismiss')}
             className="ml-2 text-muted-fg hover:text-fg"
           >
@@ -321,7 +341,8 @@ function PhotoCapture({ villageId, tagEventId, onUploaded, onError }: Sub) {
   }
 
   function retake() {
-    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    // The useEffect cleanup on [pending] handles URL.revokeObjectURL
+    // when the old pending slot is replaced with null.
     setPending(null);
     ref.current?.click();
   }
@@ -339,7 +360,6 @@ function PhotoCapture({ villageId, tagEventId, onUploaded, onError }: Sub) {
         gps,
         tagEventId,
       });
-      URL.revokeObjectURL(pending.previewUrl);
       setPending(null);
       onUploaded();
     } catch (e) {
@@ -498,7 +518,8 @@ function RecordingCapture({
   }
 
   function retake() {
-    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    // The useEffect cleanup on [pending] handles URL.revokeObjectURL
+    // when the old pending slot is replaced with null.
     setPending(null);
   }
 
@@ -515,7 +536,6 @@ function RecordingCapture({
         gps,
         tagEventId,
       });
-      URL.revokeObjectURL(pending.previewUrl);
       setPending(null);
       onUploaded();
     } catch (e) {

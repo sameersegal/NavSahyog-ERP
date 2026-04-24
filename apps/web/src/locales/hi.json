@@ -280,7 +280,7 @@
   "achievements.form.error.student_required": "छात्र चुनें।",
   "achievements.form.error.description_required": "विवरण आवश्यक है।",
 
-  "media.alt": "{kind} ({when})",
+  "media.alt": "{kind}, {when} को कैप्चर किया गया",
   "media.empty": "अभी तक कोई मीडिया नहीं।",
   "media.uploading": "अपलोड हो रहा है…",
   "media.kind.image": "फ़ोटो",

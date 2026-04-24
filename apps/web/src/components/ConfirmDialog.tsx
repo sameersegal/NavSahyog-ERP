@@ -12,6 +12,15 @@ type Props = {
   onCancel: () => void;
 };
 
+const FOCUSABLE = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 export function ConfirmDialog({
   open,
   title,
@@ -23,16 +32,42 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const { t } = useI18n();
+  const panelRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
     confirmRef.current?.focus();
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const nodes = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (nodes.length === 0) return;
+      const first = nodes[0]!;
+      const last = nodes[nodes.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
+
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      returnFocusRef.current?.focus();
+      returnFocusRef.current = null;
+    };
   }, [open, onCancel]);
 
   if (!open) return null;
@@ -46,9 +81,10 @@ export function ConfirmDialog({
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
       className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/50"
-      onClick={onCancel}
+      onClick={destructive ? undefined : onCancel}
     >
       <div
+        ref={panelRef}
         className="bg-card text-fg border border-border rounded-lg shadow-xl w-full max-w-sm p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
