@@ -51,6 +51,58 @@ Map operator phrasing:
 - "celebrate this win" / "district gold" / "one-pager about X" → `milestone`
 - "annual report" / "year-in-review" / "wrap-up" → `celebration`
 
+## Setup — pointing the skill at a backend
+
+Every API call below is a `curl` against `$NSF_API_BASE_URL`,
+which the operator exports before invoking the skill. Two
+deployments are supported today:
+
+| Backend | `NSF_API_BASE_URL` | Outer gate | App login |
+|---|---|---|---|
+| Local dev (`pnpm dev`) | `http://127.0.0.1:8787` | none | `super` / `password` (and other seeded VC/AF logins) |
+| Staging (Worker) | `https://navsahyog-api-staging.sameersegal.workers.dev` | HTTP basic auth via `STAGING_BASIC_AUTH_USER` + `STAGING_BASIC_AUTH_PASSWORD` (operator's responsibility) | same seeded users until L5 lands |
+
+The staging URL is host-allowlisted at the Worker edge — calls
+must originate from the operator's own machine, not the agent
+sandbox. If `curl` returns `403 host_not_allowed` from the
+agent, ask the operator to run the steps below in their terminal
+and paste the cookie value back.
+
+### One-time auth handshake
+
+Run once per session — the cookie is good for 12 h (§8.4).
+
+```bash
+export NSF_API_BASE_URL="https://navsahyog-api-staging.sameersegal.workers.dev"
+export NSF_BASIC="<basic_user>:<basic_password>"   # staging only
+
+curl -sS -c /tmp/cookies.txt \
+  -u "$NSF_BASIC" \
+  -X POST -H 'Content-Type: application/json' \
+  -d '{"user_id":"super","password":"password"}' \
+  "$NSF_API_BASE_URL/auth/login"
+```
+
+A successful response is `{"user":{...}}`; the `nsf_session`
+cookie is now in `/tmp/cookies.txt`. Drop the `-u "$NSF_BASIC"`
+flag for local dev (no outer gate).
+
+Every subsequent call reuses both auth layers:
+
+```bash
+curl -sS -b /tmp/cookies.txt -u "$NSF_BASIC" \
+  "$NSF_API_BASE_URL/api/<path>"
+```
+
+If `NSF_BASIC` is unset (local), `-u ""` is a no-op — keep it in
+the template so the same command works in both environments.
+
+A `401` mid-session means the cookie expired — re-run the
+handshake. A `403 host_not_allowed` means the outer Worker
+allowlist is rejecting the agent sandbox; switch to the operator's
+machine. A `403` on a specific resource means the village is
+outside the operator's scope — stop and tell the operator.
+
 ## Inputs
 
 Collect these from the operator before making any API call. If
@@ -58,7 +110,7 @@ something is missing, ask once — don't guess.
 
 | Input | Required | Notes |
 |---|---|---|
-| `village` | yes | UUID, or a name the operator will resolve. Prefer UUID. |
+| `village` | yes | Numeric id (D1 row id), or a name the agent resolves via step 1. The spec calls these "uuids" but the wire shape is `id: number`. |
 | `from`, `to` | yes | ISO dates bounding the update window (e.g. calendar quarter, rolling 90 days — whatever the operator specifies). |
 | `channel` | yes | `whatsapp` or `email`. Governs length and tone of the markdown draft. |
 | `pdf` | no | `true` \| `false`. Default: `true`. When true, also render the 1-pager PDF from `references/` (step 8). |
@@ -70,37 +122,57 @@ something is missing, ask once — don't guess.
 
 ## Procedure
 
-Run these reads **in parallel where possible**. All calls assume
-the operator's session cookie; no separate auth step.
+Run these reads **in parallel where possible**. Every `curl`
+follows the auth template from "Setup" above (`-b /tmp/cookies.txt
+-u "$NSF_BASIC"`). All paths are relative to `$NSF_API_BASE_URL`.
+
+The schema speaks **integer ids** end-to-end (D1 / SQLite); the
+spec calls them "uuid" but the wire shape is `id: number`. Pass
+whatever the operator gave you as-is — geo search returns numeric
+ids and the rest of the pipeline takes them.
 
 ### 1. Resolve village (only if name was given)
 
-`GET /api/geo/villages?q=<name>` — case-insensitive substring
-match on village name, scope-filtered (§5.3). If the match set is
-ambiguous (> 1 result), show the operator the candidates with
-cluster/district context and ask which they meant.
+`GET /api/geo/search?q=<name>&limit=20` — typeahead across
+villages + clusters, scope-filtered (§5.3). The response is
+`{ results: [{ level, id, name, path }, …] }`. **Filter to
+`level === "village"`** (clusters share the namespace). If more
+than one village matches, show the operator the candidates with
+their `path` (parent cluster) for disambiguation and ask which
+they meant.
 
 ### 2. Fetch stats (parallel)
 
-- `GET /api/children?village=<uuid>&include_graduated=false`
+- `GET /api/children?village_id=<id>&include_graduated=0`
   → active children count, gender split, program-join dates.
-- `GET /api/attendance?village=<uuid>&from=<from>&to=<to>`
-  → session rows + marks. Compute:
-  - sessions held
-  - average children per session
-  - attendance %  = `sum(present) / sum(marks)`
-  - best-attended session (date, event, count)
-- `GET /api/achievements?village=<uuid>&from=<from>&to=<to>&type=SoM`
+- `GET /api/dashboard/drilldown?metric=attendance&level=village&id=<id>&from=<from>&to=<to>&consolidated=1`
+  → window-aggregate attendance + the §3.6.2 KPI strip
+  (attendance %, avg children/session, image %, video %, SoM
+  current/prev). Use the `consolidated.kpis` block directly;
+  fall back to row-level computation only if the operator wants
+  a metric that's not in the strip.
+  - For best-attended session detail, follow up with
+    `GET /api/attendance?village_id=<id>&date=<YYYY-MM-DD>` per
+    candidate date — `/api/attendance` is a **per-day** endpoint
+    (§5.6); it does not accept `from`/`to`.
+- `GET /api/achievements?village_id=<id>&from=<from>&to=<to>&type=SoM`
   → SoM count, child names, descriptions.
-- `GET /api/achievements?village=<uuid>&from=<from>&to=<to>&type=Gold`
+- `GET /api/achievements?village_id=<id>&from=<from>&to=<to>&type=Gold`
   → gold medal count (sum `gold_count`), descriptions.
-- `GET /api/achievements?village=<uuid>&from=<from>&to=<to>&type=Silver`
+- `GET /api/achievements?village_id=<id>&from=<from>&to=<to>&type=Silver`
   → silver medal count, descriptions.
 
 ### 3. Fetch media (parallel)
 
-- `GET /api/media?village=<uuid>&kind=photo&from=<from>&to=<to>`
-- `GET /api/media?village=<uuid>&kind=video&from=<from>&to=<to>`
+- `GET /api/media?village_id=<id>&kind=image&from=<epoch>&to=<epoch>`
+- `GET /api/media?village_id=<id>&kind=video&from=<epoch>&to=<epoch>`
+
+`from`/`to` here are **Unix epoch seconds**, not ISO dates —
+the column is `media.captured_at`. Convert the operator's
+`from`/`to` window once: `date -u -d "<YYYY-MM-DD>" +%s`.
+
+`kind` accepts `image | video | audio`; the legacy "photo"
+spelling is rejected as a 400.
 
 Each item returns a short-TTL presigned GET URL (§5.8, ≤ 15 min).
 **Tell the operator the URLs expire quickly** — they should save
@@ -204,18 +276,20 @@ don't assemble a `quarterly`-shaped JSON for a `milestone` render.
    | milestone | 1 (hero) | `hero.url` |
    | celebration | 4 | `mosaic[]` |
 
-   Download from live API when possible:
+   Download from the live API (uses the same `$NSF_API_BASE_URL`
+   + `$NSF_BASIC` + cookie jar from "Setup"):
    ```
    mkdir -p .claude/skills/donor-update/references/examples/<slug>/media
    for u in <uuid1> <uuid2> <uuid3>; do
-     curl -sS -b /tmp/cookies.txt \
-       "http://127.0.0.1:8787/api/media/raw/$u" \
+     curl -sS -b /tmp/cookies.txt -u "$NSF_BASIC" \
+       "$NSF_API_BASE_URL/api/media/raw/$u" \
        -o .claude/skills/donor-update/references/examples/<slug>/media/$u
    done
    ```
-   If a fetched file is < 1 KiB it's probably a JSON error, not an
-   image. The skill doesn't ship stock photos — if the village
-   genuinely has no consented media yet, set that slot to
+   If a fetched file is < 1 KiB it's probably a JSON error (or an
+   HTML basic-auth challenge from the staging gate), not an image.
+   The skill doesn't ship stock photos — if the village genuinely
+   has no consented media yet, set that slot to
    `../assets/photo-placeholder.svg` and flag the gap in the
    sources block so the operator knows not to send the draft
    externally until real photos land.
@@ -318,11 +392,11 @@ iteration is a JSON edit + a render (~2 s).
 
 ## Example invocation
 
-Operator: "Draft a donor update for village `v_abc123`, Q1 2026,
-email, warm tone, for Mrs. Sharma."
+Operator: "Draft a donor update for Belur (village id 2),
+Q1 2026, email, warm tone, for Mrs. Sharma."
 
 Skill resolves:
-- `from=2026-01-01`, `to=2026-03-31`
+- `village_id=2`, `from=2026-01-01`, `to=2026-03-31`
 - `channel=email`, `length=medium`
 - `tone=warm`, `donor_name=Mrs. Sharma`
 
