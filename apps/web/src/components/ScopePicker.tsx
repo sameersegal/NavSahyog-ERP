@@ -92,8 +92,22 @@ export function ScopePicker({ onPick }: Props) {
         }}
         placeholder={t('dashboard.scope_search.placeholder')}
         aria-label={t('dashboard.scope_search.placeholder')}
-        className="w-full bg-card text-fg border border-border rounded px-3 py-2 min-h-[44px] text-sm"
+        className="w-full bg-card text-fg border border-border rounded px-3 py-2 pr-10 min-h-[44px] text-sm"
       />
+      {query.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setQuery('');
+            setResults([]);
+            inputRef.current?.focus();
+          }}
+          aria-label={t('common.clear')}
+          className="absolute top-0 right-0 h-full px-3 text-muted-fg hover:text-fg focus:outline-none focus:ring-2 focus:ring-focus rounded"
+        >
+          <span aria-hidden="true" className="text-lg leading-none">×</span>
+        </button>
+      )}
       {open && (q.length > 0 || loading) && (
         <div
           role="listbox"

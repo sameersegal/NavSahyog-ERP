@@ -80,7 +80,7 @@ export function Home() {
   }, [vcSingleVillage, navigate]);
 
   if (error) return <p className="text-danger">{error}</p>;
-  if (!data) return <p className="text-muted-fg">{t('common.loading')}</p>;
+  if (!data) return <HomeSkeleton />;
   if (vcSingleVillage !== null) return null;
 
   const childLabel =
@@ -554,5 +554,41 @@ function ChildCard({ child }: { child: HierarchyChild }) {
         <dd className="text-right tabular-nums">{child.achievements_this_month}</dd>
       </dl>
     </Link>
+  );
+}
+
+// Placeholder layout while /api/insights is in flight. Matches the
+// real shape (heading + KPI strip + side-by-side cards + child grid)
+// so the page doesn't jump on data arrival.
+function HomeSkeleton() {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label={t('common.loading')}>
+      <div className="h-4 w-40 bg-card-hover rounded animate-pulse" />
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="h-6 w-56 bg-card-hover rounded animate-pulse" />
+        <div className="h-4 w-32 bg-card-hover rounded animate-pulse" />
+      </div>
+      <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div
+            key={i}
+            className="bg-card border border-border rounded p-3 h-20 animate-pulse"
+          />
+        ))}
+      </section>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="bg-card border border-border rounded p-4 h-40 animate-pulse" />
+        <div className="bg-card border border-border rounded p-4 h-40 animate-pulse" />
+      </div>
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className="bg-card border border-border rounded p-4 h-32 animate-pulse"
+          />
+        ))}
+      </div>
+    </div>
   );
 }
