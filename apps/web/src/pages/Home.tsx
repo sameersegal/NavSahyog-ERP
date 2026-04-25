@@ -1,591 +1,395 @@
-// Home — the first surface anyone sees after login. What this page
-// shows depends on the user's scope:
+// Field-Dashboard Home (§3.6.4). Default landing page for every
+// authenticated user. Composition is capability-gated, not role-
+// gated — adding a future role with only `.read` caps automatically
+// lands on the observer branch with no edit here.
 //
-//   * VC with exactly one village → we skip the home grid entirely
-//     and redirect to that village. Saves a wasted tap every time
-//     they log in (VCs are the most frequent users, in the field,
-//     one-handed).
-//   * Everyone else → breadcrumb trail from India down to the
-//     current drill position + KPI strip (scoped to the drill) +
-//     insight cards (at-risk / top-this-week) + a grid of child
-//     tiles at the next hierarchy level. Click a zone tile → see
-//     states; click a state → see regions; etc. At cluster scope
-//     the tiles are villages and navigate to /village/:id.
+// Doer (any `.write` cap) sees:
+//   greeting · health score · today's mission · focus areas · capture FAB
+// Observer (`.read` only) sees:
+//   greeting · health score · focus areas · sibling-compare grid
 //
-// Drill position is URL-backed (`?level=&id=`) so refresh /
-// deep-link / back-button all preserve scope. An operator can
-// share a link like "home at Karnataka zone" and it opens there.
+// Data: one round-trip to /api/dashboard/home per preset change. URL
+// state (`?window=`, `?scope=`) preserves preset + scope across
+// refresh / share-link / back-button.
 //
-// Data comes from /api/insights, scope-filtered server-side. That
-// single round-trip carries crumbs + children + KPIs + sparks +
-// top/at-risk cards — the home screen renders with one request.
+// First-cut limits (called out in this PR's description):
+//   * Observer's compare grid is a placeholder linking to /dashboard
+//     pending the mobile-fit design call (full grid × 30 districts
+//     doesn't fit a phone without horizontal scroll / progressive
+//     disclosure — that decision wants a mock first).
+//   * Mission's "natural write path" routing collapses to a small
+//     decision table: image/video → /capture, attendance → village
+//     page (VC) or /capture (AF+), som → /achievements.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  AT_RISK_THRESHOLD_DAYS,
   api,
+  can,
+  HOME_WINDOWS,
   isGeoLevel,
-  type BreadcrumbCrumb,
   type GeoLevel,
-  type HierarchyChild,
-  type InsightKpi,
-  type InsightsResponse,
-  type VillageActivity,
+  type HomeMissionKind,
+  type HomeResponse,
+  type HomeWindow,
+  type User,
 } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 
 export function Home() {
-  const { t, tPlural } = useI18n();
+  const { t } = useI18n();
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [data, setData] = useState<InsightsResponse | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [data, setData] = useState<HomeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse ?level=&id= once per URL change. Bad params fail closed
-  // to "no drill override" — the server will resolve to the user's
-  // scope floor instead of erroring the whole page.
-  const drill = useMemo(() => {
-    const rawLevel = searchParams.get('level');
-    const rawId = searchParams.get('id');
-    if (!rawLevel) return {};
-    if (!isGeoLevel(rawLevel)) return {};
-    if (rawLevel === 'india') return { level: rawLevel };
-    const id = Number(rawId);
-    if (!Number.isInteger(id) || id <= 0) return {};
-    return { level: rawLevel, id };
+  // Preset + scope come from the URL so refresh / deep-link / back
+  // preserve state. Bad values fail closed to defaults — server
+  // resolves to the user's scope floor when scope is omitted.
+  const windowKey = useMemo<HomeWindow>(() => {
+    const raw = searchParams.get('window');
+    return isHomeWindow(raw) ? raw : '7d';
   }, [searchParams]);
+  const scope = useMemo(() => parseScopeParam(searchParams.get('scope')), [searchParams]);
 
   useEffect(() => {
+    if (!user) return;
     setData(null);
     setError(null);
     api
-      .insights(drill)
-      .then((r) => setData(r))
+      .dashboardHome({ window: windowKey, scope: scope ?? undefined })
+      .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : 'failed'));
-  }, [drill.level, drill.id]);
+  }, [user, windowKey, scope?.level, scope?.id]);
 
-  // Single-village VC shortcut — redirect before the page even
-  // paints. The server would return a village-leaf view with empty
-  // children, but VCs rarely want to read stats; they want to mark
-  // attendance. Skipping the intermediate render saves a tap.
-  const vcSingleVillage =
-    user?.scope_level === 'village' ? user.scope_id : null;
-  useEffect(() => {
-    if (vcSingleVillage !== null) {
-      navigate(`/village/${vcSingleVillage}`, { replace: true });
-    }
-  }, [vcSingleVillage, navigate]);
+  function setWindow(next: HomeWindow) {
+    const sp = new URLSearchParams(searchParams);
+    if (next === '7d') sp.delete('window'); else sp.set('window', next);
+    setSearchParams(sp, { replace: true });
+  }
 
+  if (!user) return null;
   if (error) return <p className="text-danger">{error}</p>;
   if (!data) return <HomeSkeleton />;
-  if (vcSingleVillage !== null) return null;
 
-  const childLabel =
-    data.child_level && data.children.length > 0
-      ? tPlural(
-          `home.children.${data.child_level}`,
-          data.children.length,
-          { n: data.children.length },
-        )
-      : null;
+  const hasAnyWrite = user.capabilities.some((cap) => cap.endsWith('.write'));
+  const canFab = can(user, 'media.write') || can(user, 'attendance.write');
 
   return (
-    <div className="space-y-6">
-      <Breadcrumbs crumbs={data.crumbs} />
+    <div className="space-y-5 pb-20">
+      <Greeting user={user} scopeLabel={t(`home.scope_level.${data.scope.level}`)} />
 
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold">
-          {t('home.heading', { scope: data.scope_label })}
-        </h2>
-        <p className="text-sm text-muted-fg">{t('home.subheading')}</p>
-      </header>
+      <PresetSwitch value={windowKey} onChange={setWindow} />
 
-      <KpiStrip kpis={data.kpis} somDeclaredPct={data.som_declared_pct} />
+      <HealthScoreCard score={data.health_score} />
 
-      {(data.at_risk_villages.length > 0 || data.top_villages.length > 1) && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {data.at_risk_villages.length > 0 && (
-            <AtRiskCard villages={data.at_risk_villages} />
-          )}
-          {data.top_villages.length > 1 && (
-            <TopVillagesCard villages={data.top_villages} />
-          )}
-        </div>
+      {hasAnyWrite && data.mission && (
+        <MissionCard mission={data.mission} user={user} />
       )}
 
-      {data.children.length > 0 && childLabel && (
-        <CompareChildren label={childLabel} children={data.children} />
-      )}
+      <FocusAreas areas={data.focus_areas} window={windowKey} />
 
-      {data.children.length === 0 && data.child_level !== null && (
-        <p className="text-muted-fg">{t('home.empty')}</p>
-      )}
+      {!hasAnyWrite && <CompareGridPlaceholder window={windowKey} />}
+
+      {canFab && <CaptureFab />}
     </div>
   );
 }
 
-// Breadcrumb trail from India down to the current drill position.
-// Every crumb except the last is a link back to that level. Plain
-// text chevrons between crumbs so the row reads on a phone without
-// any icon font. Hidden entirely at the scope floor (no navigation
-// to do) for users who can't drill further up anyway.
-function Breadcrumbs({ crumbs }: { crumbs: BreadcrumbCrumb[] }) {
-  if (crumbs.length < 2) return null;
-  return (
-    <nav
-      aria-label="Breadcrumb"
-      className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-fg"
-    >
-      {crumbs.map((c, i) => {
-        const last = i === crumbs.length - 1;
-        return (
-          <span key={`${c.level}-${c.id ?? 'root'}`} className="flex items-baseline gap-2">
-            {last ? (
-              <span className="text-fg font-medium">{c.name}</span>
-            ) : (
-              <Link to={crumbHref(c)} className="text-primary hover:underline">
-                {c.name}
-              </Link>
-            )}
-            {!last && <span aria-hidden="true">›</span>}
-          </span>
-        );
-      })}
-    </nav>
-  );
+// ---- helpers ------------------------------------------------------
+
+function isHomeWindow(v: unknown): v is HomeWindow {
+  return typeof v === 'string' && (HOME_WINDOWS as readonly string[]).includes(v);
 }
 
-function crumbHref(c: BreadcrumbCrumb): string {
-  if (c.level === 'india') return '/';
-  return `/?level=${c.level}&id=${c.id}`;
+function parseScopeParam(
+  raw: string | null,
+): { level: GeoLevel; id: number | null } | null {
+  if (!raw) return null;
+  const [rawLevel, rawId] = raw.split(':');
+  if (!rawLevel || !isGeoLevel(rawLevel)) return null;
+  if (rawLevel === 'india') return { level: 'india', id: null };
+  const id = Number(rawId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return { level: rawLevel, id };
 }
 
-// KPI strip. On mobile the tiles stack in a single column so each
-// metric reads as its own line; desktop packs the same seven tiles
-// (six numeric + SOM %) into a single row.
-function KpiStrip({
-  kpis,
-  somDeclaredPct,
-}: {
-  kpis: InsightKpi[];
-  somDeclaredPct: number;
-}) {
-  return (
-    <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-      {kpis.map((k) => (
-        <KpiTile key={k.label} k={k} />
-      ))}
-      <SomDeclaredTile pct={somDeclaredPct} />
-    </section>
-  );
+function scopeQueryString(level: GeoLevel, id: number | null): string {
+  return id === null ? level : `${level}:${id}`;
 }
 
-function KpiTile({ k }: { k: InsightKpi }) {
-  const { t } = useI18n();
-  const isPct =
-    k.label === 'attendance_week' || k.label === 'attendance_month';
-  const trendColor =
-    k.trend === 'up' ? 'text-primary'
-    : k.trend === 'down' ? 'text-danger'
-    : 'text-muted-fg';
-  const arrow = k.trend === 'up' ? '▲' : k.trend === 'down' ? '▼' : k.trend === 'flat' ? '•' : null;
-  return (
-    <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-1">
-      <div className="text-xs text-muted-fg uppercase tracking-wide">
-        {t(`home.kpi.${k.label}`)}
-      </div>
-      <div className="text-2xl font-semibold">
-        {k.value}
-        {isPct ? '%' : ''}
-      </div>
-      {k.delta !== null && arrow && (
-        <div className={`text-xs ${trendColor}`}>
-          {arrow} {k.delta > 0 ? '+' : ''}
-          {k.delta}
-          {isPct ? 'pp' : ''}
-          {k.hint ? ' · ' + t(`home.kpi.hint.${k.hint}`) : ''}
-        </div>
-      )}
-      {k.spark && <TileSpark points={k.spark} isPct={isPct} />}
-    </div>
-  );
-}
-
-// Inline 12-week sparkline inside a KPI tile. No axis, no dots, no
-// legend — the tile's big number is the headline; the spark is just
-// silhouette. `isPct`=true pins the y-axis to 0–100 so attendance
-// sparks compare meaningfully across scopes; count sparks (images,
-// videos, achievements) autoscale to their own max so a scope with
-// 2 uploads/week still reads as a shape.
-function TileSpark({
-  points,
-  isPct,
-}: {
-  points: Array<number | null>;
-  isPct: boolean;
-}) {
-  const observed = points.filter((v): v is number => v !== null);
-  if (observed.length === 0) return null;
-
-  const W = 120;
-  const H = 24;
-  const padX = 1;
-  const padY = 2;
-  const n = points.length;
-  const max = isPct ? 100 : Math.max(1, ...observed);
-  const xFor = (i: number) =>
-    n === 1 ? W / 2 : padX + (i * (W - 2 * padX)) / (n - 1);
-  const yFor = (v: number) =>
-    padY + ((max - v) * (H - 2 * padY)) / (max === 0 ? 1 : max);
-
-  // Build the polyline with 'M' gap-breaks so null weeks draw as
-  // broken segments rather than a false bridge to zero.
-  let d = '';
-  let penDown = false;
-  for (let i = 0; i < n; i++) {
-    const p = points[i];
-    if (p === null || p === undefined) {
-      penDown = false;
-      continue;
+// Mission tap routes to the natural write path (§3.6.4). For VCs
+// attendance lives at the village page; AF+ pick a village in
+// /capture (which exposes the same flow once a village is selected).
+function missionHref(kind: HomeMissionKind, user: User): string {
+  if (kind === 'som') return '/achievements';
+  if (kind === 'attendance') {
+    if (user.scope_level === 'village' && user.scope_id) {
+      return `/village/${user.scope_id}`;
     }
-    const cmd = penDown ? 'L' : 'M';
-    d += `${cmd}${xFor(i).toFixed(1)},${yFor(p).toFixed(1)} `;
-    penDown = true;
+    return '/capture';
   }
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="w-full h-6 mt-1"
-      aria-hidden="true"
-    >
-      <path
-        d={d.trim()}
-        fill="none"
-        className="stroke-primary"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  // image / video
+  return '/capture';
 }
 
-// Star-of-the-Month declaration tile — share of in-scope villages
-// that have declared one this month. Tone flips to primary only at
-// 100% so partial coverage still reads as "work to do"; 0% reads
-// as danger so ops sees the miss at a glance.
-function SomDeclaredTile({ pct }: { pct: number }) {
+// ---- blocks -------------------------------------------------------
+
+function Greeting({ user, scopeLabel }: { user: User; scopeLabel: string }) {
   const { t } = useI18n();
-  const tone =
-    pct >= 100 ? 'text-primary'
-    : pct === 0 ? 'text-danger'
-    : 'text-fg';
+  // Greeting uses just the first name to keep the line short on
+  // mobile. The scope chip carries the level the user can see.
+  const firstName = user.full_name.split(/\s+/)[0] ?? user.full_name;
   return (
-    <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-1">
-      <div className="text-xs text-muted-fg uppercase tracking-wide">
-        {t('home.kpi.som_declared')}
-      </div>
-      <div className={`text-2xl font-semibold ${tone}`}>{pct}%</div>
-      <div className="text-xs text-muted-fg">
-        {t('home.kpi.som_declared.hint')}
-      </div>
-    </div>
+    <header className="flex items-baseline justify-between gap-3 flex-wrap">
+      <h1 className="text-xl font-semibold">
+        {t('home.greeting', { name: firstName })}
+      </h1>
+      <span className="text-xs px-2 py-0.5 rounded-full bg-card border border-border text-muted-fg">
+        {scopeLabel}
+      </span>
+    </header>
   );
 }
 
-function AtRiskCard({ villages }: { villages: VillageActivity[] }) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-danger/30 rounded-lg p-4 space-y-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-danger">
-          {t('home.at_risk.title')}
-        </h3>
-        <span className="text-xs text-muted-fg">
-          {t('home.at_risk.threshold', { days: AT_RISK_THRESHOLD_DAYS })}
-        </span>
-      </div>
-      <ul className="space-y-1 text-sm">
-        {villages.slice(0, 5).map((v) => (
-          <li key={v.village_id} className="flex items-baseline justify-between gap-2">
-            <Link
-              to={`/village/${v.village_id}`}
-              className="text-primary hover:underline truncate"
-            >
-              {v.village_name}
-            </Link>
-            <span className="text-xs text-muted-fg shrink-0">
-              {v.days_since_last_session === null
-                ? t('home.at_risk.never')
-                : t('home.at_risk.days', { days: v.days_since_last_session })}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function TopVillagesCard({ villages }: { villages: VillageActivity[] }) {
-  const { t } = useI18n();
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-      <h3 className="text-sm font-semibold">{t('home.top.title')}</h3>
-      <ul className="space-y-1 text-sm">
-        {villages.map((v, i) => (
-          <li key={v.village_id} className="flex items-baseline justify-between gap-2">
-            <span className="flex items-baseline gap-2 min-w-0">
-              <span className="text-xs text-muted-fg w-4 shrink-0">{i + 1}</span>
-              <Link
-                to={`/village/${v.village_id}`}
-                className="text-primary hover:underline truncate"
-              >
-                {v.village_name}
-              </Link>
-            </span>
-            <span className="text-xs font-medium shrink-0">
-              {v.attendance_pct_week}%
-              <span className="text-muted-fg">
-                {' '}· {v.sessions_this_week}
-                {v.sessions_this_week === 1 ? ' session' : ' sessions'}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// Child grid — one row per next-level node (zone / state / … /
-// village). Merged compare + drill-down surface: every row carries
-// the same KPI set the scope strip shows (children, attendance %,
-// images, videos, achievements, activity) so two siblings can be
-// compared horizontally without drilling, AND each row is a link
-// that drills deeper (or, at the village leaf, goes to
-// /village/:id — the detail surface).
-//
-// Desktop: table. Mobile (below sm): one card per row with the
-// KPIs as a 2-col dl grid. Same data either way; responsive layout
-// handles the reflow.
-function CompareChildren({
-  label,
-  children,
+function PresetSwitch({
+  value,
+  onChange,
 }: {
-  label: string;
-  children: HierarchyChild[];
+  value: HomeWindow;
+  onChange: (next: HomeWindow) => void;
 }) {
   const { t } = useI18n();
-  const childLevel = children[0]?.level;
-  if (!childLevel) return null;
-  const levelHeading =
-    childLevel === 'village'
-      ? t('home.compare.col.name.village')
-      : t(`home.compare.col.name.${childLevel}`);
-
   return (
-    <section className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="px-4 py-2 border-b border-border text-sm font-semibold text-muted-fg uppercase tracking-wide">
-        {label}
-      </div>
+    <div
+      role="radiogroup"
+      aria-label={t('home.preset.label')}
+      className="inline-flex rounded-lg border border-border overflow-hidden"
+    >
+      {HOME_WINDOWS.map((w) => (
+        <button
+          key={w}
+          role="radio"
+          aria-checked={value === w}
+          onClick={() => onChange(w)}
+          className={
+            'px-3 py-1.5 text-sm min-h-[44px] sm:min-h-0 ' +
+            (value === w
+              ? 'bg-primary text-primary-fg font-medium'
+              : 'bg-card text-fg hover:bg-card-hover')
+          }
+        >
+          {t(`home.preset.${w}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-      {/* Mobile card view (below sm). Each card links to the same
-          destination as its desktop-table row. */}
-      <ul className="sm:hidden divide-y divide-border">
-        {children.map((ch) => (
-          <li key={`${ch.level}-${ch.id}`}>
-            <ChildCard child={ch} />
-          </li>
-        ))}
-      </ul>
-
-      {/* Desktop / tablet table. overflow-x-auto as a fallback for
-          narrow breakpoints where the full 7-column layout wraps. */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-muted-fg">
-              <th className="px-4 py-2 font-normal">{levelHeading}</th>
-              <th className="px-4 py-2 font-normal text-right">
-                {t('home.compare.col.children')}
-              </th>
-              <th className="px-4 py-2 font-normal text-right">
-                {t('home.compare.col.attendance_week')}
-              </th>
-              <th className="px-4 py-2 font-normal text-right">
-                {t('home.compare.col.images_month')}
-              </th>
-              <th className="px-4 py-2 font-normal text-right">
-                {t('home.compare.col.videos_month')}
-              </th>
-              <th className="px-4 py-2 font-normal text-right">
-                {t('home.compare.col.achievements_month')}
-              </th>
-              <th className="px-4 py-2 font-normal text-right">
-                {t('home.compare.col.activity')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {children.map((ch) => (
-              <ChildRow key={`${ch.level}-${ch.id}`} child={ch} />
-            ))}
-          </tbody>
-        </table>
+function HealthScoreCard({
+  score,
+}: {
+  score: HomeResponse['health_score'];
+}) {
+  const { t } = useI18n();
+  if (score.current === null) {
+    return (
+      <section className="bg-card border border-border rounded-lg p-4">
+        <div className="text-xs text-muted-fg uppercase tracking-wide">
+          {t('home.health.title')}
+        </div>
+        <div className="text-3xl font-semibold mt-1">—</div>
+        <p className="text-sm text-muted-fg mt-1">{t('home.health.no_data')}</p>
+      </section>
+    );
+  }
+  const tone =
+    score.current >= 80 ? 'text-primary'
+    : score.current >= 50 ? 'text-fg'
+    : 'text-danger';
+  const arrow =
+    score.delta === null ? null
+    : score.delta > 0 ? '▲'
+    : score.delta < 0 ? '▼'
+    : '•';
+  const trendColor =
+    score.delta === null || score.delta === 0 ? 'text-muted-fg'
+    : score.delta > 0 ? 'text-primary'
+    : 'text-danger';
+  return (
+    <section className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-xs text-muted-fg uppercase tracking-wide">
+          {t('home.health.title')}
+        </div>
+        {arrow && (
+          <div className={`text-xs ${trendColor}`}>
+            {arrow}{' '}
+            {score.delta === null
+              ? t('home.health.no_prior')
+              : score.delta > 0
+                ? `+${score.delta}`
+                : score.delta}
+          </div>
+        )}
       </div>
+      <div className={`text-4xl font-semibold mt-1 tabular-nums ${tone}`}>
+        {score.current}
+        <span className="text-base text-muted-fg font-normal">/100</span>
+      </div>
+      <p className="text-xs text-muted-fg mt-1">{t('home.health.subtitle')}</p>
     </section>
   );
 }
 
-// Tailwind classes for the activity chip. Same palette the prior
-// card used, extracted so the mobile card + the desktop table row
-// stay in sync.
-function activityChip(
-  days: number | null,
-  t: (key: string, params?: Record<string, string | number>) => string,
-): { cls: string; label: string } {
-  if (days === null) {
-    return { cls: 'bg-card-hover text-muted-fg', label: t('home.card.never') };
-  }
-  if (days === 0) {
-    return { cls: 'bg-primary/15 text-primary', label: t('home.card.today') };
-  }
-  if (days < AT_RISK_THRESHOLD_DAYS) {
-    return { cls: 'bg-card-hover text-fg', label: t('home.card.days_ago', { days }) };
-  }
-  return { cls: 'bg-danger/10 text-danger', label: t('home.card.days_ago', { days }) };
-}
-
-function childHref(child: HierarchyChild): string {
-  return child.level === 'village'
-    ? `/village/${child.id}`
-    : `/?level=${child.level}&id=${child.id}`;
-}
-
-// Desktop row. The entire row is the click target (not just the
-// name cell) — matches the drilldown table in Dashboard.tsx so the
-// interaction model reads the same way.
-function ChildRow({ child }: { child: HierarchyChild }) {
-  const { t, tPlural } = useI18n();
-  const navigate = useNavigate();
-  const chip = activityChip(child.days_since_last_session, t);
-  const subline =
-    child.level === 'village'
-      ? child.coordinator_name
-        ? t('home.card.vc', { name: child.coordinator_name })
-        : t('home.card.vc_unassigned')
-      : tPlural('home.tile.villages', child.villages_count, {
-          n: child.villages_count,
-        });
-  return (
-    <tr
-      onClick={() => navigate(childHref(child))}
-      className="border-t border-border cursor-pointer hover:bg-card-hover"
-    >
-      <td className="px-4 py-2">
-        <Link
-          to={childHref(child)}
-          className="font-medium text-primary hover:underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {child.name}
-        </Link>
-        <div className="text-xs text-muted-fg truncate">{subline}</div>
-      </td>
-      <td className="px-4 py-2 text-right tabular-nums">{child.children_count}</td>
-      <td className="px-4 py-2 text-right tabular-nums">
-        {child.attendance_pct_week === null ? '—' : `${child.attendance_pct_week}%`}
-      </td>
-      <td className="px-4 py-2 text-right tabular-nums">{child.images_this_month}</td>
-      <td className="px-4 py-2 text-right tabular-nums">{child.videos_this_month}</td>
-      <td className="px-4 py-2 text-right tabular-nums">{child.achievements_this_month}</td>
-      <td className="px-4 py-2 text-right">
-        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${chip.cls}`}>
-          {chip.label}
-        </span>
-      </td>
-    </tr>
-  );
-}
-
-// Mobile card. Same data as the desktop row, stacked — the stat
-// grid reads as a definition list so screen readers pick up the
-// label/value pairs in order.
-function ChildCard({ child }: { child: HierarchyChild }) {
-  const { t, tPlural } = useI18n();
-  const chip = activityChip(child.days_since_last_session, t);
-  const subline =
-    child.level === 'village'
-      ? child.coordinator_name
-        ? t('home.card.vc', { name: child.coordinator_name })
-        : t('home.card.vc_unassigned')
-      : tPlural('home.tile.villages', child.villages_count, {
-          n: child.villages_count,
-        });
+function MissionCard({
+  mission,
+  user,
+}: {
+  mission: NonNullable<HomeResponse['mission']>;
+  user: User;
+}) {
+  const { t } = useI18n();
+  const isCount = mission.kind === 'som';
+  const pct = isCount
+    ? Math.round((mission.current / Math.max(1, mission.target)) * 100)
+    : Math.min(100, mission.current);
   return (
     <Link
-      to={childHref(child)}
-      className="block px-4 py-3 min-h-[44px] hover:bg-card-hover"
+      to={missionHref(mission.kind, user)}
+      className="block bg-card border border-primary/30 rounded-lg p-4 hover:bg-card-hover min-h-[44px]"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="font-medium text-primary truncate">{child.name}</div>
-        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${chip.cls}`}>
-          {chip.label}
-        </span>
+        <div className="text-xs text-primary uppercase tracking-wide font-medium">
+          {t('home.mission.title')}
+        </div>
+        <div className="text-xs text-muted-fg">
+          {t('home.mission.cta')}
+        </div>
       </div>
-      <div className="text-xs text-muted-fg truncate">{subline}</div>
-      <dl className="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
-        <dt className="text-muted-fg">{t('home.compare.col.children')}</dt>
-        <dd className="text-right tabular-nums">{child.children_count}</dd>
-        <dt className="text-muted-fg">{t('home.compare.col.attendance_week')}</dt>
-        <dd className="text-right tabular-nums">
-          {child.attendance_pct_week === null ? '—' : `${child.attendance_pct_week}%`}
-        </dd>
-        <dt className="text-muted-fg">{t('home.compare.col.images_month')}</dt>
-        <dd className="text-right tabular-nums">{child.images_this_month}</dd>
-        <dt className="text-muted-fg">{t('home.compare.col.videos_month')}</dt>
-        <dd className="text-right tabular-nums">{child.videos_this_month}</dd>
-        <dt className="text-muted-fg">{t('home.compare.col.achievements_month')}</dt>
-        <dd className="text-right tabular-nums">{child.achievements_this_month}</dd>
-      </dl>
+      <p className="text-base font-medium mt-1">
+        {t(`home.mission.copy.${mission.kind}`, {
+          current: mission.current,
+          target: mission.target,
+        })}
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <div className="flex-1 h-2 bg-card-hover rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary"
+            style={{ width: `${pct}%` }}
+            aria-hidden="true"
+          />
+        </div>
+        <div className="text-xs text-muted-fg tabular-nums shrink-0">
+          {mission.current}
+          {isCount ? '' : '%'}
+          {' / '}
+          {mission.target}
+          {isCount ? '' : '%'}
+        </div>
+      </div>
     </Link>
   );
 }
 
-// Placeholder layout while /api/insights is in flight. Matches the
-// real shape (heading + KPI strip + side-by-side cards + child grid)
-// so the page doesn't jump on data arrival.
+function FocusAreas({
+  areas,
+  window: windowKey,
+}: {
+  areas: HomeResponse['focus_areas'];
+  window: HomeWindow;
+}) {
+  const { t } = useI18n();
+  if (areas.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs text-muted-fg uppercase tracking-wide">
+        {t('home.focus.title')}
+      </h2>
+      <ul className="space-y-2">
+        {areas.map((a) => (
+          <li key={`${a.level}-${a.id}`}>
+            <Link
+              to={`/dashboard?scope=${scopeQueryString(a.level, a.id)}&window=${windowKey}`}
+              className="flex items-baseline justify-between gap-2 bg-card border border-border rounded-lg px-3 py-2.5 min-h-[44px] hover:bg-card-hover"
+            >
+              <div className="min-w-0">
+                <div className="font-medium truncate">{a.name}</div>
+                <div className="text-xs text-muted-fg">
+                  {t(`home.scope_level.${a.level}`)}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-base font-semibold tabular-nums">
+                  {a.value}%
+                </div>
+                <div className="text-xs text-muted-fg">
+                  {t('home.focus.metric.attendance')}
+                </div>
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function CompareGridPlaceholder({ window: windowKey }: { window: HomeWindow }) {
+  const { t } = useI18n();
+  return (
+    <section className="bg-card border border-dashed border-border rounded-lg p-4 space-y-2">
+      <h2 className="text-xs text-muted-fg uppercase tracking-wide">
+        {t('home.compare.title')}
+      </h2>
+      <p className="text-sm text-muted-fg">{t('home.compare.placeholder')}</p>
+      <Link
+        to={`/dashboard?window=${windowKey}`}
+        className="inline-block text-sm text-primary hover:underline"
+      >
+        {t('home.compare.cta_dashboard')}
+      </Link>
+    </section>
+  );
+}
+
+function CaptureFab() {
+  const { t } = useI18n();
+  return (
+    <Link
+      to="/capture"
+      aria-label={t('home.fab.label')}
+      className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 flex items-center gap-2 bg-primary text-primary-fg rounded-full shadow-lg px-4 py-3 min-h-[56px] hover:opacity-90"
+    >
+      <span aria-hidden="true" className="text-xl leading-none">+</span>
+      <span className="text-sm font-medium">{t('home.fab.label')}</span>
+    </Link>
+  );
+}
+
+// Skeleton matching the §3.6.4 doer layout (greeting · preset switch
+// · health card · mission card · 3 focus rows). Keeps the page from
+// jumping on data arrival. Observer Home reuses the same skeleton —
+// the focus rows stand in for the compare-grid placeholder too.
 function HomeSkeleton() {
   const { t } = useI18n();
   return (
-    <div className="space-y-6" aria-busy="true" aria-label={t('common.loading')}>
-      <div className="h-4 w-40 bg-card-hover rounded animate-pulse" />
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="h-6 w-56 bg-card-hover rounded animate-pulse" />
-        <div className="h-4 w-32 bg-card-hover rounded animate-pulse" />
+    <div className="space-y-5" aria-busy="true" aria-label={t('common.loading')}>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="h-6 w-32 bg-card-hover rounded animate-pulse" />
+        <div className="h-5 w-16 bg-card-hover rounded-full animate-pulse" />
       </div>
-      <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        {Array.from({ length: 7 }).map((_, i) => (
+      <div className="h-9 w-44 bg-card-hover rounded-lg animate-pulse" />
+      <div className="bg-card border border-border rounded-lg p-4 h-28 animate-pulse" />
+      <div className="bg-card border border-primary/20 rounded-lg p-4 h-24 animate-pulse" />
+      <div className="space-y-2">
+        <div className="h-3 w-24 bg-card-hover rounded animate-pulse" />
+        {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="bg-card border border-border rounded p-3 h-20 animate-pulse"
-          />
-        ))}
-      </section>
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="bg-card border border-border rounded p-4 h-40 animate-pulse" />
-        <div className="bg-card border border-border rounded p-4 h-40 animate-pulse" />
-      </div>
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="bg-card border border-border rounded p-4 h-32 animate-pulse"
+            className="bg-card border border-border rounded-lg h-14 animate-pulse"
           />
         ))}
       </div>

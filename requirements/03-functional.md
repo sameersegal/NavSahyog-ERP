@@ -222,6 +222,97 @@ Before upload, each item must be tagged as exactly one of:
 - A District+ admin cannot see another district's data (enforced
   server-side).
 
+#### 3.6.4 Field-Dashboard Home
+Default landing page for every authenticated user (decisions.md D17).
+Replaces the India-level drill that previously served as Home; the
+drill-down (§3.6.1) moves to `/dashboard`. VCs with a single village
+no longer auto-redirect — they land on Home like everyone else.
+
+**Composition is capability-gated.** The same route `/` renders a
+different block set depending on which capabilities §2.3 grants the
+user. "Doer" roles carry at least one `.write` capability (VC, AF,
+Cluster Admin, Super Admin); "observer" roles carry only `.read`
+(District+). Blocks render in the order below, skipping any whose
+gate is not satisfied.
+
+| # | Block | Gate | Who sees it |
+|---|---|---|---|
+| 1 | Greeting + scope chip + time-preset switch | always | all roles |
+| 2 | Health Score card | `dashboard.read` | all roles |
+| 3 | Today's Mission | any `.write` cap | doer roles |
+| 4 | Focus Areas (top-3) | `dashboard.read` | all roles |
+| 5 | Sibling-compare grid (full) | no `.write` cap | observer roles |
+| 6 | Capture FAB (floating) | `media.write` or `attendance.write` | doer roles |
+
+A doer therefore sees 4 body blocks + FAB; an observer sees 4 body
+blocks + no FAB. Maximum 5 elements per role, keeping the page
+scan-in-one-glance.
+
+**Time-preset switch.** Three presets only: **7D** (default), **30D**,
+**MTD**. Custom date ranges stay on `/dashboard` (decisions.md D20).
+All blocks on Home recompute off the selected preset; the server
+also returns a trend delta against the previous equivalent window
+(previous 7D, previous 30D, MTD of prior calendar month).
+
+**Health Score.** A 0–100 composite over the §3.6.2 metric pack
+(attendance %, image %, video %, SoM ratio) within scope × preset.
+Inputs are the same data §3.6.2 already exposes; the weighting is a
+worker env var, not a schema column, and defaults are documented
+out-of-spec. Returned with a trend arrow vs. the previous window.
+Deterministic formula — no ML.
+
+**Today's Mission** (doer roles only; decisions.md D18). Server
+ranks the §3.6.2 gaps in scope × preset as `(target − current) / target`
+for attendance, image %, video %, and SoM coverage; picks the
+largest and returns `{kind, current, target, copy}`. The client
+renders `copy` with a progress strip `current / target`. Tapping
+the card opens the natural write path for `kind` — Capture for
+image / video, Attendance for attendance, Achievements for SoM.
+
+**Focus Areas.** Top-3 direct-child scopes (not leaf children) in
+the user's scope, ranked by the same gap heuristic as Mission but
+excluding Mission's `kind` to avoid duplication. Each chip shows
+scope name + headline metric; tap deep-links to that scope on
+`/dashboard` with the preset preserved.
+
+**Sibling-compare grid** (observer roles only; decisions.md D19).
+Full grid of every direct-child scope in the user's scope, one row
+per child, columns for each §3.6.2 KPI plus Health Score and trend.
+Preset-windowed. Sortable by any column; default sort is Health
+Score ascending so the worst-performing scopes surface first. Row
+tap drills to that child on `/dashboard` with preset preserved.
+The `/dashboard` drill-down is still the path for cross-level
+navigation (e.g. jumping from India to a specific Cluster) and for
+CSV export; Home is "start at your scope and see how your children
+are doing", `/dashboard` is "walk the hierarchy".
+
+**Capture FAB.** Floating bottom-right, one tap, pre-scoped to the
+user's current scope (VC: own village; AF / Cluster / Super: last
+used, or prompt to pick). Opens the existing Capture sheet.
+
+**API.** `GET /api/dashboard/home?window=7d|30d|mtd&scope=<level>:<id>`
+returns `{scope, window, healthScore, mission?, focusAreas,
+compareGrid?}`. Gated by `requireCap('dashboard.read')`. `mission`
+is present iff the caller has any `.write` cap; `compareGrid` is
+present iff the caller has none. `compareGrid` carries one row per
+direct-child scope with every §3.6.2 KPI + Health Score + trend.
+
+**Acceptance.**
+- A VC logs in and lands on `/`, **not** their village. The page
+  shows Health Score + Mission + Focus Areas + Capture FAB.
+- A State Admin lands on `/` and sees Health Score + Focus Areas +
+  a full sibling-compare grid over their direct-child scopes; no
+  Mission card, no FAB.
+- Switching the time preset triggers exactly one `/api/dashboard/home`
+  fetch; all blocks refresh consistently.
+- Focus Areas and compare-grid rows deep-link to `/dashboard` with
+  scope and preset preserved in URL state; the drill-down lands
+  already filtered.
+- Capability shape, not role name, decides composition. Adding a
+  new observer role in `packages/shared/src/capabilities.ts` (only
+  `.read` caps) automatically gives it the observer Home with no
+  UI changes.
+
 ---
 
 ### 3.7 Offline mode

@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { requireAuth } from '../auth';
-import { requireCap } from '../policy';
+import { requireCap, capabilitiesFor } from '../policy';
 import { villageIdsInScope } from '../scope';
 import { isIsoDate, todayIstDate } from '../lib/time';
 import { err } from '../lib/errors';
@@ -842,6 +842,298 @@ async function handleDrillDownRequest(
   }
   return result;
 }
+
+// ---- home (§3.6.4) ------------------------------------------------
+
+const HOME_WINDOWS = ['7d', '30d', 'mtd'] as const;
+type HomeWindow = (typeof HOME_WINDOWS)[number];
+function isHomeWindow(v: unknown): v is HomeWindow {
+  return typeof v === 'string' && (HOME_WINDOWS as readonly string[]).includes(v);
+}
+
+type DateWindow = { from: string; to: string };
+
+// Pure calendar-day shift on 'YYYY-MM-DD'. UTC math; IST has no DST
+// so this is correct for our IST-pinned calendar dates.
+function shiftDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+// 'YYYY-MM-DD' shifted by `monthDelta` calendar months. Day-of-month
+// is clamped to the last valid day of the target month so '03-31'
+// shifted -1 lands on '02-28' (or '02-29' in a leap year). Matches
+// the spec rule for MTD-vs-prior-MTD when today's day exceeds the
+// previous month's length.
+function shiftMonthDay(iso: string, monthDelta: number): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  const idx = y * 12 + (m - 1) + monthDelta;
+  const ny = Math.floor(idx / 12);
+  const nm = ((idx % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  const day = Math.min(d, lastDay);
+  return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// Resolve a Home preset to its current and prior-equivalent window.
+// 7d / 30d are rolling windows; mtd compares calendar-month-to-date
+// against the same dates of the prior calendar month (clamped).
+function resolveHomeWindows(
+  windowKey: HomeWindow,
+  today: string,
+): { current: DateWindow; previous: DateWindow } {
+  if (windowKey === '7d') {
+    const from = shiftDays(today, -6);
+    const prevTo = shiftDays(from, -1);
+    return {
+      current: { from, to: today },
+      previous: { from: shiftDays(prevTo, -6), to: prevTo },
+    };
+  }
+  if (windowKey === '30d') {
+    const from = shiftDays(today, -29);
+    const prevTo = shiftDays(from, -1);
+    return {
+      current: { from, to: today },
+      previous: { from: shiftDays(prevTo, -29), to: prevTo },
+    };
+  }
+  // mtd
+  const monthFirst = today.slice(0, 7) + '-01';
+  return {
+    current: { from: monthFirst, to: today },
+    previous: {
+      from: shiftMonthDay(monthFirst, -1),
+      to: shiftMonthDay(today, -1),
+    },
+  };
+}
+
+type HomeScope = { level: GeoLevel; id: number | null };
+
+// Default scope for a request that didn't pin one — every user sees
+// their own scope floor on Home unless they pick deeper. Global
+// (super_admin) lands on india; scope_level is otherwise a 1:1
+// match with GeoLevel and carries an id.
+function userScopeFloor(user: SessionUser): HomeScope {
+  if (user.scope_level === 'global') return { level: 'india', id: null };
+  return { level: user.scope_level as GeoLevel, id: user.scope_id };
+}
+
+// Parse `?scope=<level>:<id>`. Empty / missing falls back to the
+// user's own scope floor. `india:` (or `india` alone) reads as the
+// global root.
+function parseHomeScope(
+  scopeParam: string | undefined,
+  user: SessionUser,
+): HomeScope | { error: string } {
+  if (!scopeParam) return userScopeFloor(user);
+  const [rawLevel, rawId] = scopeParam.split(':');
+  if (!rawLevel || !isGeoLevel(rawLevel)) {
+    return { error: 'scope must be <level>:<id>' };
+  }
+  if (rawLevel === 'india') return { level: 'india', id: null };
+  const id = Number(rawId);
+  if (!Number.isInteger(id) || id <= 0) return { error: 'scope id invalid' };
+  return { level: rawLevel, id };
+}
+
+// Health Score = equal-weighted mean of the four §3.6.2 KPIs in
+// percent space. Nulls (no sessions in the period for a metric)
+// are skipped — a scope with no attendance but full media coverage
+// reads as the media-only score, not as zero. If every metric is
+// null the score is null. The weighting itself is a deliberate
+// first cut; spec §3.6.4 marks it as a worker-env-var tunable.
+function computeHealthScore(
+  consolidated: ConsolidatedPayload,
+  villageCount: number,
+): number | null {
+  const values: number[] = [];
+  if (consolidated.kpis.attendance_pct !== null) values.push(consolidated.kpis.attendance_pct);
+  if (consolidated.kpis.image_pct !== null) values.push(consolidated.kpis.image_pct);
+  if (consolidated.kpis.video_pct !== null) values.push(consolidated.kpis.video_pct);
+  if (villageCount > 0) {
+    // SoM ratio: share of in-scope villages with a SoM declared this
+    // calendar month. Capped at 100 because a village can technically
+    // declare more than one SoM per month (rare; spec discourages).
+    values.push(
+      Math.min(100, Math.round((consolidated.kpis.som_current / villageCount) * 100)),
+    );
+  }
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+}
+
+type HomeMission = {
+  kind: 'attendance' | 'image' | 'video' | 'som';
+  current: number;
+  target: number;
+};
+
+// Pick the largest gap among the four KPIs. Null KPIs are skipped:
+// "no sessions in the period" is a noisy mission ("attendance is
+// 0%") that we don't want to surface; Mission picks from whatever's
+// measurable. Returns null if every gap is already closed — the
+// happy path where there's nothing to nudge.
+function pickMission(
+  consolidated: ConsolidatedPayload,
+  villageCount: number,
+): HomeMission | null {
+  const candidates: { kind: HomeMission['kind']; gap: number; current: number; target: number }[] = [];
+  if (consolidated.kpis.attendance_pct !== null) {
+    candidates.push({
+      kind: 'attendance',
+      gap: (100 - consolidated.kpis.attendance_pct) / 100,
+      current: consolidated.kpis.attendance_pct,
+      target: 100,
+    });
+  }
+  if (consolidated.kpis.image_pct !== null) {
+    candidates.push({
+      kind: 'image',
+      gap: (100 - consolidated.kpis.image_pct) / 100,
+      current: consolidated.kpis.image_pct,
+      target: 100,
+    });
+  }
+  if (consolidated.kpis.video_pct !== null) {
+    candidates.push({
+      kind: 'video',
+      gap: (100 - consolidated.kpis.video_pct) / 100,
+      current: consolidated.kpis.video_pct,
+      target: 100,
+    });
+  }
+  if (villageCount > 0) {
+    candidates.push({
+      kind: 'som',
+      gap: 1 - consolidated.kpis.som_current / villageCount,
+      current: consolidated.kpis.som_current,
+      target: villageCount,
+    });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.gap - a.gap);
+  const top = candidates[0]!;
+  if (top.gap <= 0) return null;
+  return { kind: top.kind, current: top.current, target: top.target };
+}
+
+type HomeFocusArea = {
+  level: GeoLevel;
+  id: number;
+  name: string;
+  // Headline metric that drove the ranking. v1 always uses
+  // attendance — "rank by next-best-gap-per-child excluding Mission's
+  // kind" is deferred (would need image_pct / video_pct / som per
+  // child as new grouped queries; not blocking the doer flow).
+  metric: 'attendance';
+  value: number;
+};
+
+// Top-3 direct-child scopes by attendance (lowest first). Children
+// with no marks at all are filtered out — a 0% row there is "no
+// data" not "real bad", and surfacing those would crowd the page
+// with empty scopes that need data entry, not attention.
+async function buildHomeFocusAreas(
+  db: D1Database,
+  villageIds: number[],
+  parentLevel: GeoLevel,
+  period: DateWindow,
+): Promise<HomeFocusArea[]> {
+  const childLevel = childLevelOf(parentLevel);
+  if (!childLevel) return [];
+  const rows = await aggregateForAttendance(db, villageIds, childLevel, period.from, period.to);
+  const measurable = rows.filter((r) => {
+    const marked = Number(r.extra.split('/')[1] ?? 0);
+    return marked > 0;
+  });
+  measurable.sort((a, b) => a.value - b.value);
+  return measurable.slice(0, 3).map((r) => ({
+    level: childLevel,
+    id: r.id,
+    name: r.name,
+    metric: 'attendance' as const,
+    value: r.value,
+  }));
+}
+
+export type HomePayload = {
+  scope: HomeScope;
+  window: HomeWindow;
+  period: DateWindow;
+  health_score: {
+    current: number | null;
+    previous: number | null;
+    delta: number | null;
+  };
+  mission: HomeMission | null;
+  focus_areas: HomeFocusArea[];
+  // Observer Home block, deferred to a follow-up PR — see the
+  // §3.6.4 PR description for the mock-first plan. `null` here means
+  // "this caller is an observer and the grid isn't built yet";
+  // `undefined` means "caller is a doer and never sees a grid".
+  compare_grid?: null;
+};
+
+dashboard.get('/home', requireCap('dashboard.read'), async (c) => {
+  const user = c.get('user');
+  const today = todayIstDate();
+  const windowParam = c.req.query('window') ?? '7d';
+  if (!isHomeWindow(windowParam)) {
+    return err(c, 'bad_request', 400, `window must be one of ${HOME_WINDOWS.join('|')}`);
+  }
+  const scopeParsed = parseHomeScope(c.req.query('scope'), user);
+  if ('error' in scopeParsed) return err(c, 'bad_request', 400, scopeParsed.error);
+
+  const scopeVillages = await villageIdsInScope(c.env.DB, user);
+  const effective = await effectiveVillages(
+    c.env.DB, scopeVillages, scopeParsed.level, scopeParsed.id,
+  );
+  if (effective === 'out_of_scope') return err(c, 'forbidden', 403, 'out of scope');
+
+  const windows = resolveHomeWindows(windowParam, today);
+  const villageCount = effective.length;
+
+  // Both windows in parallel. `skipChart=true` for both — the 6-month
+  // chart belongs to /dashboard's consolidated fold; Home only needs
+  // the KPIs to derive Health Score and Mission.
+  const [current, previous] = await Promise.all([
+    buildConsolidated(c.env.DB, effective, windows.current.from, windows.current.to, true),
+    buildConsolidated(c.env.DB, effective, windows.previous.from, windows.previous.to, true),
+  ]);
+
+  const currentScore = computeHealthScore(current, villageCount);
+  const previousScore = computeHealthScore(previous, villageCount);
+  const delta =
+    currentScore !== null && previousScore !== null
+      ? currentScore - previousScore
+      : null;
+
+  // "Doer" = has any `.write` capability. Strictly cap-shape, never
+  // role-name — adding a future observer role with only `.read` caps
+  // automatically lands on the observer branch with no edit here.
+  const userCaps = capabilitiesFor(user.role);
+  const hasAnyWrite = userCaps.some((cap) => cap.endsWith('.write'));
+
+  const mission = hasAnyWrite ? pickMission(current, villageCount) : null;
+  const focusAreas = await buildHomeFocusAreas(
+    c.env.DB, effective, scopeParsed.level, windows.current,
+  );
+
+  const payload: HomePayload = {
+    scope: scopeParsed,
+    window: windowParam,
+    period: windows.current,
+    health_score: { current: currentScore, previous: previousScore, delta },
+    mission,
+    focus_areas: focusAreas,
+    compare_grid: hasAnyWrite ? undefined : null,
+  };
+  return c.json(payload);
+});
 
 dashboard.get('/drilldown', requireCap('dashboard.read'), async (c) => {
   const result = await handleDrillDownRequest(c);
