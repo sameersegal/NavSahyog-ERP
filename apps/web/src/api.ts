@@ -248,6 +248,22 @@ export const api = {
     req<DrilldownResponse>(
       `/api/dashboard/drilldown?${drilldownQs(opts)}`,
     ),
+  // §3.6.4 Field-Dashboard Home. One round-trip carries every block:
+  // health score (current + previous + delta), mission (doer only),
+  // focus areas, and the eventual compare grid (observer only,
+  // currently null pending the mock-first design call).
+  dashboardHome: (opts: { window?: HomeWindow; scope?: { level: GeoLevel; id: number | null } } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.window) qs.set('window', opts.window);
+    if (opts.scope) {
+      const scopeStr = opts.scope.id === null
+        ? opts.scope.level
+        : `${opts.scope.level}:${opts.scope.id}`;
+      qs.set('scope', scopeStr);
+    }
+    const suffix = qs.toString();
+    return req<HomeResponse>(`/api/dashboard/home${suffix ? `?${suffix}` : ''}`);
+  },
   // CSV URL builder (browsers download via <a href=…> so we never
   // need the response body on the client).
   dashboardDrilldownCsvUrl: (opts: DrilldownQuery) =>
@@ -308,6 +324,43 @@ export type ConsolidatedPayload = {
     bars: Array<{ month: string; pct: number | null }>;
   };
 };
+// §3.6.4 Home — preset-only time switch (decisions.md D20). Custom
+// date ranges stay on /dashboard.
+export const HOME_WINDOWS = ['7d', '30d', 'mtd'] as const;
+export type HomeWindow = (typeof HOME_WINDOWS)[number];
+
+export type HomeMissionKind = 'attendance' | 'image' | 'video' | 'som';
+
+export type HomeResponse = {
+  scope: { level: GeoLevel; id: number | null };
+  window: HomeWindow;
+  period: { from: string; to: string };
+  health_score: {
+    current: number | null;
+    previous: number | null;
+    delta: number | null;
+  };
+  // Present iff the caller has any `.write` capability. Tap routes
+  // to the natural write path: image/video → /capture, attendance →
+  // village page (VC) or /capture (AF+), som → /achievements.
+  mission: {
+    kind: HomeMissionKind;
+    current: number;
+    target: number;
+  } | null;
+  focus_areas: Array<{
+    level: GeoLevel;
+    id: number;
+    name: string;
+    metric: 'attendance';
+    value: number;
+  }>;
+  // Observer-only. `null` = caller is observer, grid not built yet
+  // (deferred per the §3.6.4 mock-first plan); `undefined` = caller
+  // is a doer.
+  compare_grid?: null;
+};
+
 export type DrilldownResponse = {
   metric: DashboardMetric;
   level: GeoLevel;

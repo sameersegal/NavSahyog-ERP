@@ -1,6 +1,12 @@
 # Level 3 — Master CRUD + Profile + Field-Dashboard Home
 
-**Status:** not started. Requires L2 + L2.5 landed.
+**Status:** in flight. L3.0 landed: §3.6.4 Field-Dashboard Home,
+doer branch end-to-end (route, endpoint, page, tests, screenshots).
+Observer compare grid is a placeholder pending the mobile-fit design
+call (full grid × ~30 districts doesn't fit a phone without
+horizontal scroll / progressive disclosure — that decision wants a
+mock first). §3.8.1 Profile and §3.8.7 Master Creations remain
+unstarted.
 
 ## Goal
 

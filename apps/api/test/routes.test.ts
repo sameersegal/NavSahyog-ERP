@@ -1787,6 +1787,98 @@ describe('dashboard consolidated (L2.5.3)', () => {
   });
 });
 
+describe('dashboard home (§3.6.4)', () => {
+  beforeEach(async () => { await resetDb(); });
+
+  type HomeBody = {
+    scope: { level: string; id: number | null };
+    window: '7d' | '30d' | 'mtd';
+    period: { from: string; to: string };
+    health_score: { current: number | null; previous: number | null; delta: number | null };
+    mission: { kind: string; current: number; target: number } | null;
+    focus_areas: Array<{ level: string; id: number; name: string; metric: string; value: number }>;
+    compare_grid?: null;
+  };
+
+  it('doer (super) gets mission populated and no compare grid', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/dashboard/home', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as HomeBody;
+    expect(body.scope).toEqual({ level: 'india', id: null });
+    expect(body.window).toBe('7d');
+    expect(body.period.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.period.to).toBe(todayIst());
+    // Health score and mission are shape-checked, not value-checked,
+    // so seed drift doesn't bite.
+    expect(body.health_score.current === null || typeof body.health_score.current === 'number').toBe(true);
+    expect(body.health_score.delta === null || typeof body.health_score.delta === 'number').toBe(true);
+    if (body.mission !== null) {
+      expect(['attendance', 'image', 'video', 'som']).toContain(body.mission.kind);
+      expect(typeof body.mission.current).toBe('number');
+      expect(typeof body.mission.target).toBe('number');
+    }
+    // Doers must never see the compare_grid field — it's only
+    // present (as null pending the design) for observers.
+    expect(body.compare_grid).toBeUndefined();
+    expect(Array.isArray(body.focus_areas)).toBe(true);
+  });
+
+  it('observer (district admin) gets mission null and compare_grid null placeholder', async () => {
+    const token = await loginAs('district-bid');
+    const res = await cookieFetch('/api/dashboard/home', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as HomeBody;
+    expect(body.mission).toBeNull();
+    // compare_grid is the explicit observer-only field; null means
+    // "you're an observer but the grid isn't built yet" (design call
+    // deferred per the §3.6.4 mock-first plan).
+    expect(body.compare_grid).toBeNull();
+    expect(Array.isArray(body.focus_areas)).toBe(true);
+  });
+
+  it('honours window=30d and window=mtd', async () => {
+    const token = await loginAs('super');
+    for (const w of ['30d', 'mtd'] as const) {
+      const res = await cookieFetch(`/api/dashboard/home?window=${w}`, token);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as HomeBody;
+      expect(body.window).toBe(w);
+      // 30d window spans 30 IST calendar days; mtd starts at the
+      // first of the current month. Both end at today.
+      expect(body.period.to).toBe(todayIst());
+      if (w === 'mtd') {
+        expect(body.period.from).toMatch(/^\d{4}-\d{2}-01$/);
+      } else {
+        // 30d: from = today − 29 days. Just sanity-check ordering.
+        expect(body.period.from < body.period.to).toBe(true);
+      }
+    }
+  });
+
+  it('rejects an unknown window value with 400', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/dashboard/home?window=90d', token);
+    expect(res.status).toBe(400);
+  });
+
+  it('VC at village scope sees no focus areas (no child scopes below village)', async () => {
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/dashboard/home', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as HomeBody;
+    expect(body.scope.level).toBe('village');
+    expect(body.focus_areas).toEqual([]);
+  });
+
+  it('rejects out-of-scope scope= with 403', async () => {
+    // VC at village 1 is not allowed to ask about a sibling village.
+    const token = await loginAs('vc-anandpur');
+    const res = await cookieFetch('/api/dashboard/home?scope=village:2', token);
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('home insights — merged compare + drill', () => {
   beforeEach(async () => { await resetDb(); });
 
