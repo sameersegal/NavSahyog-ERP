@@ -348,17 +348,22 @@ export type HomeResponse = {
     current: number;
     target: number;
   } | null;
+  // Same payload for both branches. Doer client renders the
+  // dominant-gap label per row ("needs photos"); observer client
+  // renders the full 4-KPI strip + Health Score. D19 (revised) —
+  // the full sibling-compare grid lives on /dashboard, not on Home.
+  // `level` is always non-root (children of a scope, never india).
   focus_areas: Array<{
-    level: GeoLevel;
+    level: Exclude<GeoLevel, 'india'>;
     id: number;
     name: string;
-    metric: 'attendance';
-    value: number;
+    health_score: number;
+    attendance_pct: number | null;
+    image_pct: number | null;
+    video_pct: number | null;
+    som_pct: number | null;
+    dominant_gap_kind: HomeMissionKind | null;
   }>;
-  // Observer-only. `null` = caller is observer, grid not built yet
-  // (deferred per the §3.6.4 mock-first plan); `undefined` = caller
-  // is a doer.
-  compare_grid?: null;
 };
 
 export type DrilldownResponse = {

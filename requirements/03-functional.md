@@ -241,12 +241,15 @@ gate is not satisfied.
 | 2 | Health Score card | `dashboard.read` | all roles |
 | 3 | Today's Mission | any `.write` cap | doer roles |
 | 4 | Focus Areas (top-3) | `dashboard.read` | all roles |
-| 5 | Sibling-compare grid (full) | no `.write` cap | observer roles |
+| 5 | "Compare all in `/dashboard` →" link | no `.write` cap | observer roles |
 | 6 | Capture FAB (floating) | `media.write` or `attendance.write` | doer roles |
 
-A doer therefore sees 4 body blocks + FAB; an observer sees 4 body
-blocks + no FAB. Maximum 5 elements per role, keeping the page
-scan-in-one-glance.
+Both branches share the same five-block skeleton; the doer's row 5
+is the FAB, the observer's is the Compare-all link. Doer Focus
+Areas surfaces attendance gaps (single metric, action-shaped);
+observer Focus Areas surfaces multi-KPI rows (4 KPIs + Health Score
++ trend per row, ranked by Health Score ascending — see below).
+Maximum 5 visible elements per role keeps the page scan-in-one-glance.
 
 **Time-preset switch.** Three presets only: **7D** (default), **30D**,
 **MTD**. Custom date ranges stay on `/dashboard` (decisions.md D20).
@@ -270,39 +273,51 @@ the card opens the natural write path for `kind` — Capture for
 image / video, Attendance for attendance, Achievements for SoM.
 
 **Focus Areas.** Top-3 direct-child scopes (not leaf children) in
-the user's scope, ranked by the same gap heuristic as Mission but
-excluding Mission's `kind` to avoid duplication. Each chip shows
-scope name + headline metric; tap deep-links to that scope on
-`/dashboard` with the preset preserved.
+the user's scope, ranked by Health Score ascending so the worst
+surface first. Same data source for both branches; rendering
+differs by capability:
 
-**Sibling-compare grid** (observer roles only; decisions.md D19).
-Full grid of every direct-child scope in the user's scope, one row
-per child, columns for each §3.6.2 KPI plus Health Score and trend.
-Preset-windowed. Sortable by any column; default sort is Health
-Score ascending so the worst-performing scopes surface first. Row
-tap drills to that child on `/dashboard` with preset preserved.
-The `/dashboard` drill-down is still the path for cross-level
-navigation (e.g. jumping from India to a specific Cluster) and for
-CSV export; Home is "start at your scope and see how your children
-are doing", `/dashboard` is "walk the hierarchy".
+- **Doer** sees a compact row per child with scope name + the one
+  KPI most likely to drive that child's low score (the largest gap
+  among attendance, image %, video %, SoM coverage). Action-shaped
+  — "South Cluster needs photo coverage" rather than a number table.
+- **Observer** sees a richer row per child: scope name + Health
+  Score + a 4-KPI strip (attendance %, image %, video %, SoM ratio)
+  + trend arrow. Comparison-shaped — observers think in terms of
+  who's ahead vs. behind, so every KPI lands at a glance.
+
+Tap drills to that child on `/dashboard` with the preset preserved.
+
+**Compare-all link** (observer roles only; decisions.md D19).
+Below Focus Areas, a single line — "Compare all N children →" —
+linking to `/dashboard?scope=…&window=…`. The full sibling-compare
+grid (every child × every KPI, sortable, CSV-exportable) lives on
+`/dashboard`, where the viewport, sort controls, and CSV export
+already handle the density. Home stays mobile-fit; `/dashboard` is
+where the deeper review happens.
 
 **Capture FAB.** Floating bottom-right, one tap, pre-scoped to the
 user's current scope (VC: own village; AF / Cluster / Super: last
 used, or prompt to pick). Opens the existing Capture sheet.
 
 **API.** `GET /api/dashboard/home?window=7d|30d|mtd&scope=<level>:<id>`
-returns `{scope, window, healthScore, mission?, focusAreas,
-compareGrid?}`. Gated by `requireCap('dashboard.read')`. `mission`
-is present iff the caller has any `.write` cap; `compareGrid` is
-present iff the caller has none. `compareGrid` carries one row per
-direct-child scope with every §3.6.2 KPI + Health Score + trend.
+returns `{scope, window, healthScore, mission?, focusAreas}`.
+Gated by `requireCap('dashboard.read')`. `mission` is present iff
+the caller has any `.write` cap. `focusAreas` is the same payload
+for both branches — one row per direct-child scope with Health
+Score, the four KPIs, the dominant-gap kind, and trend — sorted by
+Health Score ascending and capped at 3 rows. The doer client
+renders a compact action-shaped row; the observer client renders a
+multi-KPI strip plus the Compare-all link. The earlier
+`compareGrid` field is gone (decisions.md D19, revised) — full grid
+lives on `/dashboard`, not on Home.
 
 **Acceptance.**
 - A VC logs in and lands on `/`, **not** their village. The page
   shows Health Score + Mission + Focus Areas + Capture FAB.
-- A State Admin lands on `/` and sees Health Score + Focus Areas +
-  a full sibling-compare grid over their direct-child scopes; no
-  Mission card, no FAB.
+- A State Admin lands on `/` and sees Health Score + Focus Areas
+  (multi-KPI rows over their direct-child scopes) + a Compare-all
+  link to `/dashboard`; no Mission card, no FAB.
 - Switching the time preset triggers exactly one `/api/dashboard/home`
   fetch; all blocks refresh consistently.
 - Focus Areas and compare-grid rows deep-link to `/dashboard` with

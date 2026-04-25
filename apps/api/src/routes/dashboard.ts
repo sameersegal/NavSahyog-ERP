@@ -1021,22 +1021,170 @@ function pickMission(
   return { kind: top.kind, current: top.current, target: top.target };
 }
 
+// Image / video % per direct-child group for the period. Mirrors
+// `consolidatedMediaPct` (sessions-with-this-kind / total sessions)
+// but rolled up at the child level via a single grouped query so
+// observer Focus Areas don't pay N×3 round-trips.
+async function aggregateMediaPctForChildren(
+  db: D1Database,
+  villageIds: number[],
+  childLevel: NonRootLevel,
+  from: string,
+  to: string,
+  kind: 'image' | 'video',
+): Promise<{ id: number; sessions: number; hits: number }[]> {
+  if (villageIds.length === 0) return [];
+  const alias = LEVEL_ALIAS[childLevel];
+  const placeholders = villageIds.map(() => '?').join(',');
+  // CASE-around-EXISTS counts only sessions whose IST calendar day
+  // matches a media row of `kind` tagged to the same village + event.
+  // Same IST-shift on captured_at as the scope-level helper (PR #31
+  // review #5) so a UTC-evening upload of an IST-day-N photo still
+  // buckets under N.
+  const rs = await db
+    .prepare(
+      `SELECT ${alias}.id AS id,
+              COUNT(DISTINCT s.id) AS sessions,
+              COUNT(DISTINCT CASE WHEN EXISTS (
+                SELECT 1 FROM media md
+                 WHERE md.village_id = s.village_id
+                   AND md.tag_event_id = s.event_id
+                   AND md.kind = ?
+                   AND md.deleted_at IS NULL
+                   AND date(md.captured_at, 'unixepoch', '+5 hours 30 minutes') = s.date
+              ) THEN s.id END) AS hits
+       ${GEO_JOIN}
+       LEFT JOIN attendance_session s
+         ON s.village_id = v.id AND s.date BETWEEN ? AND ?
+       WHERE v.id IN (${placeholders})
+       GROUP BY ${alias}.id`,
+    )
+    .bind(kind, from, to, ...villageIds)
+    .all<{ id: number; sessions: number; hits: number }>();
+  return rs.results;
+}
+
+// SoM count + village count per direct-child group for the calendar
+// month containing `to`. Village count is the SoM denominator
+// per-child (share of the child's villages with a SoM declared).
+async function aggregateSomForChildren(
+  db: D1Database,
+  villageIds: number[],
+  childLevel: NonRootLevel,
+  monthPrefix: string,
+): Promise<{ id: number; village_count: number; som_count: number }[]> {
+  if (villageIds.length === 0) return [];
+  const alias = LEVEL_ALIAS[childLevel];
+  const placeholders = villageIds.map(() => '?').join(',');
+  const rs = await db
+    .prepare(
+      // `stu` not `st` because GEO_JOIN already aliases `state st`.
+      `SELECT ${alias}.id AS id,
+              COUNT(DISTINCT v.id) AS village_count,
+              COUNT(DISTINCT a.id) AS som_count
+       ${GEO_JOIN}
+       LEFT JOIN student stu ON stu.village_id = v.id
+       LEFT JOIN achievement a ON a.student_id = stu.id
+                              AND a.type = 'som'
+                              AND a.date LIKE ? || '%'
+       WHERE v.id IN (${placeholders})
+       GROUP BY ${alias}.id`,
+    )
+    .bind(monthPrefix, ...villageIds)
+    .all<{ id: number; village_count: number; som_count: number }>();
+  return rs.results;
+}
+
 type HomeFocusArea = {
-  level: GeoLevel;
+  // Always a non-root level — Focus Areas are direct children of
+  // the user's scope, and 'india' is virtual / has no parent.
+  level: NonRootLevel;
   id: number;
   name: string;
-  // Headline metric that drove the ranking. v1 always uses
-  // attendance — "rank by next-best-gap-per-child excluding Mission's
-  // kind" is deferred (would need image_pct / video_pct / som per
-  // child as new grouped queries; not blocking the doer flow).
-  metric: 'attendance';
-  value: number;
+  // Composite Health Score (0-100, equal-weighted mean of the four
+  // measurable KPIs, nulls skipped — same formula as the scope-level
+  // card, applied per child).
+  health_score: number;
+  // §3.6.2 KPI pack for this child. `null` means "no measurable
+  // activity in this window" — the doer client uses this to suppress
+  // a row, the observer client renders an em-dash so the row stays
+  // legible.
+  attendance_pct: number | null;
+  image_pct: number | null;
+  video_pct: number | null;
+  som_pct: number | null;
+  // The KPI with the largest gap to target. Drives the doer's
+  // single-line "needs X" rendering. Null when every KPI is at
+  // target.
+  dominant_gap_kind: 'attendance' | 'image' | 'video' | 'som' | null;
 };
 
-// Top-3 direct-child scopes by attendance (lowest first). Children
-// with no marks at all are filtered out — a 0% row there is "no
-// data" not "real bad", and surfacing those would crowd the page
-// with empty scopes that need data entry, not attention.
+// Per-child Health Score row used by `buildHomeFocusAreas`. Holds
+// raw counters from the four grouped queries before the composite
+// is computed; the public `HomeFocusArea` shape exposes percents
+// and the dominant-gap label.
+type ChildKpiRow = {
+  id: number;
+  name: string;
+  attendance_pct: number | null;
+  image_pct: number | null;
+  video_pct: number | null;
+  som_count: number;
+  village_count: number;
+};
+
+// Compute the per-child Health Score. Same formula as the scope-
+// level `computeHealthScore`: equal-weighted mean of the four KPIs
+// in percent space, nulls skipped, SoM as `som_count / village_count
+// × 100` capped at 100. Returns `null` when nothing's measurable
+// (no attendance, no media, no villages) — caller filters those
+// rows out.
+function childHealthScore(row: ChildKpiRow): { score: number | null; som_pct: number | null } {
+  const values: number[] = [];
+  if (row.attendance_pct !== null) values.push(row.attendance_pct);
+  if (row.image_pct !== null) values.push(row.image_pct);
+  if (row.video_pct !== null) values.push(row.video_pct);
+  const som_pct = row.village_count > 0
+    ? Math.min(100, Math.round((row.som_count / row.village_count) * 100))
+    : null;
+  if (som_pct !== null) values.push(som_pct);
+  if (values.length === 0) return { score: null, som_pct };
+  return {
+    score: Math.round(values.reduce((a, b) => a + b, 0) / values.length),
+    som_pct,
+  };
+}
+
+// Pick the KPI with the largest `(target − current) / target` gap
+// for a single child. Mirrors the scope-level `pickMission` logic
+// but doesn't carry current/target — only the kind label, used for
+// the doer-side "needs X" copy. Null when every KPI is at or above
+// target (the happy path).
+function dominantGapKind(
+  attendance: number | null,
+  image: number | null,
+  video: number | null,
+  som: number | null,
+): HomeFocusArea['dominant_gap_kind'] {
+  const gaps: { kind: NonNullable<HomeFocusArea['dominant_gap_kind']>; gap: number }[] = [];
+  if (attendance !== null) gaps.push({ kind: 'attendance', gap: (100 - attendance) / 100 });
+  if (image !== null)      gaps.push({ kind: 'image',      gap: (100 - image)      / 100 });
+  if (video !== null)      gaps.push({ kind: 'video',      gap: (100 - video)      / 100 });
+  if (som !== null)        gaps.push({ kind: 'som',        gap: (100 - som)        / 100 });
+  if (gaps.length === 0) return null;
+  gaps.sort((a, b) => b.gap - a.gap);
+  const top = gaps[0]!;
+  if (top.gap <= 0) return null;
+  return top.kind;
+}
+
+// Top-3 direct-child scopes by Health Score ascending. Same payload
+// for both branches; doer client renders the dominant-gap kind as a
+// single-line "needs X" copy, observer client renders the full 4-KPI
+// strip + Health Score. Children with no measurable activity at all
+// are filtered out — a 0/100 row there is "no data" not "real bad",
+// and surfacing those would crowd the page with empty scopes that
+// need data entry rather than attention.
 async function buildHomeFocusAreas(
   db: D1Database,
   villageIds: number[],
@@ -1045,19 +1193,69 @@ async function buildHomeFocusAreas(
 ): Promise<HomeFocusArea[]> {
   const childLevel = childLevelOf(parentLevel);
   if (!childLevel) return [];
-  const rows = await aggregateForAttendance(db, villageIds, childLevel, period.from, period.to);
-  const measurable = rows.filter((r) => {
-    const marked = Number(r.extra.split('/')[1] ?? 0);
-    return marked > 0;
+
+  // 4 grouped queries fire in parallel — D1 handles concurrent reads
+  // cheaply, and they're independent. Same window for all four; SoM
+  // is calendar-month scoped (current month containing `period.to`)
+  // to match §3.6.2's monthly cadence.
+  const monthPrefix = period.to.slice(0, 7);
+  const [attRows, imageRows, videoRows, somRows] = await Promise.all([
+    aggregateForAttendance(db, villageIds, childLevel, period.from, period.to),
+    aggregateMediaPctForChildren(db, villageIds, childLevel, period.from, period.to, 'image'),
+    aggregateMediaPctForChildren(db, villageIds, childLevel, period.from, period.to, 'video'),
+    aggregateSomForChildren(db, villageIds, childLevel, monthPrefix),
+  ]);
+
+  // Index image/video/som rows by child id; attendance carries the
+  // canonical name + id ordering. Children without any media or SoM
+  // data simply miss in the lookups and get null KPIs.
+  const imageById = new Map(imageRows.map((r) => [r.id, r]));
+  const videoById = new Map(videoRows.map((r) => [r.id, r]));
+  const somById   = new Map(somRows.map((r) => [r.id, r]));
+
+  const rows: ChildKpiRow[] = attRows.map((a) => {
+    const marked = Number(a.extra.split('/')[1] ?? 0);
+    const attendance_pct = marked > 0 ? a.value : null;
+    const img = imageById.get(a.id);
+    const vid = videoById.get(a.id);
+    const som = somById.get(a.id);
+    const image_pct = img && img.sessions > 0
+      ? Math.round((img.hits / img.sessions) * 100)
+      : null;
+    const video_pct = vid && vid.sessions > 0
+      ? Math.round((vid.hits / vid.sessions) * 100)
+      : null;
+    return {
+      id: a.id,
+      name: a.name,
+      attendance_pct,
+      image_pct,
+      video_pct,
+      som_count: som?.som_count ?? 0,
+      village_count: som?.village_count ?? 0,
+    };
   });
-  measurable.sort((a, b) => a.value - b.value);
-  return measurable.slice(0, 3).map((r) => ({
-    level: childLevel,
-    id: r.id,
-    name: r.name,
-    metric: 'attendance' as const,
-    value: r.value,
-  }));
+
+  const enriched: HomeFocusArea[] = [];
+  for (const r of rows) {
+    const { score, som_pct } = childHealthScore(r);
+    if (score === null) continue;
+    enriched.push({
+      level: childLevel,
+      id: r.id,
+      name: r.name,
+      health_score: score,
+      attendance_pct: r.attendance_pct,
+      image_pct: r.image_pct,
+      video_pct: r.video_pct,
+      som_pct,
+      dominant_gap_kind: dominantGapKind(
+        r.attendance_pct, r.image_pct, r.video_pct, som_pct,
+      ),
+    });
+  }
+  enriched.sort((a, b) => a.health_score - b.health_score);
+  return enriched.slice(0, 3);
 }
 
 export type HomePayload = {
@@ -1069,13 +1267,15 @@ export type HomePayload = {
     previous: number | null;
     delta: number | null;
   };
+  // Doer-only. Present iff the caller has any `.write` capability;
+  // observers always see `null`. The doer client opens the natural
+  // write path on tap; the observer client doesn't render the card.
   mission: HomeMission | null;
+  // Same payload for both branches. Doer client renders the
+  // dominant-gap label per row ("needs X"); observer client renders
+  // the full 4-KPI strip + Health Score. D19 (revised) — the full
+  // sibling-compare grid lives on `/dashboard`, not on Home.
   focus_areas: HomeFocusArea[];
-  // Observer Home block, deferred to a follow-up PR — see the
-  // §3.6.4 PR description for the mock-first plan. `null` here means
-  // "this caller is an observer and the grid isn't built yet";
-  // `undefined` means "caller is a doer and never sees a grid".
-  compare_grid?: null;
 };
 
 dashboard.get('/home', requireCap('dashboard.read'), async (c) => {
@@ -1130,7 +1330,6 @@ dashboard.get('/home', requireCap('dashboard.read'), async (c) => {
     health_score: { current: currentScore, previous: previousScore, delta },
     mission,
     focus_areas: focusAreas,
-    compare_grid: hasAnyWrite ? undefined : null,
   };
   return c.json(payload);
 });

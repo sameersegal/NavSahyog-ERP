@@ -15,7 +15,7 @@ justification.
 |---|---|---|
 | D17 | **Introduce §3.6.4 Field-Dashboard Home as the default landing for every authenticated user.** One route `/`, capability-gated composition: doer roles (any `.write` cap) see Greeting + Health Score + Today's Mission + Focus Areas + Capture FAB; observer roles (read-only, District+) see Greeting + Health Score + Focus Areas + Top-N compare snapshot. Same route, different blocks, decided server-side from the caller's capability set — not from role name. VCs with a single village no longer auto-redirect; they land on Home like everyone else. The previous `/` (India-level drill) moves to `/dashboard`. | Current `Home.tsx` which renders the India-level drill directly at `/` and auto-redirects single-village VCs to `/village/:id`. |
 | D18 | **Today's Mission is server-picked, doer-only.** Server ranks the four §3.6.2 gaps (attendance %, image %, video %, SoM coverage) as `(target − current) / target` over scope × preset and returns `{kind, current, target, copy}` for the largest. Rendered only for roles with any `.write` cap; observer roles skip the card entirely. Keeps the Home responsive to scope without an SA-curated content table. | Earlier option of a hand-curated weekly mission maintained via Master Creations. |
-| D19 | **Sibling-compare grid is the primary block on observer Home; doer Home has no compare.** Observer Home renders the full grid — one row per direct-child scope, every §3.6.2 KPI + Health Score + trend, default sort by Health Score ascending so the worst surface first. Doer Home has no compare block; its focus is the Mission + FAB action loop. `/dashboard` keeps the full drill-down for everyone and remains the path for cross-level navigation and CSV export. Rejected the "Top-N snapshot on observer Home" intermediate: observers already think in comparison terms, and truncating to 5 rows would force a second screen for every question. | Earlier phrasing that kept the compare grid on `/dashboard` only (left observers one tap from their most-used view), and the interim "5-row Top-N snapshot" option. |
+| D19 | **Observer Home is symmetric with doer Home: same five-block skeleton, with multi-KPI Focus Areas + Compare-all link replacing Mission + FAB. The full sibling-compare grid lives on `/dashboard`, not on Home.** Both branches share Greeting + preset switch + Health Score + Focus Areas (top-3, ranked by Health Score ascending). Doer's row 5 is the Capture FAB; observer's is a single-line "Compare all N children →" link to `/dashboard` with scope and preset preserved. Doer Focus Areas surfaces the dominant-gap KPI per child (action-shaped, "South Cluster needs photo coverage"); observer Focus Areas renders a 4-KPI strip per child (comparison-shaped). The `/dashboard` consolidated fold + sortable drill-down already handle the full-density review with CSV export. Revised from the original D19 that pinned the full grid as the primary observer block — once the doer Home shipped, the asymmetric framing felt wrong, and the full grid genuinely lived more comfortably one tap away on `/dashboard` (bigger viewport, existing sort controls, CSV export). | Original D19: "Sibling-compare grid is the primary block on observer Home." Earlier phrasings that kept the compare grid on `/dashboard` only, and the interim "5-row Top-N snapshot." |
 | D20 | **Home time filter is presets only: 7D (default) / 30D / MTD.** Custom from–to picker stays on `/dashboard`. One payload per preset switch; server returns trend deltas against the previous equivalent window (prev 7D, prev 30D, MTD of prior calendar month). Keeps Home scan-in-one-glance and saves an edge-cache key per arbitrary range. | §3.6.1 / §3.6.2's "two date icons" custom range applied to Home as well. |
 
 ### Follow-on spec / mvp cleanups (same commit as D17–D20)
@@ -34,9 +34,14 @@ justification.
 - Exact gap targets for Mission ranking (e.g. "image % target =
   80"). Env vars; §3.6.2 defines the ratios, not the absolute
   thresholds.
-- Observer compare-grid column order (§3.6.2 KPIs vs Health Score
-  first). Component-level decision; revisit once observer roles
-  are in the hands of real users.
+- Observer Focus Areas KPI order in the multi-KPI strip (Health
+  Score first, then attendance / image / video / SoM, vs. some
+  other ordering). Component-level decision; revisit once observer
+  roles are in the hands of real users.
+- The full sibling-compare grid on `/dashboard` (sortable, CSV-
+  exportable). D19 (revised) names this as the path for observer
+  density; the grid's exact `/dashboard` shape is component work,
+  tracked alongside §3.6.1.
 
 ---
 

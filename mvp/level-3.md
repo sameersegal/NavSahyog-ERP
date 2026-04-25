@@ -1,12 +1,12 @@
 # Level 3 — Master CRUD + Profile + Field-Dashboard Home
 
-**Status:** in flight. L3.0 landed: §3.6.4 Field-Dashboard Home,
-doer branch end-to-end (route, endpoint, page, tests, screenshots).
-Observer compare grid is a placeholder pending the mobile-fit design
-call (full grid × ~30 districts doesn't fit a phone without
-horizontal scroll / progressive disclosure — that decision wants a
-mock first). §3.8.1 Profile and §3.8.7 Master Creations remain
-unstarted.
+**Status:** in flight. L3.0 landed (PR #40): §3.6.4 Field-Dashboard
+Home, doer branch end-to-end. L3.0b in flight: observer Home —
+symmetric shape with multi-KPI Focus Areas + Compare-all link to
+`/dashboard`. D19 amended to drop the original "full sibling-compare
+grid as primary block" framing; the grid lives more comfortably one
+tap away on `/dashboard`. §3.8.1 Profile and §3.8.7 Master Creations
+remain unstarted.
 
 ## Goal
 
@@ -22,9 +22,9 @@ as the default `/` for every authenticated user.
   role. Capability-gated composition: doer roles (any `.write`
   cap) see Greeting + Health Score + Today's Mission + Focus
   Areas + Capture FAB; observer roles (read-only) see Greeting +
-  Health Score + Focus Areas + full sibling-compare grid. Time
-  filter is presets only (7D / 30D / MTD); custom range stays on
-  `/dashboard`. See decisions.md D17–D20.
+  Health Score + Focus Areas (multi-KPI rows) + Compare-all link
+  to `/dashboard`. Time filter is presets only (7D / 30D / MTD);
+  custom range stays on `/dashboard`. See decisions.md D17–D20.
 - **Master Creations (§3.8.7).** Super Admin screens for:
   villages, schools, events / activities, users, qualifications.
   Each screen is dedicated (not a generic table editor). No "app
@@ -60,9 +60,9 @@ and §5. The in-menu language toggle already ships with L2.5.
    joined-at, and assigned geo scope.
 3. A VC lands on `/` (not `/village/:id`) and sees Health Score +
    Today's Mission + Focus Areas + Capture FAB.
-4. A State Admin lands on `/` and sees Health Score + Focus Areas +
-   a full sibling-compare grid over their direct-child scopes; no
-   Mission card, no FAB.
+4. A State Admin lands on `/` and sees Health Score + Focus Areas
+   (multi-KPI rows over their direct-child scopes) + a Compare-all
+   link to `/dashboard`; no Mission card, no FAB.
 5. Switching the Home time preset (7D / 30D / MTD) issues exactly
    one `/api/dashboard/home` fetch and refreshes all blocks
    consistently.
