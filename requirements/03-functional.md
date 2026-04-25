@@ -406,13 +406,14 @@ reviews, and sends manually via email or WhatsApp.
   - channel (`whatsapp` | `email`)
   - optional: donor name, tone hint, length, language
 - **Behaviour**: the AI skill
-  (`.claude/skills/donor-update/SKILL.md`) composes reads across
+  (`skills/donor-update/SKILL.md`, shipped as the `navsahyog-erp`
+  Claude Code plugin) composes reads across
   children (§5.6), attendance (§5.9), achievements (§5.10), and
   media (§5.8) for the village and window, and emits:
   1. a markdown draft (email- or WhatsApp-shaped) plus a "sources
      used" block, and
   2. a 1-pager A4 PDF rendered from one of the three bundled
-     templates in `.claude/skills/donor-update/references/themes/`
+     templates in `skills/donor-update/references/themes/`
      (each a distinct layout, not just a palette): `quarterly`
      (default — 5-stat strip + story + 3-photo grid, data-forward),
      `milestone` (full-width hero photo + single achievement

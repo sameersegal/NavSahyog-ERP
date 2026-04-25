@@ -1,0 +1,11 @@
+{
+  "name": "navsahyog",
+  "owner": { "name": "Sameer Segal" },
+  "plugins": [
+    {
+      "name": "navsahyog-erp",
+      "source": ".",
+      "description": "Donor-update skill backed by the NavSahyog ERP APIs"
+    }
+  ]
+}

@@ -68,6 +68,27 @@ Seeded logins (all password `password`):
 `vc-anandpur`, `vc-belur`, `vc-chandragiri`, `af-bid01`,
 `cluster-bid01`, `super`.
 
+## Donor-update skill (Claude Code plugin)
+
+The `donor-update` skill — drafts a donor engagement update for a
+village and window by composing reads across the ERP APIs and
+rendering a 1-pager PDF — ships as a Claude Code plugin. Install:
+
+```
+/plugin marketplace add sameersegal/NavSahyog-ERP
+/plugin install navsahyog-erp@navsahyog
+```
+
+The skill auto-discovers after install; invoke it by asking Claude
+for "a donor update for village X" or similar. Runtime setup
+(`NSF_API_BASE_URL`, the HTTP basic credentials for staging, the
+`/auth/login` cookie handshake) lives in the skill's own `SKILL.md`
+under "Setup — pointing the skill at a backend".
+
+Plugin source lives at `.claude-plugin/` + `skills/donor-update/`
+in this repo; everything else under `skills/` is shipped as part
+of the same plugin when more skills are added.
+
 ## Contributing
 
 See [`CLAUDE.md`](./CLAUDE.md) if you are working with a Claude

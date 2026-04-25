@@ -11,7 +11,9 @@ itself is defined one level up in `SKILL.md`.
 ## Files
 
 ```
-.claude/skills/donor-update/
+skills/donor-update/                   ← in-repo path; under
+                                       ~/.claude/plugins/cache/...
+                                       when installed as a plugin
 ├── SKILL.md                         ← agent instructions (one level up)
 └── references/                       ← you are here
     ├── render.mjs                    ← Playwright-driven HTML → PDF + PNG
@@ -81,8 +83,8 @@ cache (`~/.cache/ms-playwright/` on Linux, `~/Library/Caches/…` on
 macOS) is auto-discovered; just run:
 
 ```bash
-node .claude/skills/donor-update/references/render.mjs \
-  .claude/skills/donor-update/references/examples/belur-q1-2026.quarterly.json
+node skills/donor-update/references/render.mjs \
+  skills/donor-update/references/examples/belur-q1-2026.quarterly.json
 ```
 
 If Playwright can't find Chromium (e.g. browsers were installed to
@@ -92,25 +94,30 @@ prepend `PLAYWRIGHT_BROWSERS_PATH=<path>`:
 
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers \
-  node .claude/skills/donor-update/references/render.mjs \
-  .claude/skills/donor-update/references/examples/belur-q1-2026.quarterly.json
+  node skills/donor-update/references/render.mjs \
+  skills/donor-update/references/examples/belur-q1-2026.quarterly.json
 ```
 
 The theme is read from the JSON. Override on the command line only
 if you *also* updated the data to match the new layout's shape:
 
 ```bash
-node .claude/skills/donor-update/references/render.mjs \
-  .claude/skills/donor-update/references/examples/belur-kho-kho.milestone.json \
+node skills/donor-update/references/render.mjs \
+  skills/donor-update/references/examples/belur-kho-kho.milestone.json \
   --theme=milestone
 ```
 
 Keep the rendered HTML for debugging:
 
 ```bash
-node .claude/skills/donor-update/references/render.mjs <data.json> --keep-html
+node skills/donor-update/references/render.mjs <data.json> --keep-html
 # writes references/themes/.render.html
 ```
+
+The same commands work from inside the plugin cache —
+`~/.claude/plugins/cache/navsahyog/navsahyog-erp/skills/donor-update/`
+is the install path; substitute it for the `skills/donor-update/`
+prefix above when invoking the renderer outside this repo.
 
 ## How the skill uses this
 
