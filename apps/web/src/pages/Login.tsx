@@ -9,6 +9,7 @@ export function Login() {
   const { lang, setLang, t } = useI18n();
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -55,14 +56,29 @@ export function Login() {
         </label>
         <label className="block">
           <span className="text-sm">{t('auth.login.password')}</span>
-          <input
-            type="password"
-            className={field}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className={field + ' pr-10'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={
+                showPassword
+                  ? t('auth.login.hide_password')
+                  : t('auth.login.show_password')
+              }
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 right-0 flex items-center px-2 text-muted-fg hover:text-fg focus:outline-none focus:ring-2 focus:ring-focus rounded"
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
         </label>
         {error && <p className="text-sm text-danger">{error}</p>}
         <button
@@ -132,5 +148,49 @@ function Pill({
     >
       {label}
     </button>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg
+      className="w-5 h-5"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z"
+      />
+      <circle cx="10" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg
+      className="w-5 h-5"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 3l14 14M8.2 5.3A8.7 8.7 0 0110 5c5.5 0 8.5 5 8.5 5a14 14 0 01-2.6 3.2M6.1 6.8A14 14 0 001.5 10s3 5 8.5 5a8.7 8.7 0 003.5-.7"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.2 8.3a2.5 2.5 0 003.5 3.5"
+      />
+    </svg>
   );
 }

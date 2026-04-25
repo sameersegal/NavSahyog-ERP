@@ -71,7 +71,7 @@ export function Home() {
 
   if (!user) return null;
   if (error) return <p className="text-danger">{error}</p>;
-  if (!data) return <p className="text-muted-fg">{t('common.loading')}</p>;
+  if (!data) return <HomeSkeleton />;
 
   const hasAnyWrite = user.capabilities.some((cap) => cap.endsWith('.write'));
   const canFab = can(user, 'media.write') || can(user, 'attendance.write');
@@ -366,5 +366,33 @@ function CaptureFab() {
       <span aria-hidden="true" className="text-xl leading-none">+</span>
       <span className="text-sm font-medium">{t('home.fab.label')}</span>
     </Link>
+  );
+}
+
+// Skeleton matching the §3.6.4 doer layout (greeting · preset switch
+// · health card · mission card · 3 focus rows). Keeps the page from
+// jumping on data arrival. Observer Home reuses the same skeleton —
+// the focus rows stand in for the compare-grid placeholder too.
+function HomeSkeleton() {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label={t('common.loading')}>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="h-6 w-32 bg-card-hover rounded animate-pulse" />
+        <div className="h-5 w-16 bg-card-hover rounded-full animate-pulse" />
+      </div>
+      <div className="h-9 w-44 bg-card-hover rounded-lg animate-pulse" />
+      <div className="bg-card border border-border rounded-lg p-4 h-28 animate-pulse" />
+      <div className="bg-card border border-primary/20 rounded-lg p-4 h-24 animate-pulse" />
+      <div className="space-y-2">
+        <div className="h-3 w-24 bg-card-hover rounded animate-pulse" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="bg-card border border-border rounded-lg h-14 animate-pulse"
+          />
+        ))}
+      </div>
+    </div>
   );
 }
