@@ -17,8 +17,10 @@ import {
 } from 'react';
 import en from './locales/en.json';
 import hi from './locales/hi.json';
+import kn from './locales/kn.json';
+import ta from './locales/ta.json';
 
-const catalogs = { en, hi } as const;
+const catalogs = { en, hi, kn, ta } as const;
 
 export type Lang = keyof typeof catalogs;
 export const LANGS: readonly Lang[] = Object.keys(catalogs) as Lang[];
