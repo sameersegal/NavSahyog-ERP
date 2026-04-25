@@ -1790,17 +1790,28 @@ describe('dashboard consolidated (L2.5.3)', () => {
 describe('dashboard home (§3.6.4)', () => {
   beforeEach(async () => { await resetDb(); });
 
+  type FocusArea = {
+    level: string;
+    id: number;
+    name: string;
+    health_score: number;
+    attendance_pct: number | null;
+    image_pct: number | null;
+    video_pct: number | null;
+    som_pct: number | null;
+    dominant_gap_kind: 'attendance' | 'image' | 'video' | 'som' | null;
+  };
+
   type HomeBody = {
     scope: { level: string; id: number | null };
     window: '7d' | '30d' | 'mtd';
     period: { from: string; to: string };
     health_score: { current: number | null; previous: number | null; delta: number | null };
     mission: { kind: string; current: number; target: number } | null;
-    focus_areas: Array<{ level: string; id: number; name: string; metric: string; value: number }>;
-    compare_grid?: null;
+    focus_areas: FocusArea[];
   };
 
-  it('doer (super) gets mission populated and no compare grid', async () => {
+  it('doer (super) gets mission populated and rich focus areas', async () => {
     const token = await loginAs('super');
     const res = await cookieFetch('/api/dashboard/home', token);
     expect(res.status).toBe(200);
@@ -1809,8 +1820,7 @@ describe('dashboard home (§3.6.4)', () => {
     expect(body.window).toBe('7d');
     expect(body.period.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(body.period.to).toBe(todayIst());
-    // Health score and mission are shape-checked, not value-checked,
-    // so seed drift doesn't bite.
+    // Shape-check, not value-check, so seed drift doesn't bite.
     expect(body.health_score.current === null || typeof body.health_score.current === 'number').toBe(true);
     expect(body.health_score.delta === null || typeof body.health_score.delta === 'number').toBe(true);
     if (body.mission !== null) {
@@ -1818,23 +1828,56 @@ describe('dashboard home (§3.6.4)', () => {
       expect(typeof body.mission.current).toBe('number');
       expect(typeof body.mission.target).toBe('number');
     }
-    // Doers must never see the compare_grid field — it's only
-    // present (as null pending the design) for observers.
-    expect(body.compare_grid).toBeUndefined();
+    // D19 (revised) — `compare_grid` is gone; full grid lives on
+    // /dashboard, not on Home. The field must not appear in the
+    // payload for either branch.
+    expect((body as Record<string, unknown>).compare_grid).toBeUndefined();
     expect(Array.isArray(body.focus_areas)).toBe(true);
   });
 
-  it('observer (district admin) gets mission null and compare_grid null placeholder', async () => {
+  it('observer (district admin) gets mission null and the same rich focus areas as a doer', async () => {
     const token = await loginAs('district-bid');
     const res = await cookieFetch('/api/dashboard/home', token);
     expect(res.status).toBe(200);
     const body = (await res.json()) as HomeBody;
     expect(body.mission).toBeNull();
-    // compare_grid is the explicit observer-only field; null means
-    // "you're an observer but the grid isn't built yet" (design call
-    // deferred per the §3.6.4 mock-first plan).
-    expect(body.compare_grid).toBeNull();
+    // D19 (revised) — symmetric payload across branches; no
+    // compare_grid placeholder, just the same focus_areas a doer
+    // would receive. Capability shape decides client rendering.
+    expect((body as Record<string, unknown>).compare_grid).toBeUndefined();
     expect(Array.isArray(body.focus_areas)).toBe(true);
+  });
+
+  it('focus areas carry the four KPIs + Health Score + dominant-gap kind, sorted by Health Score asc', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/dashboard/home', token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as HomeBody;
+    expect(body.focus_areas.length).toBeGreaterThan(0);
+    expect(body.focus_areas.length).toBeLessThanOrEqual(3);
+    for (const a of body.focus_areas) {
+      expect(typeof a.id).toBe('number');
+      expect(typeof a.name).toBe('string');
+      expect(typeof a.health_score).toBe('number');
+      expect(a.health_score).toBeGreaterThanOrEqual(0);
+      expect(a.health_score).toBeLessThanOrEqual(100);
+      // Each KPI is `number | null` — null means "no measurable
+      // activity for this metric in this window," which the client
+      // renders as an em-dash.
+      for (const k of ['attendance_pct', 'image_pct', 'video_pct', 'som_pct'] as const) {
+        const v = a[k];
+        expect(v === null || (typeof v === 'number' && v >= 0 && v <= 100)).toBe(true);
+      }
+      const gap = a.dominant_gap_kind;
+      expect(gap === null || ['attendance', 'image', 'video', 'som'].includes(gap)).toBe(true);
+    }
+    // Default sort = Health Score ascending so the worst surface
+    // first. Stable monotone check.
+    for (let i = 1; i < body.focus_areas.length; i++) {
+      expect(body.focus_areas[i]!.health_score).toBeGreaterThanOrEqual(
+        body.focus_areas[i - 1]!.health_score,
+      );
+    }
   });
 
   it('honours window=30d and window=mtd', async () => {

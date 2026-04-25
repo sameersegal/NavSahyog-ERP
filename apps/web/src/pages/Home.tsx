@@ -88,9 +88,15 @@ export function Home() {
         <MissionCard mission={data.mission} user={user} />
       )}
 
-      <FocusAreas areas={data.focus_areas} window={windowKey} />
+      <FocusAreas
+        areas={data.focus_areas}
+        window={windowKey}
+        variant={hasAnyWrite ? 'doer' : 'observer'}
+      />
 
-      {!hasAnyWrite && <CompareGridPlaceholder window={windowKey} />}
+      {!hasAnyWrite && data.focus_areas.length > 0 && (
+        <CompareAllLink window={windowKey} scope={data.scope} />
+      )}
 
       {canFab && <CaptureFab />}
     </div>
@@ -294,12 +300,21 @@ function MissionCard({
   );
 }
 
+type FocusArea = HomeResponse['focus_areas'][number];
+
+// Top-3 direct-child scopes ranked by Health Score ascending. Same
+// data either way; rendering is capability-shape:
+//   * doer    — compact row, action copy ("needs photos · 45%") to
+//               match the Mission framing.
+//   * observer — multi-KPI strip per row, comparison-shaped.
 function FocusAreas({
   areas,
   window: windowKey,
+  variant,
 }: {
-  areas: HomeResponse['focus_areas'];
+  areas: FocusArea[];
   window: HomeWindow;
+  variant: 'doer' | 'observer';
 }) {
   const { t } = useI18n();
   if (areas.length === 0) return null;
@@ -313,22 +328,11 @@ function FocusAreas({
           <li key={`${a.level}-${a.id}`}>
             <Link
               to={`/dashboard?scope=${scopeQueryString(a.level, a.id)}&window=${windowKey}`}
-              className="flex items-baseline justify-between gap-2 bg-card border border-border rounded-lg px-3 py-2.5 min-h-[44px] hover:bg-card-hover"
+              className="block bg-card border border-border rounded-lg px-3 py-2.5 min-h-[44px] hover:bg-card-hover"
             >
-              <div className="min-w-0">
-                <div className="font-medium truncate">{a.name}</div>
-                <div className="text-xs text-muted-fg">
-                  {t(`home.scope_level.${a.level}`)}
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-base font-semibold tabular-nums">
-                  {a.value}%
-                </div>
-                <div className="text-xs text-muted-fg">
-                  {t('home.focus.metric.attendance')}
-                </div>
-              </div>
+              {variant === 'doer'
+                ? <DoerFocusRow area={a} />
+                : <ObserverFocusRow area={a} />}
             </Link>
           </li>
         ))}
@@ -337,21 +341,108 @@ function FocusAreas({
   );
 }
 
-function CompareGridPlaceholder({ window: windowKey }: { window: HomeWindow }) {
+function DoerFocusRow({ area }: { area: FocusArea }) {
+  const { t } = useI18n();
+  // Action copy uses the dominant gap kind: "needs photos · 45%".
+  // Falls back to the Health Score with no qualifier when every KPI
+  // is at target (rare on Home but cheap to handle honestly).
+  const copy = area.dominant_gap_kind
+    ? t(`home.focus.gap.${area.dominant_gap_kind}`, {
+        value: pctValue(area, area.dominant_gap_kind),
+      })
+    : t('home.focus.no_gap');
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <div className="min-w-0">
+        <div className="font-medium truncate">{area.name}</div>
+        <div className="text-xs text-muted-fg truncate">{copy}</div>
+      </div>
+      <HealthScorePill score={area.health_score} />
+    </div>
+  );
+}
+
+function ObserverFocusRow({ area }: { area: FocusArea }) {
   const { t } = useI18n();
   return (
-    <section className="bg-card border border-dashed border-border rounded-lg p-4 space-y-2">
-      <h2 className="text-xs text-muted-fg uppercase tracking-wide">
-        {t('home.compare.title')}
-      </h2>
-      <p className="text-sm text-muted-fg">{t('home.compare.placeholder')}</p>
-      <Link
-        to={`/dashboard?window=${windowKey}`}
-        className="inline-block text-sm text-primary hover:underline"
-      >
-        {t('home.compare.cta_dashboard')}
-      </Link>
-    </section>
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium truncate">{area.name}</div>
+          <div className="text-xs text-muted-fg truncate">
+            {t(`home.scope_level.${area.level}`)}
+          </div>
+        </div>
+        <HealthScorePill score={area.health_score} />
+      </div>
+      {/* Four KPI tiles in one row. tabular-nums keeps the percent
+          column width even for "—%" so rows align across the list. */}
+      <dl className="grid grid-cols-4 gap-1 text-xs">
+        <KpiTile label={t('home.focus.kpi.attendance')} pct={area.attendance_pct} />
+        <KpiTile label={t('home.focus.kpi.image')}      pct={area.image_pct} />
+        <KpiTile label={t('home.focus.kpi.video')}      pct={area.video_pct} />
+        <KpiTile label={t('home.focus.kpi.som')}        pct={area.som_pct} />
+      </dl>
+    </div>
+  );
+}
+
+function KpiTile({ label, pct }: { label: string; pct: number | null }) {
+  return (
+    <div className="bg-card-hover/40 rounded px-1.5 py-1">
+      <dt className="text-[10px] uppercase tracking-wide text-muted-fg leading-tight">
+        {label}
+      </dt>
+      <dd className="text-sm font-medium tabular-nums leading-tight">
+        {pct === null ? '—' : `${pct}%`}
+      </dd>
+    </div>
+  );
+}
+
+function HealthScorePill({ score }: { score: number }) {
+  const tone =
+    score >= 80 ? 'bg-primary/15 text-primary border-primary/30'
+    : score >= 50 ? 'bg-card-hover text-fg border-border'
+    : 'bg-danger/10 text-danger border-danger/30';
+  return (
+    <span
+      className={`text-sm font-semibold tabular-nums px-2 py-0.5 rounded-full border shrink-0 ${tone}`}
+    >
+      {score}
+    </span>
+  );
+}
+
+function pctValue(area: FocusArea, kind: HomeMissionKind): number {
+  switch (kind) {
+    case 'attendance': return area.attendance_pct ?? 0;
+    case 'image':      return area.image_pct ?? 0;
+    case 'video':      return area.video_pct ?? 0;
+    case 'som':        return area.som_pct ?? 0;
+  }
+}
+
+// Single-line link that follows observer Focus Areas. Replaces the
+// pre-symmetric "Compare grid is in design" placeholder — the full
+// sibling-compare grid lives on /dashboard now (D19, revised). Scope
+// + preset preserved so the dashboard lands already filtered.
+function CompareAllLink({
+  window: windowKey,
+  scope,
+}: {
+  window: HomeWindow;
+  scope: HomeResponse['scope'];
+}) {
+  const { t } = useI18n();
+  const qs = `scope=${scopeQueryString(scope.level, scope.id)}&window=${windowKey}`;
+  return (
+    <Link
+      to={`/dashboard?${qs}`}
+      className="block text-sm text-primary hover:underline px-3 min-h-[44px] flex items-center"
+    >
+      {t('home.compare.cta_all')}
+    </Link>
   );
 }
 
