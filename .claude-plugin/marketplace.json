@@ -4,7 +4,10 @@
   "plugins": [
     {
       "name": "navsahyog-erp",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "sameersegal/NavSahyog-ERP"
+      },
       "description": "Donor-update skill backed by the NavSahyog ERP APIs"
     }
   ]
