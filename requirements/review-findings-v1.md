@@ -242,7 +242,7 @@ files link to it.
   opt-in by the uploader, attested by guardian). Update §5.8
   list/get responses to always return the flag. Remove the
   "assume shareable" language from §3.9.3 and the stand-in note
-  in `.claude/skills/donor-update/SKILL.md` once shipped.
+  in `skills/donor-update/SKILL.md` once shipped.
 - **Sequencing.** Low-risk to defer while donor engagement is a
   single-operator workflow with manual review. Must land before
   the capability in §2.3 extends to Cluster Admins or donors ever

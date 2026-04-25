@@ -5,7 +5,7 @@
   PNG preview.
 
   Usage:
-    node .claude/skills/donor-update/references/render.mjs \
+    node skills/donor-update/references/render.mjs \
       <data.json> [--theme=<name>] [--out=<dir>] [--keep-html]
 
   The theme (`quarterly` | `milestone` | `celebration`) determines

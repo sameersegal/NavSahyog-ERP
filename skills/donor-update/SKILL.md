@@ -12,8 +12,11 @@ engagement message the operator then reviews and sends.
 
 ## Files in this skill
 
-Everything lives under `.claude/skills/donor-update/`. Paths below
-are relative to that directory.
+Everything lives under this skill's own directory — `skills/donor-update/`
+in the repo, `~/.claude/plugins/cache/navsahyog/navsahyog-erp/skills/donor-update/`
+when installed via `/plugin install`. Paths below are relative to
+that directory; `$SKILL_DIR` in the shell snippets stands for whichever
+of those two it actually is.
 
 | File | Role | What the agent does with it |
 |---|---|---|
@@ -279,11 +282,11 @@ don't assemble a `quarterly`-shaped JSON for a `milestone` render.
    Download from the live API (uses the same `$NSF_API_BASE_URL`
    + `$NSF_BASIC` + cookie jar from "Setup"):
    ```
-   mkdir -p .claude/skills/donor-update/references/examples/<slug>/media
+   mkdir -p "$SKILL_DIR/references/examples/<slug>/media"
    for u in <uuid1> <uuid2> <uuid3>; do
      curl -sS -b /tmp/cookies.txt -u "$NSF_BASIC" \
        "$NSF_API_BASE_URL/api/media/raw/$u" \
-       -o .claude/skills/donor-update/references/examples/<slug>/media/$u
+       -o "$SKILL_DIR/references/examples/<slug>/media/$u"
    done
    ```
    If a fetched file is < 1 KiB it's probably a JSON error (or an
@@ -317,13 +320,13 @@ don't assemble a `quarterly`-shaped JSON for a `milestone` render.
      `closer.{quote,attribution}`.
 
 4. **Write the JSON** to
-   `.claude/skills/donor-update/references/examples/<slug>.json`.
+   `$SKILL_DIR/references/examples/<slug>.json`.
 
 5. **Invoke the renderer.** On most machines Playwright auto-finds
    its Chromium in `~/.cache/ms-playwright/` — just run:
    ```
-   node .claude/skills/donor-update/references/render.mjs \
-     .claude/skills/donor-update/references/examples/<slug>.json \
+   node "$SKILL_DIR/references/render.mjs" \
+     "$SKILL_DIR/references/examples/<slug>.json" \
      [--theme=<name>]
    ```
    Only if Playwright can't find Chromium (e.g. a sandboxed
