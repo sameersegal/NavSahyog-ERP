@@ -25,6 +25,8 @@ export type Capability =
   | 'media.read'
   | 'media.write'
   | 'qualification.write'
+  | 'training_manual.read'
+  | 'training_manual.write'
   | 'user.write'
   | 'dashboard.read';
 
@@ -38,6 +40,7 @@ const READ_ONLY: readonly Capability[] = [
   'attendance.read',
   'achievement.read',
   'media.read',
+  'training_manual.read',
   'dashboard.read',
 ];
 
@@ -59,6 +62,7 @@ const SUPER_ADMIN_ONLY: readonly Capability[] = [
   'school.write',
   'event.write',
   'qualification.write',
+  'training_manual.write',
   'user.write',
 ];
 

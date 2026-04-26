@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Achievements } from './pages/Achievements';
 import { Capture } from './pages/Capture';
 import { Masters } from './pages/Masters';
+import { TrainingManuals } from './pages/TrainingManuals';
 import { Shell } from './pages/Shell';
 import { can } from './api';
 
@@ -39,6 +40,7 @@ export function App() {
         <Route path="/capture" element={<Capture />} />
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/training-manuals" element={<TrainingManuals />} />
         {canMasters && <Route path="/masters" element={<Masters />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

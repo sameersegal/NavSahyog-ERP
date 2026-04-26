@@ -8,8 +8,13 @@ grid as primary block" framing; the grid lives more comfortably one
 tap away on `/dashboard`. **L3.1 Master Creations landed**: list +
 create + edit for villages, schools, events, qualifications, users,
 gated to Super Admin via five new write capabilities; closes
-review-findings H5 server-side. **L3.2 Profile** (§3.8.1) carved
-out as a follow-on slice — read-only screen, no schema changes.
+review-findings H5 server-side. **L3.1.1 Training manuals (§3.8.8)
+added on top**: read-only catalogue at `/training-manuals` for every
+authenticated role + a sixth Super-Admin tab in Master Creations
+for CRUD; new `training_manual.read` cap (universal) and
+`training_manual.write` cap (Super Admin only). **L3.2 Profile**
+(§3.8.1) carved out as a follow-on slice — read-only screen, no
+schema changes.
 
 ## Sub-levels
 
@@ -18,6 +23,7 @@ out as a follow-on slice — read-only screen, no schema changes.
 | L3.0 | §3.6.4 Field-Dashboard Home — doer branch | landed (PR #40) |
 | L3.0b | §3.6.4 Field-Dashboard Home — observer branch | in flight |
 | L3.1 | §3.8.7 Master Creations — villages, schools, events / activities, qualifications, users (D21–D24); list + create + edit, soft-delete deferred | landed |
+| L3.1.1 | §3.8.8 Training manuals — read-only `/training-manuals` for every role + Master Creations tab for Super Admin CRUD | landed |
 | L3.2 | §3.8.1 Profile — read-only page | carved out, not started |
 
 ## Goal
@@ -105,6 +111,18 @@ and §5. The in-menu language toggle already ships with L2.5.
 8. A non-Super-Admin issuing any `POST /api/<master>` (or any of
    the `GET /admin` list endpoints) gets 403 from `requireCap`,
    not from a route-internal role check.
+
+**L3.1.1 — Training manuals:**
+
+8a. A VC opens `/training-manuals` and sees the catalogue grouped
+    by category, with each title rendering as a link that opens
+    in a new tab.
+8b. A Super Admin creates a manual from the Training manuals tab
+    in Master Creations; the row appears immediately on the
+    read-only page for any logged-in role.
+8c. A non-Super-Admin issuing `POST /api/training-manuals` is
+    rejected with 403 from `requireCap`. Patching bumps
+    `updated_at`.
 
 **L3.2 — Profile:**
 

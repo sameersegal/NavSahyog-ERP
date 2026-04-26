@@ -41,6 +41,8 @@ within the user's effective scope; `—` = denied.
 | CSV export | — | ✔ | ✔ | ✔ | ✔ |
 | Manage users | — | — | ✔ | ✔ | ✔ |
 | Master CRUD (villages, schools, events…) | — | — | ✔ | ✔ | ✔ |
+| Read training manuals (§3.8.8) | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Manage training manuals (§3.8.8) | — | — | — | — | ✔ |
 | Donor update (draft) — §3.9 | — | — | — | — | ✔ |
 
 **Acceptance:** every write endpoint enforces scope server-side from
