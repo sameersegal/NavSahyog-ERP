@@ -10,6 +10,9 @@ create + edit for villages, schools, events, qualifications, users,
 gated to Super Admin via five new write capabilities; closes
 review-findings H5 server-side. **L3.2 Profile** (§3.8.1) carved
 out as a follow-on slice — read-only screen, no schema changes.
+**L3.3 Jal Vriddhi pond + agreement form (§3.10) in flight**:
+first non-child-development workflow, three new tables, two new
+capabilities (`pond.read`, `pond.write`); decisions.md D25–D28.
 
 ## Sub-levels
 
@@ -19,6 +22,7 @@ out as a follow-on slice — read-only screen, no schema changes.
 | L3.0b | §3.6.4 Field-Dashboard Home — observer branch | in flight |
 | L3.1 | §3.8.7 Master Creations — villages, schools, events / activities, qualifications, users (D21–D24); list + create + edit, soft-delete deferred | landed |
 | L3.2 | §3.8.1 Profile — read-only page | carved out, not started |
+| L3.3 | §3.10 Jal Vriddhi — farmer + pond + append-only agreement versions; first non-child-development workflow (D25–D28) | in flight |
 
 ## Goal
 
@@ -57,6 +61,16 @@ as the default `/` for every authenticated user.
   ID, date of joining, role, assigned geo scope, with a "Report
   an error" mailto link to the user's AF. Carved out of L3.1 to
   keep that slice focused on the master CRUD surface.
+- **L3.3 — Jal Vriddhi pond + agreement (§3.10).** First
+  non-child-development workflow. Three new tables (`farmer`,
+  `pond`, `pond_agreement_version`) under §4.3.10. Two new
+  capabilities (`pond.read` for everyone, `pond.write` for
+  VC / AF / Cluster / Super) wired into the existing
+  `requireCap(...)` middleware. Form captures farmer details + GPS
+  + an agreement scan (PDF / JPEG / PNG, 25 MiB cap). Re-uploads
+  append a new version row — the agreement file is critical info
+  so we never overwrite. Online-only; not in the §6.1 offline
+  scope. See decisions.md D25–D28.
 
 ## Cancelled (decisions.md D15)
 
@@ -110,6 +124,21 @@ and §5. The in-menu language toggle already ships with L2.5.
 
 9. A VC opens their own Profile page and sees name, role,
    joined-at, and assigned geo scope.
+
+**L3.3 — Jal Vriddhi pond + agreement:**
+
+10. A VC fills the new-pond form (farmer name, optional phone +
+    plot, GPS via "Use my location" or manual entry, status, an
+    agreement PDF) and lands on the detail page with version 1
+    visible.
+11. The same VC re-uploads a newer agreement on the detail page
+    with a one-line "what changed" note; the version count goes
+    from 1 to 2 and the older version is still downloadable.
+12. A District Admin opens `/ponds` and sees every pond in scope
+    with its latest version count, but the "Add pond" CTA is
+    hidden (no `pond.write`). A direct POST to `/api/ponds`
+    returns 403 from `requireCap` — not from a route-internal
+    role check.
 
 **Removed / superseded acceptance:**
 

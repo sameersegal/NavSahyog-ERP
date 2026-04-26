@@ -14,6 +14,7 @@ import streaks from './routes/streaks';
 import geo from './routes/geo';
 import qualifications from './routes/qualifications';
 import users from './routes/users';
+import ponds from './routes/ponds';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
 
@@ -39,6 +40,9 @@ app.use('*', async (c, next) => {
   const path = new URL(c.req.url).pathname;
   if (path === '/health') return next();
   if (path.startsWith('/api/media/upload/')) return next();
+  // Same carve-out for the agreement upload endpoint — already
+  // token-gated by the HMAC in the query string.
+  if (path.startsWith('/api/ponds/agreements/upload/')) return next();
 
   const header = c.req.header('authorization') ?? '';
   const match = /^Basic (.+)$/i.exec(header);
@@ -106,6 +110,7 @@ app.route('/api/streaks', streaks);
 app.route('/api/geo', geo);
 app.route('/api/qualifications', qualifications);
 app.route('/api/users', users);
+app.route('/api/ponds', ponds);
 
 app.onError((e, c) => {
   console.error(e);

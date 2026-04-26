@@ -24,6 +24,17 @@ export type {
   MediaWithUrls,
   DashboardMetric,
   GeoLevel,
+  Farmer,
+  Pond,
+  PondStatus,
+  PondAgreementVersion,
+  PondListItem,
+  PondDetail,
+  AgreementPresignRequest,
+  AgreementPresignResponse,
+  AgreementCommitRef,
+  CreatePondRequest,
+  AppendAgreementRequest,
 } from '@navsahyog/shared';
 export type {
   BreadcrumbCrumb,
@@ -44,14 +55,22 @@ export {
   GEO_LEVELS,
   isDashboardMetric,
   isGeoLevel,
+  POND_STATUSES,
+  isPondStatus,
+  AGREEMENT_MIMES,
+  AGREEMENT_MAX_BYTES,
 } from '@navsahyog/shared';
 
 import type {
   AchievementType,
   AchievementWithStudent,
+  AgreementPresignRequest,
+  AgreementPresignResponse,
+  AppendAgreementRequest,
   AttendanceMark,
   AttendanceSessionWithMarks,
   AuthUser,
+  CreatePondRequest,
   DashboardMetric,
   Event,
   GeoLevel,
@@ -59,6 +78,8 @@ import type {
   InsightsResponse,
   MediaKind,
   MediaWithUrls,
+  PondDetail,
+  PondListItem,
   StreakResponse,
   Student,
 } from '@navsahyog/shared';
@@ -433,6 +454,31 @@ export const api = {
       body: JSON.stringify(body),
     }),
   geoAll: () => req<{ levels: GeoLevels }>('/api/geo/all'),
+  // Jal Vriddhi pond agreements (§3.10).
+  ponds: (opts: { village_id?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.village_id) qs.set('village_id', String(opts.village_id));
+    const suffix = qs.toString();
+    return req<{ ponds: PondListItem[] }>(
+      `/api/ponds${suffix ? `?${suffix}` : ''}`,
+    );
+  },
+  pond: (id: number) => req<{ pond: PondDetail }>(`/api/ponds/${id}`),
+  presignAgreement: (body: AgreementPresignRequest) =>
+    req<AgreementPresignResponse>('/api/ponds/agreements/presign', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  createPond: (body: CreatePondRequest) =>
+    req<{ pond: PondDetail }>('/api/ponds', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  appendAgreement: (pondId: number, body: AppendAgreementRequest) =>
+    req<{ pond: PondDetail }>(`/api/ponds/${pondId}/agreements`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };
 
 export type GeoSearchHit = {

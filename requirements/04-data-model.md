@@ -230,6 +230,56 @@ bespoke equivalent. Runtime tunables (session TTL, OTP TTL, default
 language) live in Worker env vars; retention timelines are
 handled out-of-system (see §9.3, decisions.md D1/D4).
 
+#### 4.3.10 Jal Vriddhi (pond + agreement)
+
+Numbered out of source-order so Audit (§4.3.9) keeps its existing
+cross-references. Added by migration `0009_pond_agreement.sql` for
+§3.10. Three tables, separate from the child-development surface.
+
+**`farmer`** — the partner on whose plot a pond is created.
+- `id INTEGER PRIMARY KEY`
+- `village_id INTEGER NOT NULL REFERENCES village(id)` — scope
+  anchor; a farmer is village-bound today (one VC owns).
+- `full_name TEXT NOT NULL`
+- `phone TEXT` — canonical `+91XXXXXXXXXX`, NULL if not collected.
+- `plot_identifier TEXT` — free text (e.g. "Survey No. 42/3").
+- *audit columns* + `deleted_at`, `deleted_by` for soft delete.
+
+**`pond`** — the physical asset.
+- `id`, `farmer_id REFERENCES farmer(id)`
+- `village_id INTEGER NOT NULL REFERENCES village(id)` —
+  denormalised from `farmer.village_id` for cheap scope filters;
+  app keeps the two in sync.
+- `latitude REAL NOT NULL`, `longitude REAL NOT NULL`
+- `status TEXT NOT NULL CHECK (status IN
+  ('planned','dug','active','inactive')) DEFAULT 'planned'`
+- `notes TEXT` — free text, max 500 chars (app-enforced).
+- *audit columns* + soft-delete pair.
+
+**`pond_agreement_version`** — append-only audit trail.
+- `id`, `pond_id REFERENCES pond(id)`
+- `version INTEGER NOT NULL` — monotonic per pond, starting at 1;
+  unique with `pond_id`.
+- `uuid TEXT NOT NULL UNIQUE` — UUIDv4, also tail of R2 key.
+- `r2_key TEXT NOT NULL UNIQUE` — bytes live in R2 at
+  `agreement/{yyyy}/{mm}/{village_id}/{uuid}.{ext}`.
+- `mime TEXT NOT NULL` — one of `application/pdf`, `image/jpeg`,
+  `image/png`. App-enforced; not a CHECK constraint so the
+  allow-list can evolve without a migration.
+- `bytes INTEGER NOT NULL CHECK (bytes > 0)` — 25 MiB cap
+  app-enforced.
+- `original_filename TEXT` — as supplied by the client.
+- `notes TEXT` — "what changed" note, max 200 chars
+  (app-enforced).
+- `uploaded_at INTEGER NOT NULL`,
+  `uploaded_by INTEGER NOT NULL REFERENCES user(id)`.
+- No update, no delete. The "current" agreement is
+  `MAX(version) WHERE pond_id = ?`.
+
+Indexes: `farmer(village_id, deleted_at)`, `pond(farmer_id)`,
+`pond(village_id, deleted_at)`, `pond(created_at)`,
+`pond_agreement_version(pond_id, version)`.
+
 #### 4.3.9 Audit
 
 **`audit_log`** — append-only (§9.4).
@@ -249,7 +299,9 @@ handled out-of-system (see §9.3, decisions.md D1/D4).
 
 ### 4.4 Summary
 
-- **17 tables** in the bespoke schema (vendor had 35).
+- **20 tables** in the bespoke schema (vendor had 35) — three
+  added in §4.3.10 for Jal Vriddhi (`farmer`, `pond`,
+  `pond_agreement_version`).
 - Removed: `ngo_features`, `role_permission`, `teacher_roles`,
   `teacher_roles_assign`, `country`, `territory`, `taluk`,
   `MembershipType`, `village_pgm_status`, `student_pgm_status`,
