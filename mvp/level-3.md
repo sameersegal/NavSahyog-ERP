@@ -1,14 +1,15 @@
 # Level 3 — Master CRUD + Profile + Field-Dashboard Home
 
 **Status:** in flight. L3.0 landed (PR #40): §3.6.4 Field-Dashboard
-Home, doer branch end-to-end. L3.0b in flight: observer Home —
+Home, doer branch end-to-end. L3.0b landed (PR #44): observer Home —
 symmetric shape with multi-KPI Focus Areas + Compare-all link to
 `/dashboard`. D19 amended to drop the original "full sibling-compare
 grid as primary block" framing; the grid lives more comfortably one
-tap away on `/dashboard`. **L3.1 Master Creations** scoped (D21–D24)
-and ready to start; **L3.2 Profile** (§3.8.1) carved out as a
-follow-on slice — read-only screen, no schema changes, ships once
-L3.1 lands.
+tap away on `/dashboard`. **L3.1 Master Creations landed**: list +
+create + edit for villages, schools, events, qualifications, users,
+gated to Super Admin via five new write capabilities; closes
+review-findings H5 server-side. **L3.2 Profile** (§3.8.1) carved
+out as a follow-on slice — read-only screen, no schema changes.
 
 ## Sub-levels
 
@@ -16,7 +17,7 @@ L3.1 lands.
 |---|---|---|
 | L3.0 | §3.6.4 Field-Dashboard Home — doer branch | landed (PR #40) |
 | L3.0b | §3.6.4 Field-Dashboard Home — observer branch | in flight |
-| L3.1 | §3.8.7 Master Creations — villages, schools, events / activities, qualifications, users (D21–D24) | scoped, not started |
+| L3.1 | §3.8.7 Master Creations — villages, schools, events / activities, qualifications, users (D21–D24); list + create + edit, soft-delete deferred | landed |
 | L3.2 | §3.8.1 Profile — read-only page | carved out, not started |
 
 ## Goal
@@ -98,11 +99,12 @@ and §5. The in-menu language toggle already ships with L2.5.
    a PATCH to flip `kind` to `event` after a media or attendance
    row references it — the request fails with 409 and the form
    read-disables the field for the same condition.
-7. Super Admin creates a user with role=VC, scope=`village:<uuid>`;
-   that user can log in and lands on the doer Home.
-8. A non-Super-Admin issuing any `POST /api/<master>` (or PATCH /
-   soft-delete) gets 403 from `requireCap`, not from a route-
-   internal role check.
+7. Super Admin creates a user with role=VC, scope_id=`<village>`;
+   that user can log in with the lab default password and lands
+   on the doer Home. (No password field on the form — D24 / Clerk.)
+8. A non-Super-Admin issuing any `POST /api/<master>` (or any of
+   the `GET /admin` list endpoints) gets 403 from `requireCap`,
+   not from a route-internal role check.
 
 **L3.2 — Profile:**
 
