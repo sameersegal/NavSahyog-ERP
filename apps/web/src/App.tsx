@@ -6,7 +6,9 @@ import { Village } from './pages/Village';
 import { Dashboard } from './pages/Dashboard';
 import { Achievements } from './pages/Achievements';
 import { Capture } from './pages/Capture';
+import { Masters } from './pages/Masters';
 import { Shell } from './pages/Shell';
+import { can } from './api';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -25,6 +27,10 @@ export function App() {
       </Routes>
     );
   }
+  // L3.1 Master Creations is Super-Admin only (via `user.write` cap).
+  // Non-admins reaching `/masters` get bounced back to the Home —
+  // the route is also hidden from the nav for the same audience.
+  const canMasters = can(user, 'user.write');
   return (
     <Shell>
       <Routes>
@@ -33,6 +39,7 @@ export function App() {
         <Route path="/capture" element={<Capture />} />
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        {canMasters && <Route path="/masters" element={<Masters />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

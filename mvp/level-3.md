@@ -1,12 +1,24 @@
 # Level 3 — Master CRUD + Profile + Field-Dashboard Home
 
 **Status:** in flight. L3.0 landed (PR #40): §3.6.4 Field-Dashboard
-Home, doer branch end-to-end. L3.0b in flight: observer Home —
+Home, doer branch end-to-end. L3.0b landed (PR #44): observer Home —
 symmetric shape with multi-KPI Focus Areas + Compare-all link to
 `/dashboard`. D19 amended to drop the original "full sibling-compare
 grid as primary block" framing; the grid lives more comfortably one
-tap away on `/dashboard`. §3.8.1 Profile and §3.8.7 Master Creations
-remain unstarted.
+tap away on `/dashboard`. **L3.1 Master Creations landed**: list +
+create + edit for villages, schools, events, qualifications, users,
+gated to Super Admin via five new write capabilities; closes
+review-findings H5 server-side. **L3.2 Profile** (§3.8.1) carved
+out as a follow-on slice — read-only screen, no schema changes.
+
+## Sub-levels
+
+| Sub | Scope | Status |
+|---|---|---|
+| L3.0 | §3.6.4 Field-Dashboard Home — doer branch | landed (PR #40) |
+| L3.0b | §3.6.4 Field-Dashboard Home — observer branch | in flight |
+| L3.1 | §3.8.7 Master Creations — villages, schools, events / activities, qualifications, users (D21–D24); list + create + edit, soft-delete deferred | landed |
+| L3.2 | §3.8.1 Profile — read-only page | carved out, not started |
 
 ## Goal
 
@@ -18,21 +30,33 @@ as the default `/` for every authenticated user.
 
 ## In scope
 
-- **Field-Dashboard Home (§3.6.4).** New default `/` for every
-  role. Capability-gated composition: doer roles (any `.write`
-  cap) see Greeting + Health Score + Today's Mission + Focus
-  Areas + Capture FAB; observer roles (read-only) see Greeting +
-  Health Score + Focus Areas (multi-KPI rows) + Compare-all link
-  to `/dashboard`. Time filter is presets only (7D / 30D / MTD);
-  custom range stays on `/dashboard`. See decisions.md D17–D20.
-- **Master Creations (§3.8.7).** Super Admin screens for:
-  villages, schools, events / activities, users, qualifications.
-  Each screen is dedicated (not a generic table editor). No "app
-  settings" screen — `app_settings` was removed in L2.0
-  (decisions.md D1); retention is out-of-system.
-- **Profile (§3.8.1).** Read-only page showing name, user ID,
-  date of joining, role, assigned geo scope, with a "Report an
-  error" mailto link to the user's AF.
+- **L3.0 / L3.0b — Field-Dashboard Home (§3.6.4).** New default
+  `/` for every role. Capability-gated composition: doer roles
+  (any `.write` cap) see Greeting + Health Score + Today's
+  Mission + Focus Areas + Capture FAB; observer roles (read-only)
+  see Greeting + Health Score + Focus Areas (multi-KPI rows) +
+  Compare-all link to `/dashboard`. Time filter is presets only
+  (7D / 30D / MTD); custom range stays on `/dashboard`. See
+  decisions.md D17–D20.
+- **L3.1 — Master Creations (§3.8.7).** Super Admin screens for:
+  villages, schools, events / activities, qualifications, users.
+  Each screen is dedicated (not a generic table editor). Five new
+  write capabilities (`village.write`, `school.write`,
+  `event.write`, `qualification.write`, `user.write`) added to
+  `apps/api/src/policy.ts`, granted only to Super Admin per the
+  §2.3 matrix; routes gate via `requireCap(...)`. Soft-delete
+  via `deleted_at` is the only delete primitive. `event.kind`
+  immutability (review-findings H5) enforced server-side. User
+  passwords stay plain-text (L1/L2 seed parity); L5 sweep
+  replaces both. **No schema changes** — every master already
+  has its row in `db/`. No "app settings" screen —
+  `app_settings` was removed in L2.0 (decisions.md D1); retention
+  is out-of-system. No "roles" master — roles are hardcoded in
+  `policy.ts`. See decisions.md D21–D24.
+- **L3.2 — Profile (§3.8.1).** Read-only page showing name, user
+  ID, date of joining, role, assigned geo scope, with a "Report
+  an error" mailto link to the user's AF. Carved out of L3.1 to
+  keep that slice focused on the master CRUD surface.
 
 ## Cancelled (decisions.md D15)
 
@@ -54,25 +78,48 @@ and §5. The in-menu language toggle already ships with L2.5.
 
 ## Acceptance
 
-1. Super Admin can create a new village through Master Creations
-   and it appears immediately in the VC / AF village picker.
-2. A VC can open their own Profile page and see name, role,
-   joined-at, and assigned geo scope.
-3. A VC lands on `/` (not `/village/:id`) and sees Health Score +
+**L3.0 / L3.0b — Home:**
+
+1. A VC lands on `/` (not `/village/:id`) and sees Health Score +
    Today's Mission + Focus Areas + Capture FAB.
-4. A State Admin lands on `/` and sees Health Score + Focus Areas
+2. A State Admin lands on `/` and sees Health Score + Focus Areas
    (multi-KPI rows over their direct-child scopes) + a Compare-all
    link to `/dashboard`; no Mission card, no FAB.
-5. Switching the Home time preset (7D / 30D / MTD) issues exactly
+3. Switching the Home time preset (7D / 30D / MTD) issues exactly
    one `/api/dashboard/home` fetch and refreshes all blocks
    consistently.
-6. *(App-settings acceptance criterion removed — see decisions.md
-   D1. Retention is out-of-system; there is no in-app knob.)*
-7. *(Consolidated-dashboard acceptance moved to L2.5.3 — see
-   decisions.md D12. §3.6.2 now lives inside the drill-down
-   dashboard, not a separate L3 screen.)*
-8. *(Notice / About / References / Quick / Language-switcher
-   acceptance removed — cancelled in decisions.md D15.)*
+
+**L3.1 — Master Creations:**
+
+4. Super Admin creates a new village through Master Creations and
+   it appears immediately in the VC / AF village picker.
+5. Super Admin creates a school under that village; it appears in
+   the school picker for child registration.
+6. Super Admin creates an event with `kind=activity`, then attempts
+   a PATCH to flip `kind` to `event` after a media or attendance
+   row references it — the request fails with 409 and the form
+   read-disables the field for the same condition.
+7. Super Admin creates a user with role=VC, scope_id=`<village>`;
+   that user can log in with the lab default password and lands
+   on the doer Home. (No password field on the form — D24 / Clerk.)
+8. A non-Super-Admin issuing any `POST /api/<master>` (or any of
+   the `GET /admin` list endpoints) gets 403 from `requireCap`,
+   not from a route-internal role check.
+
+**L3.2 — Profile:**
+
+9. A VC opens their own Profile page and sees name, role,
+   joined-at, and assigned geo scope.
+
+**Removed / superseded acceptance:**
+
+10. *(App-settings acceptance criterion removed — see decisions.md
+    D1. Retention is out-of-system; there is no in-app knob.)*
+11. *(Consolidated-dashboard acceptance moved to L2.5.3 — see
+    decisions.md D12. §3.6.2 now lives inside the drill-down
+    dashboard, not a separate L3 screen.)*
+12. *(Notice / About / References / Quick / Language-switcher
+    acceptance removed — cancelled in decisions.md D15.)*
 
 ## Notes
 

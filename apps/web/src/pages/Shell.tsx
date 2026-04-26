@@ -15,6 +15,9 @@ export function Shell({ children }: { children: ReactNode }) {
   // activities. Read-only district+ admins don't log sessions
   // themselves, so there's nothing to streak on.
   const canLog = can(user, 'attendance.write');
+  // Masters tab is Super-Admin only (decisions.md D22). `user.write`
+  // is in the SUPER_ADMIN_ONLY set, so checking it here is enough.
+  const canMasters = can(user, 'user.write');
 
   useEffect(() => {
     if (!canLog) {
@@ -55,6 +58,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <NavLink to="/dashboard" active={pathname === '/dashboard'}>
               {t('nav.dashboard')}
             </NavLink>
+            {canMasters && (
+              <NavLink to="/masters" active={pathname === '/masters'}>
+                {t('nav.masters')}
+              </NavLink>
+            )}
           </nav>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {streak && streak.current_streak_days > 0 && (

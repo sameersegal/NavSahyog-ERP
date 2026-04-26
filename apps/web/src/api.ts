@@ -74,6 +74,57 @@ export type Village = {
 
 export type School = { id: number; village_id: number; name: string };
 
+// L3.1 Master Creations wire shapes (decisions.md D21–D24).
+export type AdminVillage = {
+  id: number;
+  name: string;
+  code: string;
+  cluster_id: number;
+};
+
+export type AdminSchool = {
+  id: number;
+  name: string;
+  village_id: number;
+  village_name: string;
+};
+
+export type AdminEvent = {
+  id: number;
+  name: string;
+  kind: 'event' | 'activity';
+  description: string | null;
+  reference_count: number;
+  // 1 once any media/attendance row references the event — server
+  // freezes `kind` at that point (review-findings H5).
+  kind_locked: 0 | 1;
+};
+
+export type Qualification = {
+  id: number;
+  name: string;
+  description: string | null;
+};
+
+export type AdminUser = {
+  id: number;
+  user_id: string;
+  full_name: string;
+  role: import('@navsahyog/shared').Role;
+  scope_level: import('@navsahyog/shared').ScopeLevel;
+  scope_id: number | null;
+  scope_name: string | null;
+};
+
+export type GeoLevels = {
+  zone: Array<{ id: number; name: string }>;
+  state: Array<{ id: number; name: string }>;
+  region: Array<{ id: number; name: string }>;
+  district: Array<{ id: number; name: string }>;
+  cluster: Array<{ id: number; name: string }>;
+  village: Array<{ id: number; name: string }>;
+};
+
 // Wire shape accepted by POST / PATCH /api/children for the
 // parent + alt-contact block. Null omits; server treats all fields
 // as nullable. Booleans are coerced to 0/1 server-side.
@@ -291,6 +342,97 @@ export const api = {
       `/api/geo/siblings?${qs.toString()}`,
     );
   },
+  // L3.1 Master Creations — admin endpoints. Each list returns the
+  // full table (no scope filter) and each write is gated server-side
+  // on the corresponding `*.write` capability.
+  adminVillages: () =>
+    req<{ villages: AdminVillage[] }>('/api/villages/admin'),
+  createVillage: (body: { name: string; code: string; cluster_id: number }) =>
+    req<{ village: AdminVillage }>('/api/villages', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateVillage: (
+    id: number,
+    body: { name?: string; code?: string; cluster_id?: number },
+  ) =>
+    req<{ village: AdminVillage }>(`/api/villages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  adminSchools: () => req<{ schools: AdminSchool[] }>('/api/schools/admin'),
+  createSchool: (body: { name: string; village_id: number }) =>
+    req<{ school: AdminSchool }>('/api/schools', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateSchool: (id: number, body: { name?: string; village_id?: number }) =>
+    req<{ school: AdminSchool }>(`/api/schools/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  adminEvents: () => req<{ events: AdminEvent[] }>('/api/events/admin'),
+  createEvent: (body: {
+    name: string;
+    kind: 'event' | 'activity';
+    description?: string | null;
+  }) =>
+    req<{ event: AdminEvent }>('/api/events', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateEvent: (
+    id: number,
+    body: {
+      name?: string;
+      kind?: 'event' | 'activity';
+      description?: string | null;
+    },
+  ) =>
+    req<{ event: AdminEvent }>(`/api/events/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  qualifications: () =>
+    req<{ qualifications: Qualification[] }>('/api/qualifications'),
+  createQualification: (body: { name: string; description?: string | null }) =>
+    req<{ qualification: Qualification }>('/api/qualifications', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateQualification: (
+    id: number,
+    body: { name?: string; description?: string | null },
+  ) =>
+    req<{ qualification: Qualification }>(`/api/qualifications/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  adminUsers: () => req<{ users: AdminUser[] }>('/api/users'),
+  createUser: (body: {
+    user_id: string;
+    full_name: string;
+    role: import('@navsahyog/shared').Role;
+    scope_id?: number | null;
+  }) =>
+    req<{ user: AdminUser }>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateUser: (
+    id: number,
+    body: {
+      user_id?: string;
+      full_name?: string;
+      role?: import('@navsahyog/shared').Role;
+      scope_id?: number | null;
+    },
+  ) =>
+    req<{ user: AdminUser }>(`/api/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  geoAll: () => req<{ levels: GeoLevels }>('/api/geo/all'),
 };
 
 export type GeoSearchHit = {

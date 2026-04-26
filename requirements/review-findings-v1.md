@@ -148,15 +148,20 @@ follow-up addendum PR — don't edit the spec during the meeting.
   comms to each AF. Keep onboarding doc wording accurate by issuing
   updated training materials before wave 1.
 
-### H5 — Event ↔ Activity merge: semantic parity, not just schema parity
+### H5 — Event ↔ Activity merge: semantic parity, not just schema parity *(closed by D23, L3.1)*
 - §4.3.4 merges both into a single `event` row with `kind`.
 - §3.4.2 keeps the two pickers in UI, mapped by `kind`.
-- The concern: if an admin changes `event.kind` from `activity` to
-  `event` (or vice versa) mid-year, previously tagged media and
+- The concern was: if an admin changes `event.kind` from `activity`
+  to `event` (or vice versa) mid-year, previously tagged media and
   attendance rows silently change category.
-- **Fix.** Add to §4.3.4: _"`event.kind` is immutable once the row
-  has any referencing media or attendance. Changing it requires
-  Super Admin to create a replacement row and re-tag."_
+- **Resolved.** L3.1 ships the server-side enforcement
+  (decisions.md D23). PATCH `/api/events/:id` rejects a `kind`
+  change with `409 event.kind frozen — has N referencing rows`
+  once any media or attendance row references the event; the
+  admin list returns a derived `kind_locked` flag the UI uses to
+  read-disable the dropdown. Test in
+  `apps/api/test/masters.test.ts` ("PATCH freezes kind once an
+  attendance session references the event").
 
 ---
 

@@ -9,6 +9,49 @@ justification.
 
 ---
 
+## 2026-04-26 — L3.1 Master Creations scope + delivery
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D21 | **L3.1 ships Master Creations as a single slice covering five masters: villages, schools, events / activities, qualifications, users — list + create + edit only, no soft-delete.** One dedicated screen per master, surfaced as five tabs on `/masters` (not a generic table editor, restated from §3.8.7 so it isn't relitigated). The five share enough scaffolding — `requireCap(...)` gates, list / create / edit form shape — that splitting them buys two rounds of the same review without buying isolation. **Soft-delete is carved out of L3.1**: the existing schema has no `deleted_at` on village / school / event / qualification / user, and adding it would be a 5-table migration + 5 SELECT updates + 5 confirm-dialog UIs, well beyond "list + create + edit". Delete lives in a follow-on slice (call it L3.1.5) once a real workflow needs it. Profile (§3.8.1) is **not** in this slice; it lands as L3.2. "Roles" is **not** a master in this slice — roles are hardcoded in `apps/api/src/policy.ts` per CLAUDE.md, so a creation surface would be dead UI. A read-only "roles & capabilities" reference page can land later if it earns its keep. No bulk import / CSV upload — out of §3.8.7 scope; add only when a real onboarding workflow demands it. **One schema change**: a new `qualification` table (migration `0008_qualification.sql`) — none of the other four masters needed schema changes. | `mvp/level-3.md` "Master Creations + Profile" combined scope (re-sliced for delivery — Profile carved out, Master Creations isolated). Earlier draft that promised soft-delete in this slice (carved out at implementation time once the migration cost was clear). |
+| D22 | **Five new write capabilities land in `packages/shared/src/capabilities.ts`: `village.write`, `school.write`, `event.write`, `qualification.write`, `user.write` — granted only to Super Admin per the §2.3 matrix.** Read caps stay broad for the three masters with non-admin consumers (villages / schools / events — dashboards and pickers); for `qualification` and `user` the list endpoints are gated on `*.write` because no non-admin consumer exists yet. The capability matrix lives in `@navsahyog/shared`, not `apps/api/src/policy.ts` — the latter just wires the matrix into a Hono middleware (`requireCap`). Non-Super-Admin POST/PATCH/list-admin returns 403 from the gate, not from a route-internal role check. This closes B3's "structurally read-only via the policy layer" promise for the write side too. | Any earlier framing that put the matrix in `policy.ts` (it's been in `@navsahyog/shared` since L2.0 — D22 just enumerates the five new caps). |
+| D23 | **`event.kind` immutability (review-findings H5) is enforced server-side by the L3.1 PATCH route, not just UI-disabled. Closes H5.** PATCH `/api/events/:id` rejects a `kind` change with `409 event.kind frozen — has N referencing rows` once any media (`media.tag_event_id`) or attendance (`attendance_session.event_id`) row references the event. The admin list response carries a derived `kind_locked: 0|1` field; the form reads it and read-disables the kind dropdown when the row is locked. Name + description stay editable regardless. The L3.1 test suite covers both the lock (POST attendance against event 3 → PATCH kind → 409) and the editable surface (PATCH name + description while locked → 200). | H5's open state in `review-findings-v1.md`. |
+| D24 | **L3.1 user-create has no password field. Server defaults `users.password` to the lab string `'password'` so newly-created users can log in immediately, matching the L1/L2 seed.** Auth moves to Clerk in L5; introducing a bring-your-own-password surface here would be ripped out wholesale at that point and would also leak an inconsistent partial security posture (some passwords operator-set, some `'password'` from the seed, none hashed). The form carries a one-line note explaining the L5 plan. The `password` column itself stays in the schema until Clerk lands; L5 then either drops it or repurposes it for the Clerk user_id. | Earlier draft of D24 that exposed a plain-text password field on the create form. The decision flipped once Clerk was confirmed as the L5 auth path. |
+
+### What the implementation PR ships (lands with this commit)
+
+- **Schema:** `db/migrations/0008_qualification.sql` — new `qualification` table (id, name UNIQUE, description, created_at, created_by). `db/seed.sql` adds `DELETE FROM qualification` to the reset block in FK-topology order.
+- **Capabilities:** `packages/shared/src/capabilities.ts` adds the five `*.write` caps, plus a `SUPER_ADMIN_ONLY` array layered onto the super_admin row.
+- **API routes:**
+  - `villages.ts` — adds `GET /admin`, `POST /`, `PATCH /:id`. Existing `GET /` (scope-filtered for non-admins) is unchanged.
+  - `schools.ts` — adds `GET /admin`, `POST /`, `PATCH /:id`. Existing per-village `GET /` unchanged.
+  - `events.ts` — adds `GET /admin` (returns `reference_count` + `kind_locked`), `POST /`, `PATCH /:id` (enforces D23).
+  - `qualifications.ts` — new file: `GET /`, `POST /`, `PATCH /:id` (all gated on `qualification.write`).
+  - `users.ts` — new file: `GET /` (all users, scope_name resolved via CASE-WHEN), `POST /` (no password in body, server defaults to `'password'`), `PATCH /:id` (role change resets the scope_id requirement).
+  - `geo.ts` — adds `GET /all` (admin-only geo dump for the user-create scope picker).
+  - `index.ts` — wires `qualifications` and `users` route trees.
+- **Tests:** `apps/api/test/masters.test.ts` — 30 new tests covering POST/PATCH happy paths, capability-gate 403s, duplicate-key 409s, `event.kind` immutability (closes H5), and the user-create lab-password round-trip (created user logs in with `'password'`).
+- **UI:** `apps/web/src/pages/Masters.tsx` — single page, five tabs, list + inline create/edit form per master. `Shell.tsx` gains a Masters nav link gated on `user.write`. `App.tsx` gates the `/masters` route on `user.write` so non-admins can't bookmark in. `apps/web/src/api.ts` gains the wire shapes + client functions for every endpoint above.
+- **i18n:** `master.*` namespace added to all four catalogs (en + hi + kn + ta), plus `nav.masters`. `scripts/check-i18n.mjs` passes.
+- **Test infra:** `apps/api/test/setup.ts` `applySchema()` short-circuits when the schema is already initialised — necessary because `singleWorker:true + isolatedStorage:false` shares the D1 binding across files, and the existing test only works when one file's `beforeAll` runs first.
+- **Screenshots:** `mvp/screenshots/l3.1/` — eight images (one per tab + village create form + event kind-locked form + user create form). `scripts/capture-l3.1.mjs` is the harness.
+
+### Follow-on spec / mvp cleanups (same commit as D21–D24)
+
+- `mvp/level-3.md` — sub-levels enumerated (L3.0 doer Home ✅,
+  L3.0b observer Home in flight, **L3.1 Master Creations** ✅,
+  L3.2 Profile carved out). Status line updated. Acceptance list
+  re-numbered to scope each criterion to the sub-level that owns
+  it; the list now reflects what actually shipped (no soft-delete
+  acceptance, since delete carved out per D21).
+- `requirements/03-functional.md` §3.8.7 — no body change; the
+  trimmed master list (no roles, no app settings) already matches
+  D21. Section header stable per CLAUDE.md numbering rule.
+- `requirements/review-findings-v1.md` H5 — marked closed by D23
+  in the same commit; the PR ships the test that proves it.
+
+---
+
 ## 2026-04-24 — L3.x Field-Dashboard Home
 
 | # | Decision | Supersedes |

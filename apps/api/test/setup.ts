@@ -28,6 +28,16 @@ function statementsFrom(raw: string): string[] {
 }
 
 export async function applySchema(db: D1Database): Promise<void> {
+  // singleWorker + isolatedStorage:false (vitest.config.ts) means the
+  // D1 binding persists across test files. The first file's beforeAll
+  // applies the schema; subsequent files' beforeAll calls would fail
+  // on `CREATE TABLE zone` because it already exists. Detect the
+  // initialised state and short-circuit so each file can call
+  // applySchemaAndSeed() in its own beforeAll without coordinating.
+  const existing = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='zone'")
+    .first<{ name: string }>();
+  if (existing) return;
   for (const migration of migrations) {
     for (const stmt of statementsFrom(migration)) {
       await db.prepare(stmt).run();

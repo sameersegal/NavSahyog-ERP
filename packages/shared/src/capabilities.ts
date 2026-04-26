@@ -11,16 +11,21 @@ import type { Role } from './roles';
 
 export type Capability =
   | 'village.read'
+  | 'village.write'
   | 'school.read'
+  | 'school.write'
   | 'child.read'
   | 'child.write'
   | 'event.read'
+  | 'event.write'
   | 'attendance.read'
   | 'attendance.write'
   | 'achievement.read'
   | 'achievement.write'
   | 'media.read'
   | 'media.write'
+  | 'qualification.write'
+  | 'user.write'
   | 'dashboard.read';
 
 // Read-only caps shared by every viewer tier. Write tiers extend
@@ -44,6 +49,19 @@ const WRITE: readonly Capability[] = [
   'media.write',
 ];
 
+// L3.1 Master-Creations writes (decisions.md D22). Granted only to
+// super_admin per §2.3. `qualification.write` and `user.write` also
+// gate the corresponding LIST endpoints — those masters have no
+// non-admin consumer yet, so the read cap doesn't need a separate
+// row in the matrix.
+const SUPER_ADMIN_ONLY: readonly Capability[] = [
+  'village.write',
+  'school.write',
+  'event.write',
+  'qualification.write',
+  'user.write',
+];
+
 // Mirrors §2.3. District / Region / State / Zone admins only carry
 // `.read` caps — that's the structural closure for blocker B3 in
 // requirements/review-findings-v1.md. The server's `requireCap`
@@ -58,7 +76,7 @@ export const CAPABILITIES_BY_ROLE = {
   region_admin: READ_ONLY,
   state_admin: READ_ONLY,
   zone_admin: READ_ONLY,
-  super_admin: WRITE,
+  super_admin: [...WRITE, ...SUPER_ADMIN_ONLY],
 } as const satisfies Record<Role, readonly Capability[]>;
 
 export function capabilitiesFor(role: Role): readonly Capability[] {
