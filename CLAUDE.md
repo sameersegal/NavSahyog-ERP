@@ -193,6 +193,11 @@ flag it in `review-findings-v1.md` under Medium.
 
 ## When in doubt
 
-Ask. This is a small repo with a single maintainer; a one-line
-clarifying question ("A or B? I'd pick A because …") is cheap
-and shipping the wrong thing is expensive.
+Ask — but only when there's actually doubt. If you have a clear
+recommendation with a one-line justification you'd write anyway,
+just take it and note the trade-off in the same breath ("going
+with A because X; B trades Y for Z if you want to override").
+A two-option ask where one is obviously better isn't a decision —
+it's a recommendation with framing noise that costs the user a
+turn. Reserve clarifying questions for genuinely close calls,
+irreversible actions, or anything touching production.
