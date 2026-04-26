@@ -9,6 +9,33 @@ justification.
 
 ---
 
+## 2026-04-26 — L3.1 Master Creations scope
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D21 | **L3.1 ships Master Creations as a single slice covering five masters: villages, schools, events / activities, qualifications, users.** One dedicated screen per master (not a generic table editor, restated from §3.8.7 so it isn't relitigated). The five share enough scaffolding — `requireCap(...)` gates, soft-delete via `deleted_at`, list / create / edit form shape — that splitting them buys two rounds of the same review without buying isolation. Profile (§3.8.1) is **not** in this slice; it lands as L3.2. "Roles" is **not** a master in this slice — roles are hardcoded in `apps/api/src/policy.ts` per CLAUDE.md, so a creation surface would be dead UI. A read-only "roles & capabilities" reference page can land later if it earns its keep. No bulk import / CSV upload — out of §3.8.7 scope; add only when a real onboarding workflow demands it. No hard delete — soft-delete is the only delete primitive across the spec. **No schema changes.** Every master already has its row in `db/`; this slice is API write endpoints + UI screens + policy.ts diff only. | `mvp/level-3.md` "Master Creations + Profile" combined scope (re-sliced for delivery — Profile carved out, Master Creations isolated). |
+| D22 | **Five new write capabilities land on `apps/api/src/policy.ts`: `village.write`, `school.write`, `event.write`, `qualification.write`, `user.write` — granted only to Super Admin per the §2.3 matrix.** Read caps stay broad (existing list endpoints already serve the dashboards). Routes use the existing `requireCap(...)` middleware; non-Super-Admin POST/PATCH returns 403 from the gate, not from a route-internal role check. This closes B3's "structurally read-only via the policy layer" promise for the write side too — the data shape is identical to the existing read-cap rows. | Any earlier framing that left write gates implicit on master endpoints. |
+| D23 | **`event.kind` immutability (review-findings H5) is enforced server-side by the L3.1 PATCH route, not just UI-disabled.** PATCH `/api/events/:id` rejects a `kind` change with `409 event.kind frozen — has N referencing rows` once any media or attendance row references the event. The form read-disables the field for the same condition based on a `kind_locked: boolean` field on the GET response. H5 closes when L3.1 lands. | H5's open state in `review-findings-v1.md`. |
+| D24 | **User create writes plain-text passwords in L3.1, matching the existing L1/L2 seed.** The `users.password` column receives the operator-typed password directly; an L5 sweep (per `mvp/level-5.md`) replaces both seed and Master-Creations writes with Argon2id at the same time. Adding hashing here would be half-built — the seed and the existing login flow would still treat the column as plain text, and the change wouldn't survive L5 anyway. The form carries a single `// L5: argon2id` TODO mirroring the seed-script TODO so the sweep is mechanical. | Earlier instinct to bring hashing forward "while we're here" — leaks an inconsistent partial security posture. |
+
+### Follow-on spec / mvp cleanups (same commit as D21–D24)
+
+- `mvp/level-3.md` — sub-levels enumerated (L3.0 doer Home ✅,
+  L3.0b observer Home in flight, **L3.1 Master Creations** new,
+  L3.2 Profile carved out). Acceptance list re-numbered to scope
+  each criterion to the sub-level that owns it.
+- `requirements/03-functional.md` §3.8.7 — no body change; the
+  trimmed master list (no roles, no app settings) already matches
+  D21. Section header stable per CLAUDE.md numbering rule.
+- `requirements/review-findings-v1.md` H5 — leave open until the
+  L3.1 implementation PR lands; that PR's commit message closes
+  H5 and updates the row.
+- `apps/api/src/policy.ts` — implementation diff (five new write
+  caps + Super-Admin grants) lands with the L3.1 code PR, not
+  this spec PR. Listed here so the dependency is explicit.
+
+---
+
 ## 2026-04-24 — L3.x Field-Dashboard Home
 
 | # | Decision | Supersedes |
