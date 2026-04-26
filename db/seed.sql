@@ -25,6 +25,7 @@ DELETE FROM media;
 DELETE FROM event;
 DELETE FROM school;
 DELETE FROM session;
+DELETE FROM qualification;
 DELETE FROM user;
 DELETE FROM village;
 DELETE FROM cluster;

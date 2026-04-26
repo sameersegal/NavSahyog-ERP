@@ -178,4 +178,22 @@ geo.get('/siblings', requireCap('dashboard.read'), async (c) => {
   return c.json({ siblings: rs.results });
 });
 
+// L3.1 — full geo tree dump for the Master-Creations user-create
+// scope picker. The form needs to resolve a scope_id against the
+// role's derived scope_level (zone / state / region / district /
+// cluster / village), and the seed has only ~30 rows total — one
+// admin-only dump is simpler than six per-level endpoints. Gated
+// on `user.write` since the only consumer is the admin form.
+geo.get('/all', requireCap('user.write'), async (c) => {
+  const tables = ['zone', 'state', 'region', 'district', 'cluster', 'village'] as const;
+  const out: Record<string, Array<{ id: number; name: string }>> = {};
+  for (const table of tables) {
+    const rs = await c.env.DB
+      .prepare(`SELECT id, name FROM ${table} ORDER BY name COLLATE NOCASE`)
+      .all<{ id: number; name: string }>();
+    out[table] = rs.results;
+  }
+  return c.json({ levels: out });
+});
+
 export default geo;
