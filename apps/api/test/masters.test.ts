@@ -39,6 +39,8 @@ describe('masters — capability gate (decisions.md D22)', () => {
     ['POST', '/api/schools', 'vc-anandpur'],
     ['POST', '/api/events', 'cluster-bid01'],
     ['POST', '/api/qualifications', 'state-ka'],
+    ['POST', '/api/training-manuals', 'vc-anandpur'],
+    ['POST', '/api/training-manuals', 'district-bid'],
     ['POST', '/api/users', 'af-bid01'],
   ];
 
@@ -307,6 +309,138 @@ describe('qualifications master', () => {
     expect(
       ((await patch.json()) as { qualification: { name: string } }).qualification.name,
     ).toBe('B.A. Ed');
+  });
+});
+
+describe('training manuals master', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it('list is readable by every authenticated role; create/patch are super-admin', async () => {
+    const adminToken = await loginAs('super');
+    const create = await cookieFetch('/api/training-manuals', adminToken, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Onboarding',
+        name: 'New VC walkthrough',
+        link: 'https://example.org/vc-walkthrough.pdf',
+      }),
+    });
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as {
+      manual: { id: number; updated_at: number };
+    };
+    expect(created.manual.id).toBeGreaterThan(0);
+    expect(created.manual.updated_at).toBeGreaterThan(0);
+
+    // A read-only role can list — `training_manual.read` is in the
+    // shared READ_ONLY cap set.
+    const vcToken = await loginAs('vc-anandpur');
+    const list = await cookieFetch('/api/training-manuals', vcToken);
+    expect(list.status).toBe(200);
+    const body = (await list.json()) as {
+      manuals: Array<{ name: string; category: string }>;
+    };
+    expect(body.manuals.some((m) => m.name === 'New VC walkthrough')).toBe(true);
+
+    // …but cannot patch.
+    const patchAsVc = await cookieFetch(
+      `/api/training-manuals/${created.manual.id}`,
+      vcToken,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'Changed' }),
+      },
+    );
+    expect(patchAsVc.status).toBe(403);
+  });
+
+  it('rejects duplicate (category, name) pair with 409 but allows same name in another category', async () => {
+    const token = await loginAs('super');
+    const first = await cookieFetch('/api/training-manuals', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Onboarding',
+        name: 'Field guide',
+        link: 'https://example.org/a',
+      }),
+    });
+    expect(first.status).toBe(201);
+
+    const dup = await cookieFetch('/api/training-manuals', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Onboarding',
+        name: 'Field guide',
+        link: 'https://example.org/b',
+      }),
+    });
+    expect(dup.status).toBe(409);
+
+    const otherCategory = await cookieFetch('/api/training-manuals', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Attendance',
+        name: 'Field guide',
+        link: 'https://example.org/c',
+      }),
+    });
+    expect(otherCategory.status).toBe(201);
+  });
+
+  it('rejects non-http(s) links with 400', async () => {
+    const token = await loginAs('super');
+    const bad = await cookieFetch('/api/training-manuals', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Onboarding',
+        name: 'Sketchy',
+        link: 'javascript:alert(1)',
+      }),
+    });
+    expect(bad.status).toBe(400);
+
+    const relative = await cookieFetch('/api/training-manuals', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Onboarding',
+        name: 'Relative',
+        link: '/internal/path',
+      }),
+    });
+    expect(relative.status).toBe(400);
+  });
+
+  it('PATCH bumps updated_at', async () => {
+    const token = await loginAs('super');
+    const create = await cookieFetch('/api/training-manuals', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        category: 'Onboarding',
+        name: 'Bump test',
+        link: 'https://example.org/x',
+      }),
+    });
+    const { manual: created } = (await create.json()) as {
+      manual: { id: number; updated_at: number };
+    };
+
+    // Wait for the second-resolution clock to tick before the PATCH so
+    // the bump is observable. nowEpochSeconds() truncates to whole
+    // seconds, so a sub-second PATCH would land on the same value.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    const patch = await cookieFetch(`/api/training-manuals/${created.id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Bump test (revised)' }),
+    });
+    expect(patch.status).toBe(200);
+    const { manual: patched } = (await patch.json()) as {
+      manual: { name: string; updated_at: number };
+    };
+    expect(patched.name).toBe('Bump test (revised)');
+    expect(patched.updated_at).toBeGreaterThan(created.updated_at);
   });
 });
 

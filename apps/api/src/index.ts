@@ -13,6 +13,7 @@ import insights from './routes/insights';
 import streaks from './routes/streaks';
 import geo from './routes/geo';
 import qualifications from './routes/qualifications';
+import trainingManuals from './routes/training_manuals';
 import users from './routes/users';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
@@ -105,6 +106,7 @@ app.route('/api/insights', insights);
 app.route('/api/streaks', streaks);
 app.route('/api/geo', geo);
 app.route('/api/qualifications', qualifications);
+app.route('/api/training-manuals', trainingManuals);
 app.route('/api/users', users);
 
 app.onError((e, c) => {

@@ -397,12 +397,46 @@ serve a workflow a NavSahyog user can't accomplish out-of-band).
 
 #### 3.8.7 Master Creations (Super Admin only)
 - Consolidated CRUD for each master (villages, schools, events,
-  activities, qualifications, roles, users). Not a generic table
-  editor — one dedicated screen per master, with only the fields
-  the bespoke app actually uses. Content-hub masters (`notice`,
-  `reference_link`, `quick_link`, `about_us`) were cancelled in
-  D15 and do not appear. No "app settings" screen — retention is
-  out-of-system; other tunables are Worker env vars (D1).
+  activities, qualifications, roles, users, training manuals
+  (§3.8.8)). Not a generic table editor — one dedicated screen
+  per master, with only the fields the bespoke app actually uses.
+  Content-hub masters (`notice`, `reference_link`, `quick_link`,
+  `about_us`) were cancelled in D15 and do not appear. No "app
+  settings" screen — retention is out-of-system; other tunables
+  are Worker env vars (D1).
+
+#### 3.8.8 Training manuals
+- **Read-only catalogue** of training material curated by the
+  central team. Every authenticated role sees it; authoring is
+  Super-Admin via Master Creations (§3.8.7). One row carries
+  `category`, `name`, `link`, and a server-stamped `updated_at`.
+  The page groups rows by category and renders each `name` as an
+  external link that opens in a new tab — the ERP does not host
+  the underlying assets (PDFs, Drive docs, walkthrough videos all
+  live wherever the central team already keeps them).
+- **Why it lives in the bespoke app despite §3.8.4
+  (reference-links cancelled).** The cancelled section was
+  generic vendor scaffolding for arbitrary "useful URLs" —
+  workflow-adjacent in name only. Training manuals are
+  workflow-adjacent in fact: a VC who can't find the attendance
+  walkthrough mid-shift cannot log a session. Putting the link
+  one tap away inside the ERP is the bespoke fix; out-of-band
+  WhatsApp distribution is not.
+- **Validation**: `link` must be `http` or `https`; other
+  schemes (`mailto:`, `javascript:`, relative paths) are
+  rejected with 400 to keep the read-only page from rendering
+  unopenable or unsafe entries. `(category, name)` is unique —
+  same name allowed across different categories.
+- **Acceptance**:
+  - Every authenticated role can open `/training-manuals` and
+    see the catalogue.
+  - A Super Admin creates a row from Master Creations; it
+    appears immediately on the read-only page for any logged-in
+    role.
+  - A non-Super-Admin issuing `POST /api/training-manuals` is
+    rejected with 403 from the capability gate, not from a
+    route-internal role check.
+  - A PATCH bumps `updated_at` to the current epoch second.
 
 ---
 

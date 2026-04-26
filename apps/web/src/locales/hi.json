@@ -354,6 +354,7 @@
   "capture.success": "सहेजा गया। गाँव की गैलरी अपडेट हो गई।",
   "capture.recent": "इस गाँव के हालिया कैप्चर",
 
+  "nav.manuals": "प्रशिक्षण",
   "nav.masters": "मास्टर",
 
   "master.title": "मास्टर निर्माण",
@@ -362,6 +363,7 @@
   "master.tab.schools": "विद्यालय",
   "master.tab.events": "आयोजन",
   "master.tab.qualifications": "योग्यताएँ",
+  "master.tab.manuals": "प्रशिक्षण मैनुअल",
   "master.tab.users": "उपयोगकर्ता",
   "master.action.edit": "संपादित करें",
   "master.empty": "अभी कोई पंक्ति नहीं।",
@@ -377,6 +379,9 @@
   "master.col.full_name": "पूरा नाम",
   "master.col.role": "भूमिका",
   "master.col.scope": "क्षेत्र",
+  "master.col.category": "श्रेणी",
+  "master.col.link": "लिंक",
+  "master.col.updated_at": "अद्यतन",
   "master.kind.event": "आयोजन",
   "master.kind.activity": "गतिविधि",
   "master.scope.village": "गाँव",
@@ -398,7 +403,16 @@
   "master.events.kind_locked": "प्रकार स्थिर है — इस आयोजन में पहले से उपस्थिति या मीडिया है।",
   "master.qualifications.add": "योग्यता जोड़ें",
   "master.qualifications.empty": "अभी तक कोई योग्यता परिभाषित नहीं।",
+  "master.manuals.add": "प्रशिक्षण मैनुअल जोड़ें",
+  "master.manuals.empty": "अभी तक कोई प्रशिक्षण मैनुअल नहीं।",
+  "master.manuals.category_hint": "मुक्त-रूप समूह लेबल, जैसे \"ऑनबोर्डिंग\" या \"उपस्थिति\"।",
+  "master.manuals.link_hint": "http या https का उपयोग करें। मैनुअल नई टैब में खुलते हैं।",
   "master.users.add": "उपयोगकर्ता जोड़ें",
   "master.users.user_id_hint": "लोअरकेस लॉगिन आईडी (जैसे vc-newville)।",
-  "master.users.password_note": "नए उपयोगकर्ता प्रयोगशाला डिफ़ॉल्ट पासवर्ड से साइन इन करते हैं। L5 में Clerk पर शिफ्ट होगा।"
+  "master.users.password_note": "नए उपयोगकर्ता प्रयोगशाला डिफ़ॉल्ट पासवर्ड से साइन इन करते हैं। L5 में Clerk पर शिफ्ट होगा।",
+
+  "manuals.title": "प्रशिक्षण मैनुअल",
+  "manuals.description": "केंद्रीय टीम द्वारा क्यूरेट की गई संदर्भ सामग्री। शीर्षक पर टैप करें — यह नई टैब में खुलेगा।",
+  "manuals.empty": "अभी कोई प्रशिक्षण मैनुअल उपलब्ध नहीं।",
+  "manuals.updated_at": "{when} को अद्यतन"
 }

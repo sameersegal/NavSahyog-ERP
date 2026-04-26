@@ -230,6 +230,33 @@ bespoke equivalent. Runtime tunables (session TTL, OTP TTL, default
 language) live in Worker env vars; retention timelines are
 handled out-of-system (see §9.3, decisions.md D1/D4).
 
+##### 4.3.8.1 Training manuals (§3.8.8)
+
+**`training_manual`** — read-only catalogue surfaced at
+`/training-manuals` for every authenticated role; authored by
+Super Admin from Master Creations.
+
+- `id INTEGER PRIMARY KEY`
+- `category TEXT NOT NULL` — free-form label used for grouping
+  on the read page (e.g. `Onboarding`, `Attendance`).
+- `name TEXT NOT NULL` — display label, also the link text.
+- `link TEXT NOT NULL` — absolute `http(s)` URL; validated at
+  the route layer. The asset itself is not hosted by the ERP.
+- `created_at INTEGER NOT NULL`,
+  `created_by INTEGER NOT NULL REFERENCES user(id)`,
+  `updated_at INTEGER NOT NULL`,
+  `updated_by INTEGER NOT NULL REFERENCES user(id)` —
+  `updated_at` is surfaced on the read page so users can see
+  when a manual last changed.
+- `UNIQUE (category, name)` — same name is allowed across
+  different categories.
+- Index: `(category COLLATE NOCASE, name COLLATE NOCASE)` for
+  the grouped sort on the read page.
+
+Soft-delete is deferred (parity with the other L3.1 masters);
+removing a row is a hard `DELETE`-from-admin operation when the
+post-MVP slice lands.
+
 #### 4.3.9 Audit
 
 **`audit_log`** — append-only (§9.4).
@@ -249,7 +276,7 @@ handled out-of-system (see §9.3, decisions.md D1/D4).
 
 ### 4.4 Summary
 
-- **17 tables** in the bespoke schema (vendor had 35).
+- **18 tables** in the bespoke schema (vendor had 35).
 - Removed: `ngo_features`, `role_permission`, `teacher_roles`,
   `teacher_roles_assign`, `country`, `territory`, `taluk`,
   `MembershipType`, `village_pgm_status`, `student_pgm_status`,
@@ -261,7 +288,7 @@ handled out-of-system (see §9.3, decisions.md D1/D4).
   decisions.md D15).
 - Merged: `teacher` + `login_user_data` → `user`;
   `event_image` + `event_video` (+ offline pairs) → `media`.
-- Added: `audit_log`.
+- Added: `audit_log`, `training_manual` (§4.3.8.1).
 
 ### 4.5 Open items
 
