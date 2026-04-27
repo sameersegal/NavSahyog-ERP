@@ -18,7 +18,7 @@ import {
   SCHEMA_VERSION_HEADER,
   type OutboxRow,
 } from '@navsahyog/shared';
-import { UPGRADE_REQUIRED_EVENT } from './events';
+import { notifyFromResponse } from './events';
 import {
   gcDone,
   markDeadLetter,
@@ -99,15 +99,14 @@ async function drainOnce(options: DrainOptions): Promise<DrainResult> {
       result.drained++;
     } else if (verdict.kind === 'upgrade_required') {
       // Don't bump attempts. The row stays in_flight transiently;
-      // reset to pending so the next drain (after upgrade) picks it
-      // up again. Latch the banner via the same event api.ts uses.
+      // reset to pending so the next drain (after upgrade) picks
+      // it up again. The UPGRADE_REQUIRED_EVENT was already
+      // dispatched by `notifyFromResponse` inside `sendOnce` —
+      // don't re-fire here.
       await markFailed(
         row.idempotency_key,
         '426 upgrade_required — refresh the app',
       );
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent(UPGRADE_REQUIRED_EVENT));
-      }
       result.upgrade_required = true;
       break;
     } else if (verdict.kind === 'terminal') {
@@ -155,6 +154,10 @@ async function sendOnce(
     const summary = e instanceof Error ? e.message : 'network error';
     return { kind: 'retryable', summary: `network: ${summary}` };
   }
+
+  // Surface server-build / 426 signals to the chrome the same way
+  // online API calls do.
+  notifyFromResponse(res);
 
   if (res.ok) return { kind: 'ok' };
   if (res.status === UPGRADE_REQUIRED_STATUS) return { kind: 'upgrade_required' };

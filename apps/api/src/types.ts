@@ -29,6 +29,21 @@ export type Bindings = {
   // BOTH are set via `wrangler secret put`. A no-op in dev / test.
   STAGING_BASIC_AUTH_USER?: string;
   STAGING_BASIC_AUTH_PASSWORD?: string;
+  // Build-id of the deployed server (L4.0c — decisions.md D31).
+  // CI sets this at deploy time; format `YYYY-MM-DD[.<sha>]`. Stamped
+  // on every response as `X-Server-Build` so clients can detect a
+  // newer deploy and surface the soft "Update available" banner.
+  // Optional — when absent, the header isn't stamped and the soft
+  // nudge stays dormant.
+  SERVER_BUILD_ID?: string;
+  // Compat floor for the build-id middleware (L4.0c — decisions.md
+  // D31 deploy-grace fix). Format `YYYY-MM-DD[.<sha>]` — clients with
+  // a build-date strictly older than this are 426'd. Operator sets
+  // it on each deploy: typically to the *previous* deploy's build-id
+  // so one-version-back keeps working; bump it to the current build
+  // to force-upgrade the fleet (security-fix scenario). When unset,
+  // no floor applies and any well-formed client build is accepted.
+  MIN_SUPPORTED_BUILD?: string;
 };
 
 // The session-bound user — DB row shape, no computed capabilities.

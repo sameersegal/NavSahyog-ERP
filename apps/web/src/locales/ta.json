@@ -152,6 +152,10 @@
   "sync.update_required.title": "புதுப்பிப்பு தேவை",
   "sync.update_required.body": "இந்த பதிப்பு ஆதரிக்கப்படும் காலத்தைத் தாண்டியது. புதுப்பிக்க புதுப்பிக்கவும்.",
   "sync.update_required.action": "புதுப்பி",
+  "sync.update_available.title": "புதிய பதிப்பு கிடைக்கிறது",
+  "sync.update_available.body": "சேவையகம் பதிப்பு {build} இல் உள்ளது. வசதியான போது புதுப்பிக்கவும்.",
+  "sync.update_available.action": "புதுப்பி",
+  "sync.update_available.dismiss": "பின்னர்",
 
   "outbox.title": "வெளியனுப்பு பெட்டி",
   "outbox.subtitle": "இந்த சாதனத்தில் வரிசையில் உள்ள மாற்றங்கள், சேவையகத்தை அடைய காத்திருக்கின்றன.",

@@ -192,7 +192,7 @@ export type ChildCorePatch = {
 
 import { BUILD_ID_HEADER } from '@navsahyog/shared';
 import { BUILD_ID } from './lib/build';
-import { UPGRADE_REQUIRED_EVENT } from './lib/events';
+import { UPGRADE_REQUIRED_EVENT, notifyFromResponse } from './lib/events';
 
 // Re-export so callers that already imported it from `../api` keep
 // working — the canonical home is `lib/events.ts` so the drain
@@ -210,9 +210,9 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
-  if (res.status === 426 && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(UPGRADE_REQUIRED_EVENT));
-  }
+  // Dispatches UPGRADE_REQUIRED_EVENT on 426 and
+  // SERVER_BUILD_OBSERVED_EVENT when the server is on a newer build.
+  notifyFromResponse(res);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as {
       error?: { code?: string; message?: string };
