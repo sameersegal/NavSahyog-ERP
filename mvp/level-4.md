@@ -16,9 +16,10 @@ ships first; workflows opt in incrementally.
 
 | Sub | Scope | Status |
 |---|---|---|
-| L4.0a | Foundation primitives — `X-App-Build` header, server compat middleware (426 past N-7), client build-id injection, real network detection (HEAD probe, not `navigator.onLine`), sync-state taxonomy (green/yellow/red/update_required) chip in chrome, force-upgrade banner. **No outbox or IDB yet.** | in flight |
+| L4.0a | Foundation primitives — `X-App-Build` header, server compat middleware (initial wall-clock-based; replaced in L4.0c), client build-id injection, real network detection (HEAD probe, not `navigator.onLine`), sync-state taxonomy (green/yellow/red/update_required) chip in chrome, force-upgrade banner. **No outbox or IDB yet.** | in flight |
 | L4.0b | Generic versioned outbox — IDB migration framework, ULID-keyed `outbox` store, opaque drain runner with backoff + 426 handling, dead-letter pathway, hard outbox cap, `/outbox` UI screen with retry/discard/manual sync, sync chip wired to queued/dead-letter counts. **No live workflows enqueue yet.** | in flight |
-| L4.0 | Offline platform — versioned generic outbox, IDB migration framework, service-worker upgrade, build-id pinning, additive-only CI guard, sync-state taxonomy. **No new offline workflows ship in this slice.** | in flight (L4.0a + L4.0b in review) |
+| L4.0c | Update discipline — deploy-grace fix (`MIN_SUPPORTED_BUILD` operator floor instead of wall-clock-today), `SERVER_BUILD_ID` stamped on every response, soft dismissible "Update available" banner when client observes a newer server build, plus a reference deploy script. **No service worker** — the soft signal travels on response headers, which is enough for data-offline workflows. | in flight |
+| L4.0 | Offline platform — versioned generic outbox, IDB migration framework, build-id discipline, sync-state taxonomy. **No new offline workflows ship in this slice.** Original L4.0 spec also called for additive-only CI guard, dead-letter UX polish, replay tool, cache integrity check — those land in L4.0d/e. | in flight (L4.0a + L4.0b + L4.0c in review) |
 | L4.1 | Onboard the §6.1 three workflows (attendance, achievements, media) onto the L4.0 platform. | not started |
 | L4.2+ | Progressive opt-in per workflow as `requirements/offline-scope.md` grows. Each new offline-eligible workflow is its own small PR with a decision entry. | not started |
 

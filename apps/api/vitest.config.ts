@@ -22,6 +22,12 @@ export default defineWorkersConfig({
             ENVIRONMENT: 'test',
             ALLOWED_ORIGINS: 'http://localhost:5173',
             MEDIA_PRESIGN_SECRET: 'test-secret',
+            // Build-id middleware (L4.0c). Floor at 2020-01-01 so any
+            // realistically-dated test build passes; tests that want
+            // to exercise the 426 path use a build older than this.
+            MIN_SUPPORTED_BUILD: '2020-01-01.test',
+            // Server-build response header — tests assert this stamp.
+            SERVER_BUILD_ID: '2026-04-27.test',
           },
         },
       },

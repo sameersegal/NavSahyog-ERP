@@ -154,6 +154,10 @@
   "sync.update_required.title": "An update is required",
   "sync.update_required.body": "This build is past the supported window. Refresh to upgrade.",
   "sync.update_required.action": "Refresh",
+  "sync.update_available.title": "A newer build is available",
+  "sync.update_available.body": "Server is running build {build}. Refresh when convenient.",
+  "sync.update_available.action": "Refresh",
+  "sync.update_available.dismiss": "Later",
 
   "outbox.title": "Outbox",
   "outbox.subtitle": "Mutations queued on this device, waiting to reach the server.",

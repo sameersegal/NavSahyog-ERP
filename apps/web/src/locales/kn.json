@@ -152,6 +152,10 @@
   "sync.update_required.title": "ನವೀಕರಣ ಅಗತ್ಯವಿದೆ",
   "sync.update_required.body": "ಈ ಬಿಲ್ಡ್ ಬೆಂಬಲಿತ ವಿಂಡೋ ದಾಟಿದೆ. ನವೀಕರಿಸಲು ರಿಫ್ರೆಶ್ ಮಾಡಿ.",
   "sync.update_required.action": "ರಿಫ್ರೆಶ್",
+  "sync.update_available.title": "ಹೊಸ ಬಿಲ್ಡ್ ಲಭ್ಯವಿದೆ",
+  "sync.update_available.body": "ಸರ್ವರ್ ಬಿಲ್ಡ್ {build} ನಲ್ಲಿದೆ. ಅನುಕೂಲವಾದಾಗ ರಿಫ್ರೆಶ್ ಮಾಡಿ.",
+  "sync.update_available.action": "ರಿಫ್ರೆಶ್",
+  "sync.update_available.dismiss": "ನಂತರ",
 
   "outbox.title": "ಔಟ್‌ಬಾಕ್ಸ್",
   "outbox.subtitle": "ಈ ಸಾಧನದಲ್ಲಿ ಸರತಿಯಲ್ಲಿರುವ ಬದಲಾವಣೆಗಳು, ಸರ್ವರ್‌ಗೆ ತಲುಪಲು ಕಾಯುತ್ತಿವೆ.",

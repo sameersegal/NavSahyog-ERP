@@ -19,7 +19,7 @@ import { PondDetail } from './pages/PondDetail';
 import { TrainingManuals } from './pages/TrainingManuals';
 import { Outbox } from './pages/Outbox';
 import { Shell } from './pages/Shell';
-import { ForceUpgradeBanner } from './lib/sync-state';
+import { ForceUpgradeBanner, UpdateAvailableBanner } from './lib/sync-state';
 import { can } from './api';
 
 export function App() {
@@ -35,6 +35,7 @@ export function App() {
     return (
       <>
         <ForceUpgradeBanner />
+        <UpdateAvailableBanner />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
@@ -54,6 +55,7 @@ export function App() {
   return (
     <Shell>
       <ForceUpgradeBanner />
+      <UpdateAvailableBanner />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/village/:id" element={<Village />} />

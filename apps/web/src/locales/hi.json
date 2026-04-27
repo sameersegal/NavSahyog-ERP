@@ -152,6 +152,10 @@
   "sync.update_required.title": "अपडेट करना ज़रूरी है",
   "sync.update_required.body": "यह बिल्ड समर्थित अवधि से बाहर है। अपडेट के लिए ताज़ा करें।",
   "sync.update_required.action": "ताज़ा करें",
+  "sync.update_available.title": "नया बिल्ड उपलब्ध है",
+  "sync.update_available.body": "सर्वर बिल्ड {build} पर है। सुविधाजनक होने पर ताज़ा करें।",
+  "sync.update_available.action": "ताज़ा करें",
+  "sync.update_available.dismiss": "बाद में",
 
   "outbox.title": "आउटबॉक्स",
   "outbox.subtitle": "इस डिवाइस पर कतारबद्ध परिवर्तन, सर्वर तक पहुँचने की प्रतीक्षा में।",
