@@ -74,7 +74,7 @@ export function Shell({ children }: { children: ReactNode }) {
               {t('nav.manuals')}
             </NavLink>
             {canMasters && (
-              <NavLink to="/masters" active={pathname === '/masters'}>
+              <NavLink to="/masters" active={pathname.startsWith('/masters')}>
                 {t('nav.masters')}
               </NavLink>
             )}
