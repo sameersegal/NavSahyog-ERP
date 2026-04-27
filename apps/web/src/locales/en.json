@@ -150,6 +150,14 @@
   "streak.toast.matches_best": "matches this week's best",
   "streak.toast.steady": "steady",
 
+  "sync.green": "Online",
+  "sync.yellow": "Syncing",
+  "sync.red": "Offline",
+  "sync.update_required.label": "Update required",
+  "sync.update_required.title": "An update is required",
+  "sync.update_required.body": "This build is past the supported window. Refresh to upgrade.",
+  "sync.update_required.action": "Refresh",
+
   "village.back": "← All villages",
   "village.invalid": "Invalid village.",
   "village.tab.children": "Children",

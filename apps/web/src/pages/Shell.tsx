@@ -4,6 +4,7 @@ import { UserMenu } from '../components/UserMenu';
 import { useI18n } from '../i18n';
 import { useAuth } from '../auth';
 import { api, can, type StreakResponse } from '../api';
+import { SyncChip } from '../lib/sync-state';
 
 export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
@@ -102,6 +103,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {streak && streak.current_streak_days > 0 && (
               <StreakChip streak={streak} />
             )}
+            <SyncChip />
             <UserMenu />
           </div>
         </div>

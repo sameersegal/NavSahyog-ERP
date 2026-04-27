@@ -15,6 +15,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'not_found'
   | 'conflict'
+  | 'upgrade_required'
   | 'internal_error';
 
 export type ErrorBody = {

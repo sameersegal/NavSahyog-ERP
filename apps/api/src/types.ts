@@ -39,4 +39,15 @@ export type SessionUser = BaseUser;
 
 export type Variables = {
   user: SessionUser;
+  // Build identity of the client that issued the request. Stamped by
+  // the buildCompat middleware (apps/api/src/lib/build.ts) for every
+  // non-carve-out path. `clientBuild` is the raw header value;
+  // `clientBuildDate` is the parsed YYYY-MM-DD prefix or null when
+  // the header is missing/malformed; `clientSchemaVersion` is reserved
+  // for the L4.0b outbox-replay path. All three are absent on the
+  // carve-out surfaces (`/health`, `/api/programs/*`, the token-gated
+  // upload PUTs) — see src/lib/build.ts for the carve-out list.
+  clientBuild?: string | null;
+  clientBuildDate?: string | null;
+  clientSchemaVersion?: string | null;
 };

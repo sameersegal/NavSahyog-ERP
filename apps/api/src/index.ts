@@ -17,6 +17,7 @@ import trainingManuals from './routes/training_manuals';
 import users from './routes/users';
 import ponds from './routes/ponds';
 import programs from './routes/programs';
+import { buildCompat } from './lib/build';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
 
@@ -115,6 +116,12 @@ app.use('*', async (c, next) => {
 // Liveness. The old `/` JSON ping moved here so `/` falls through
 // to Workers Static Assets (the web bundle's index.html).
 app.get('/health', (c) => c.json({ ok: true, service: 'navsahyog-api' }));
+
+// Build-id compat gate (L4.0a — decisions.md D31). Applies to
+// authenticated API surfaces only; carve-outs match the staging
+// gate (see src/lib/build.ts). Returns 426 for clients past the
+// N-7 window so the client can surface its "Update required" screen.
+app.use('*', buildCompat);
 
 app.route('/auth', auth);
 app.route('/api/villages', villages);
