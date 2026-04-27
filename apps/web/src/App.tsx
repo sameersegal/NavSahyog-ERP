@@ -17,6 +17,7 @@ import { Ponds } from './pages/Ponds';
 import { PondNew } from './pages/PondNew';
 import { PondDetail } from './pages/PondDetail';
 import { TrainingManuals } from './pages/TrainingManuals';
+import { Outbox } from './pages/Outbox';
 import { Shell } from './pages/Shell';
 import { ForceUpgradeBanner } from './lib/sync-state';
 import { can } from './api';
@@ -60,6 +61,7 @@ export function App() {
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/training-manuals" element={<TrainingManuals />} />
+        <Route path="/outbox" element={<Outbox />} />
         {canMasters && <Route path="/masters" element={<Masters />} />}
         {canMasters && <Route path="/masters/villages" element={<MastersVillages />} />}
         {canMasters && <Route path="/masters/schools" element={<MastersSchools />} />}
