@@ -7,6 +7,12 @@ import { Dashboard } from './pages/Dashboard';
 import { Achievements } from './pages/Achievements';
 import { Capture } from './pages/Capture';
 import { Masters } from './pages/Masters';
+import { Villages as MastersVillages } from './pages/masters/Villages';
+import { Schools as MastersSchools } from './pages/masters/Schools';
+import { Events as MastersEvents } from './pages/masters/Events';
+import { Qualifications as MastersQualifications } from './pages/masters/Qualifications';
+import { Manuals as MastersManuals } from './pages/masters/Manuals';
+import { Users as MastersUsers } from './pages/masters/Users';
 import { Ponds } from './pages/Ponds';
 import { PondNew } from './pages/PondNew';
 import { PondDetail } from './pages/PondDetail';
@@ -50,6 +56,12 @@ export function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/training-manuals" element={<TrainingManuals />} />
         {canMasters && <Route path="/masters" element={<Masters />} />}
+        {canMasters && <Route path="/masters/villages" element={<MastersVillages />} />}
+        {canMasters && <Route path="/masters/schools" element={<MastersSchools />} />}
+        {canMasters && <Route path="/masters/events" element={<MastersEvents />} />}
+        {canMasters && <Route path="/masters/qualifications" element={<MastersQualifications />} />}
+        {canMasters && <Route path="/masters/manuals" element={<MastersManuals />} />}
+        {canMasters && <Route path="/masters/users" element={<MastersUsers />} />}
         {canPondsRead && <Route path="/ponds" element={<Ponds />} />}
         {canPondsWrite && <Route path="/ponds/new" element={<PondNew />} />}
         {canPondsRead && <Route path="/ponds/:id" element={<PondDetail />} />}
