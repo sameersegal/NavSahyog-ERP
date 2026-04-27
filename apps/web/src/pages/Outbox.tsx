@@ -184,54 +184,135 @@ function Row({
   const { t, lang } = useI18n();
   const created = formatTimestamp(row.created_at, lang);
   const canRetry = row.status === 'failed' || row.status === 'dead_letter';
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Bundle the row into a support-ticket-friendly JSON snippet. The
+  // user opens a dead-letter row, hits "Copy", and pastes into a
+  // ticket; this gives the support team everything they need to
+  // reproduce — idempotency key, endpoint shape, the build that
+  // authored the row, and the rejection reason.
+  const supportBundle = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          idempotency_key: row.idempotency_key,
+          status: row.status,
+          method: row.method,
+          path: row.path,
+          schema_version: row.schema_version,
+          build_id: row.build_id,
+          attempts: row.attempts,
+          created_at: new Date(row.created_at).toISOString(),
+          last_error: row.last_error,
+          body: row.body,
+        },
+        null,
+        2,
+      ),
+    [row],
+  );
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(supportBundle);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail in non-secure contexts. Fall back
+      // to a synthetic textarea + execCommand. Best effort —
+      // worst case the user has to read the expanded panel.
+      const ta = document.createElement('textarea');
+      ta.value = supportBundle;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+  };
+
   return (
-    <li className="px-3 py-2 flex items-start gap-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={
-              'rounded px-1.5 py-0.5 text-xs font-medium ' +
-              STATUS_PILL[row.status]
-            }
-          >
-            {t(`outbox.status.${row.status}`)}
-          </span>
-          <code className="text-xs text-muted-fg truncate">
-            {row.method} {row.path}
-          </code>
-        </div>
-        <div className="text-xs text-muted-fg mt-1">
-          {t('outbox.row.meta', {
-            when: created,
-            attempts: row.attempts,
-            build: row.build_id,
-            schema: row.schema_version,
-          })}
-        </div>
-        {row.last_error && (
-          <div className="text-xs text-rose-700 mt-1 break-words">
-            {row.last_error}
+    <li className="px-3 py-2 space-y-2">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={
+                'rounded px-1.5 py-0.5 text-xs font-medium ' +
+                STATUS_PILL[row.status]
+              }
+            >
+              {t(`outbox.status.${row.status}`)}
+            </span>
+            <code className="text-xs text-muted-fg truncate">
+              {row.method} {row.path}
+            </code>
           </div>
-        )}
-      </div>
-      <div className="shrink-0 flex items-center gap-2">
-        {canRetry && (
+          <div className="text-xs text-muted-fg mt-1">
+            {t('outbox.row.meta', {
+              when: created,
+              attempts: row.attempts,
+              build: row.build_id,
+              schema: row.schema_version,
+            })}
+          </div>
+          {row.last_error && (
+            <div className="text-xs text-rose-700 mt-1 break-words">
+              {row.last_error}
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => onRetry(row.idempotency_key)}
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
             className="text-xs rounded border border-border px-2 py-1 hover:bg-bg"
           >
-            {t('outbox.action.retry')}
+            {expanded ? t('outbox.action.hide') : t('outbox.action.show')}
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => onDiscard(row.idempotency_key)}
-          className="text-xs rounded border border-border px-2 py-1 text-rose-700 hover:bg-rose-50"
-        >
-          {t('outbox.action.discard')}
-        </button>
+          {canRetry && (
+            <button
+              type="button"
+              onClick={() => onRetry(row.idempotency_key)}
+              className="text-xs rounded border border-border px-2 py-1 hover:bg-bg"
+            >
+              {t('outbox.action.retry')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onDiscard(row.idempotency_key)}
+            className="text-xs rounded border border-border px-2 py-1 text-rose-700 hover:bg-rose-50"
+          >
+            {t('outbox.action.discard')}
+          </button>
+        </div>
       </div>
+      {expanded && (
+        <div className="rounded border border-border bg-bg/40 p-2 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted-fg">
+              {t('outbox.row.payload_label')}
+            </span>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="text-xs rounded border border-border px-2 py-1 hover:bg-bg"
+            >
+              {copied ? t('outbox.action.copied') : t('outbox.action.copy')}
+            </button>
+          </div>
+          <pre className="text-xs whitespace-pre-wrap break-words font-mono leading-snug max-h-64 overflow-auto">
+            {supportBundle}
+          </pre>
+        </div>
+      )}
     </li>
   );
 }

@@ -179,8 +179,13 @@
   "outbox.status.dead_letter": "நிராகரிக்கப்பட்டது",
   "outbox.status.done": "ஒத்திசைந்தது",
   "outbox.row.meta": "{when} இல் வரிசையில் · முயற்சிகள் {attempts} · பதிப்பு {build} · ஸ்கீமா v{schema}",
+  "outbox.row.payload_label": "ஆதரவு விவரம் (டிக்கெட்டில் ஒட்டவும்)",
   "outbox.action.retry": "மீண்டும் முயற்சி",
   "outbox.action.discard": "நிராகரி",
+  "outbox.action.show": "விவரங்கள்",
+  "outbox.action.hide": "மறை",
+  "outbox.action.copy": "நகலெடு",
+  "outbox.action.copied": "நகலெடுக்கப்பட்டது",
 
   "village.back": "← அனைத்து கிராமங்கள்",
   "village.invalid": "தவறான கிராமம்.",

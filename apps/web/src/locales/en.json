@@ -181,8 +181,13 @@
   "outbox.status.dead_letter": "rejected",
   "outbox.status.done": "synced",
   "outbox.row.meta": "queued {when} · attempts {attempts} · build {build} · schema v{schema}",
+  "outbox.row.payload_label": "Support bundle (paste in a ticket)",
   "outbox.action.retry": "Retry",
   "outbox.action.discard": "Discard",
+  "outbox.action.show": "Details",
+  "outbox.action.hide": "Hide",
+  "outbox.action.copy": "Copy",
+  "outbox.action.copied": "Copied",
 
   "village.back": "← All villages",
   "village.invalid": "Invalid village.",
