@@ -9,6 +9,34 @@ justification.
 
 ---
 
+## 2026-04-27 — L4 reframed as offline-as-platform
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D29 | **L4 is reframed from "3-workflow lab demo" to "offline-as-platform". The level ships in three sub-levels: L4.0 platform (versioned outbox + IDB migrations + service-worker upgrade + build-id + CI regression corpus + dead-letter UX), L4.1 the original §6.1 three workflows onto the platform, and L4.2+ progressive per-workflow opt-in.** Field reality is that most VC / Cluster data-capture workflows want to be offline-eligible, and the team will keep iterating on schema and endpoints after deploy — building offline narrowly now and retrofitting iterability later is the path that produces brittleness. The platform-first ordering means each L4.2+ workflow is a route registration plus a row in `offline-scope.md`, not an outbox-processor change. The original `level-4.md` plan (3 workflows, lab-only) lands as L4.1 inside this larger frame. | The original `mvp/level-4.md` "lab-only architecture validation" framing — the goal flips from "validate the architecture for an unspecified future" to "build the platform that production iteration depends on". |
+| D30 | **`requirements/offline-scope.md` is the authoritative contract surface for offline functionality, and offline-eligible endpoints are bound by an additive-only contract.** The new doc lists every workflow as `online-only` / `offline-eligible` / `offline-required`. Anything in the latter two categories cannot rename, remove, or tighten a field — those are breaking changes that require a new endpoint version. New nullable fields are fine. A CI regression corpus replays real payloads from each release against the current server; a failing payload blocks merge. Adding a workflow to the doc requires a D-numbered decision; flipping it back to `online-only` is a multi-release deprecation (drain existing queued items first). | §6's earlier implicit framing where "what's offline" was scattered across §3.7 + §6.1 + the field-team's heads. Centralising it into one editable doc is the precondition for the additive-only rule to actually be enforceable. |
+| D31 | **Client compat window is N-7: same-day upgrade preferred, end-of-week the hard ceiling. Server adapters for offline-eligible endpoints cover the last seven days of builds; outbox items older than that dead-letter on drain. A "Update required" screen blocks new client-side queueing past the window.** Without an upgrade SLA, the server's compat surface grows unbounded — adapters multiply, dead code accumulates, and the additive-only contract becomes much harder to keep coherent. A bounded window turns adapters from a long-tail problem into a small known set. The screen is what makes the SLA enforceable on devices, not just a doc claim. | An open-ended "support whatever client is in the field" model — that is the operational shape that makes offline brittle. |
+| D32 | **§6.4's manifest delta protocol (`since=…`) is replaced by a full-snapshot manifest scoped to the user's authority, and the offline-eligible workflow set is governed by ten operational principles (level-4.md "Working principles").** Per-user scopes are kilobytes (one village, dozens of students, dozens of events) — the delta protocol's complexity (timestamps, tombstones, ordering, fence tokens) buys nothing at that size. Replace-snapshot is one HTTP fetch per refresh, no merge logic. The ten principles (online-only default, additive-only, N-7 window, one mutation per workflow, no optimistic UI, scope-bound caching, replace-snapshot, foreground-only sync, server-as-truth, hard outbox cap) are the operational shape that keeps the platform surviving iteration. | §6.4's `since=…` delta protocol; §6.13's "pick manifest granularity" open item (resolved by snapshot replace); the implicit per-workflow optimistic-UI / draft / merge surface that field workflows tend to grow under pressure if the principles aren't named explicitly. |
+
+### What lands with this decision
+
+- **`requirements/offline-scope.md` (new):** the contract surface
+  doc — workflow inventory by §, status (`online-only` /
+  `offline-eligible` / `offline-required`), owner, notes. Indexed
+  from `requirements/README.md`.
+- **`requirements/06-offline-and-sync.md`:** new §6.0 "Offline
+  contract (L4 amendment)" subsection at the top of §6 pointing
+  at the new doc and naming the four rules. §6.4 marked superseded
+  by snapshot replace.
+- **`mvp/level-4.md`:** redrafted around the three sub-levels
+  (L4.0 platform / L4.1 onboard / L4.2+ progressive), ten working
+  principles, per-sub-level scope and acceptance, watch-out for
+  the L5 auth re-test.
+- **No code or schema changes in this commit.** Implementation
+  lands in subsequent L4.0 PRs.
+
+---
+
 ## 2026-04-26 — L3.3 Jal Vriddhi pond + agreement form
 
 | # | Decision | Supersedes |
