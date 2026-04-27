@@ -25,6 +25,9 @@ DELETE FROM media;
 DELETE FROM event;
 DELETE FROM school;
 DELETE FROM session;
+-- Break the user ↔ qualification cycle (user.qualification_id → qualification(id);
+-- qualification.created_by → user(id)) before deleting either side.
+UPDATE user SET qualification_id = NULL;
 DELETE FROM qualification;
 DELETE FROM user;
 DELETE FROM village;
@@ -336,6 +339,18 @@ INSERT INTO student (village_id, school_id, first_name, last_name, gender, dob, 
   (19, 19, 'Renben',     'Kikon',    'm', '2019-01-01', '2024-10-01', unixepoch(), 26),
   (19, 19, 'Sashiben',   'Longchar', 'f', '2018-01-01', '2024-10-01', unixepoch(), 26),
   (19, 19, 'Tialemla',   'Imchen',   'f', '2016-01-01', '2024-10-01', unixepoch(), 26);
+
+-- Qualifications (§4.3.1 picklist for `user.qualification_id`).
+-- Common Indian teaching credentials so the L3.1 user-create form's
+-- picker has reasonable defaults on first launch. IDs stable so
+-- fixtures can reference them.
+INSERT INTO qualification (id, name, description, created_at, created_by) VALUES
+  (1, 'B.Ed',          'Bachelor of Education',         unixepoch(), 6),
+  (2, 'M.Ed',          'Master of Education',           unixepoch(), 6),
+  (3, 'B.A. Education','Bachelor of Arts in Education', unixepoch(), 6),
+  (4, 'B.A.',          'Bachelor of Arts',              unixepoch(), 6),
+  (5, 'M.A.',          'Master of Arts',                unixepoch(), 6),
+  (6, 'D.El.Ed',       'Diploma in Elementary Education', unixepoch(), 6);
 
 -- Events & activities (§3.4.2, §4.3.4). Event master is single-tenant
 -- and stable — same list surfaces in Attendance (L2.2) and Capture

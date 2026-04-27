@@ -20,6 +20,22 @@ import {
   type GeoLevels,
   type Qualification,
 } from '../api';
+
+// Qualifications list is loaded by the user form (and by the
+// Qualifications tab via its own fetch). Hoisted so the user form
+// can pull it once when it mounts without coupling to the tab's
+// state. Returns the list and a setter so an optimistic refresh
+// after a qualification CRUD on the other tab is possible later.
+function useQualifications() {
+  const [list, setList] = useState<Qualification[] | null>(null);
+  useEffect(() => {
+    api
+      .qualifications()
+      .then((r) => setList(r.qualifications))
+      .catch(() => setList([]));
+  }, []);
+  return list;
+}
 import { useI18n } from '../i18n';
 
 type Tab = 'villages' | 'schools' | 'events' | 'qualifications' | 'users';
@@ -694,6 +710,7 @@ function UsersAdmin({ geo }: { geo: GeoLevels | null }) {
           t('master.col.full_name'),
           t('master.col.role'),
           t('master.col.scope'),
+          t('master.col.qualification'),
           '',
         ]}
         rows={(rows ?? []).map((u) => ({
@@ -703,6 +720,7 @@ function UsersAdmin({ geo }: { geo: GeoLevels | null }) {
             u.full_name,
             t(`role.${u.role}`),
             u.scope_name ?? t(`master.scope.${u.scope_level}`),
+            u.qualification_name ?? '—',
           ],
           onEdit: () => setEditing(u),
         }))}
@@ -728,6 +746,12 @@ function UserForm({
   const [fullName, setFullName] = useState(existing?.full_name ?? '');
   const [role, setRole] = useState<Role>(existing?.role ?? 'vc');
   const [scopeId, setScopeId] = useState<number | ''>(existing?.scope_id ?? '');
+  // Empty string = no qualification (sent as null on submit). Edit
+  // form starts at the existing value; create form starts unset.
+  const [qualificationId, setQualificationId] = useState<number | ''>(
+    existing?.qualification_id ?? '',
+  );
+  const qualifications = useQualifications();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -760,6 +784,7 @@ function UserForm({
         full_name: fullName,
         role,
         scope_id: scopeLevel ? Number(scopeId) : null,
+        qualification_id: qualificationId === '' ? null : Number(qualificationId),
       };
       if (existing) {
         await api.updateUser(existing.id, body);
@@ -816,6 +841,20 @@ function UserForm({
             </div>
           </Field>
         )}
+        <Field label={t('master.col.qualification')}>
+          <select
+            className={FIELD}
+            value={qualificationId}
+            onChange={(e) =>
+              setQualificationId(e.target.value ? Number(e.target.value) : '')
+            }
+          >
+            <option value="">{t('master.pick.qualification_none')}</option>
+            {(qualifications ?? []).map((q) => (
+              <option key={q.id} value={q.id}>{q.name}</option>
+            ))}
+          </select>
+        </Field>
       </div>
       <FormActions saving={saving} error={error} saved={saved} onCancel={onCancel} />
     </form>

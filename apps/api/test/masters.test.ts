@@ -279,34 +279,37 @@ describe('qualifications master', () => {
     await resetDb();
   });
 
-  it('list is empty after seed (no migration data); POST creates and PATCH renames', async () => {
+  it('list returns the seeded picklist; POST creates a new row and PATCH renames', async () => {
     const token = await loginAs('super');
     const initial = await cookieFetch('/api/qualifications', token);
     expect(initial.status).toBe(200);
-    const initialBody = (await initial.json()) as { qualifications: unknown[] };
-    expect(initialBody.qualifications).toEqual([]);
+    const initialBody = (await initial.json()) as {
+      qualifications: Array<{ name: string }>;
+    };
+    expect(initialBody.qualifications.map((q) => q.name)).toContain('B.Ed');
 
     const create = await cookieFetch('/api/qualifications', token, {
       method: 'POST',
-      body: JSON.stringify({ name: 'B.A. Education', description: 'Teaching degree' }),
+      body: JSON.stringify({ name: 'Diploma in Early Childhood', description: 'ECCE' }),
     });
     expect(create.status).toBe(201);
     const created = (await create.json()) as { qualification: { id: number; name: string } };
 
+    // Seeded value must collide.
     const dup = await cookieFetch('/api/qualifications', token, {
       method: 'POST',
-      body: JSON.stringify({ name: 'B.A. Education' }),
+      body: JSON.stringify({ name: 'B.Ed' }),
     });
     expect(dup.status).toBe(409);
 
     const patch = await cookieFetch(`/api/qualifications/${created.qualification.id}`, token, {
       method: 'PATCH',
-      body: JSON.stringify({ name: 'B.A. Ed' }),
+      body: JSON.stringify({ name: 'D.E.C.E' }),
     });
     expect(patch.status).toBe(200);
     expect(
       ((await patch.json()) as { qualification: { name: string } }).qualification.name,
-    ).toBe('B.A. Ed');
+    ).toBe('D.E.C.E');
   });
 });
 
@@ -422,5 +425,85 @@ describe('users master', () => {
     };
     expect(body.user.role).toBe('cluster_admin');
     expect(body.user.scope_level).toBe('cluster');
+  });
+
+  it('POST attaches qualification_id; admin list joins the name', async () => {
+    const token = await loginAs('super');
+    const create = await cookieFetch('/api/users', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: 'vc-with-qual',
+        full_name: 'VC With Qual',
+        role: 'vc',
+        scope_id: 1,
+        qualification_id: 1, // 'B.Ed' — seed
+      }),
+    });
+    expect(create.status).toBe(201);
+    const body = (await create.json()) as {
+      user: { qualification_id: number | null; qualification_name: string | null };
+    };
+    expect(body.user.qualification_id).toBe(1);
+    expect(body.user.qualification_name).toBe('B.Ed');
+
+    const listRes = await cookieFetch('/api/users', token);
+    const list = (await listRes.json()) as {
+      users: Array<{ user_id: string; qualification_name: string | null }>;
+    };
+    const row = list.users.find((u) => u.user_id === 'vc-with-qual');
+    expect(row?.qualification_name).toBe('B.Ed');
+  });
+
+  it('POST rejects an unknown qualification_id with 400', async () => {
+    const token = await loginAs('super');
+    const res = await cookieFetch('/api/users', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: 'vc-bad-qual',
+        full_name: 'Bad',
+        role: 'vc',
+        scope_id: 1,
+        qualification_id: 9999,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH clears qualification_id when sent null and preserves it when omitted', async () => {
+    const token = await loginAs('super');
+    const create = await cookieFetch('/api/users', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: 'vc-toggle-qual',
+        full_name: 'Toggler',
+        role: 'vc',
+        scope_id: 1,
+        qualification_id: 2, // 'M.Ed'
+      }),
+    });
+    const id = ((await create.json()) as { user: { id: number } }).user.id;
+
+    // Rename without touching qualification_id — preserves.
+    const rename = await cookieFetch(`/api/users/${id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({ full_name: 'Toggler Renamed' }),
+    });
+    expect(rename.status).toBe(200);
+    const renamed = (await rename.json()) as {
+      user: { qualification_id: number | null };
+    };
+    expect(renamed.user.qualification_id).toBe(2);
+
+    // Explicit null clears.
+    const cleared = await cookieFetch(`/api/users/${id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({ qualification_id: null }),
+    });
+    expect(cleared.status).toBe(200);
+    const clearedBody = (await cleared.json()) as {
+      user: { qualification_id: number | null; qualification_name: string | null };
+    };
+    expect(clearedBody.user.qualification_id).toBeNull();
+    expect(clearedBody.user.qualification_name).toBeNull();
   });
 });

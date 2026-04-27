@@ -377,6 +377,8 @@
   "master.col.full_name": "முழுப் பெயர்",
   "master.col.role": "பங்கு",
   "master.col.scope": "எல்லை",
+  "master.col.qualification": "தகுதி",
+  "master.pick.qualification_none": "— தகுதி இல்லை —",
   "master.kind.event": "நிகழ்வு",
   "master.kind.activity": "செயல்பாடு",
   "master.scope.village": "கிராமம்",

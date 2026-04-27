@@ -377,6 +377,8 @@
   "master.col.full_name": "पूरा नाम",
   "master.col.role": "भूमिका",
   "master.col.scope": "क्षेत्र",
+  "master.col.qualification": "योग्यता",
+  "master.pick.qualification_none": "— कोई योग्यता नहीं —",
   "master.kind.event": "आयोजन",
   "master.kind.activity": "गतिविधि",
   "master.scope.village": "गाँव",

@@ -376,6 +376,8 @@
   "master.col.full_name": "Full name",
   "master.col.role": "Role",
   "master.col.scope": "Scope",
+  "master.col.qualification": "Qualification",
+  "master.pick.qualification_none": "— No qualification —",
   "master.kind.event": "Event",
   "master.kind.activity": "Activity",
   "master.scope.village": "Village",

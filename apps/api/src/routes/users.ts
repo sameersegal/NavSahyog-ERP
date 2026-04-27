@@ -41,6 +41,8 @@ type AdminUser = {
   scope_level: ScopeLevel;
   scope_id: number | null;
   scope_name: string | null;
+  qualification_id: number | null;
+  qualification_name: string | null;
 };
 
 type AdminBody = {
@@ -48,6 +50,7 @@ type AdminBody = {
   full_name?: string;
   role?: string;
   scope_id?: number | null;
+  qualification_id?: number | null;
 };
 
 const users = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -62,27 +65,33 @@ function parseRole(raw: unknown): Role | null {
 
 // scope_name resolved per row by picking the right table from
 // SCOPE_TABLE. Done with a CASE expression rather than seven LEFT
-// JOINs so the query stays compact.
+// JOINs so the query stays compact. qualification_name comes via
+// LEFT JOIN so users with no qualification still surface as a row.
+const SELECT_USER_COLUMNS = `
+  u.id, u.user_id, u.full_name, u.role, u.scope_level, u.scope_id,
+  CASE u.scope_level
+    WHEN 'village'  THEN (SELECT name FROM village  WHERE id = u.scope_id)
+    WHEN 'cluster'  THEN (SELECT name FROM cluster  WHERE id = u.scope_id)
+    WHEN 'district' THEN (SELECT name FROM district WHERE id = u.scope_id)
+    WHEN 'region'   THEN (SELECT name FROM region   WHERE id = u.scope_id)
+    WHEN 'state'    THEN (SELECT name FROM state    WHERE id = u.scope_id)
+    WHEN 'zone'     THEN (SELECT name FROM zone     WHERE id = u.scope_id)
+    ELSE NULL
+  END AS scope_name,
+  u.qualification_id, q.name AS qualification_name
+`;
+const FROM_USER = `
+  FROM user u
+  LEFT JOIN qualification q ON q.id = u.qualification_id
+`;
+
 async function loadAdminUser(
   db: D1Database,
   id: number,
 ): Promise<AdminUser | null> {
   return (
     (await db
-      .prepare(
-        `SELECT u.id, u.user_id, u.full_name, u.role, u.scope_level, u.scope_id,
-                CASE u.scope_level
-                  WHEN 'village'  THEN (SELECT name FROM village  WHERE id = u.scope_id)
-                  WHEN 'cluster'  THEN (SELECT name FROM cluster  WHERE id = u.scope_id)
-                  WHEN 'district' THEN (SELECT name FROM district WHERE id = u.scope_id)
-                  WHEN 'region'   THEN (SELECT name FROM region   WHERE id = u.scope_id)
-                  WHEN 'state'    THEN (SELECT name FROM state    WHERE id = u.scope_id)
-                  WHEN 'zone'     THEN (SELECT name FROM zone     WHERE id = u.scope_id)
-                  ELSE NULL
-                END AS scope_name
-           FROM user u
-          WHERE u.id = ?`,
-      )
+      .prepare(`SELECT ${SELECT_USER_COLUMNS} ${FROM_USER} WHERE u.id = ?`)
       .bind(id)
       .first<AdminUser>()) ?? null
   );
@@ -90,18 +99,8 @@ async function loadAdminUser(
 
 users.get('/', requireCap('user.write'), async (c) => {
   const rs = await c.env.DB.prepare(
-    `SELECT u.id, u.user_id, u.full_name, u.role, u.scope_level, u.scope_id,
-            CASE u.scope_level
-              WHEN 'village'  THEN (SELECT name FROM village  WHERE id = u.scope_id)
-              WHEN 'cluster'  THEN (SELECT name FROM cluster  WHERE id = u.scope_id)
-              WHEN 'district' THEN (SELECT name FROM district WHERE id = u.scope_id)
-              WHEN 'region'   THEN (SELECT name FROM region   WHERE id = u.scope_id)
-              WHEN 'state'    THEN (SELECT name FROM state    WHERE id = u.scope_id)
-              WHEN 'zone'     THEN (SELECT name FROM zone     WHERE id = u.scope_id)
-              ELSE NULL
-            END AS scope_name
-       FROM user u
-      ORDER BY u.role, u.full_name COLLATE NOCASE`,
+    `SELECT ${SELECT_USER_COLUMNS} ${FROM_USER}
+     ORDER BY u.role, u.full_name COLLATE NOCASE`,
   ).all<AdminUser>();
   return c.json({ users: rs.results });
 });
@@ -112,6 +111,7 @@ type ParsedUser = {
   role: Role;
   scope_level: ScopeLevel;
   scope_id: number | null;
+  qualification_id: number | null;
 };
 
 async function validateScope(
@@ -159,7 +159,37 @@ function parseAdminBody(body: AdminBody): ParsedUser | { error: string } {
     }
     scopeId = n;
   }
-  return { user_id: userId, full_name: fullName, role, scope_level: scopeLevel, scope_id: scopeId };
+  // qualification_id is optional; null clears, undefined keeps existing
+  // (handled in PATCH). Server validates existence in validateQualification.
+  let qualificationId: number | null = null;
+  if (body.qualification_id !== undefined && body.qualification_id !== null) {
+    const n = Number(body.qualification_id);
+    if (!Number.isInteger(n) || n <= 0) {
+      return { error: 'qualification_id must be a positive integer or null' };
+    }
+    qualificationId = n;
+  }
+  return {
+    user_id: userId,
+    full_name: fullName,
+    role,
+    scope_level: scopeLevel,
+    scope_id: scopeId,
+    qualification_id: qualificationId,
+  };
+}
+
+async function validateQualification(
+  db: D1Database,
+  id: number | null,
+): Promise<string | null> {
+  if (id === null) return null;
+  const row = await db
+    .prepare('SELECT id FROM qualification WHERE id = ?')
+    .bind(id)
+    .first<{ id: number }>();
+  if (!row) return 'unknown qualification_id';
+  return null;
 }
 
 // Lab default password matching the L1/L2 seed (decisions.md D24).
@@ -176,6 +206,8 @@ users.post('/', requireCap('user.write'), async (c) => {
   if ('error' in parsed) return err(c, 'bad_request', 400, parsed.error);
   const scopeError = await validateScope(c.env.DB, parsed.scope_level, parsed.scope_id);
   if (scopeError) return err(c, 'bad_request', 400, scopeError);
+  const qualError = await validateQualification(c.env.DB, parsed.qualification_id);
+  if (qualError) return err(c, 'bad_request', 400, qualError);
 
   const existing = await c.env.DB
     .prepare('SELECT id FROM user WHERE user_id = ?')
@@ -185,8 +217,9 @@ users.post('/', requireCap('user.write'), async (c) => {
 
   const now = nowEpochSeconds();
   const rs = await c.env.DB.prepare(
-    `INSERT INTO user (user_id, full_name, password, role, scope_level, scope_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    `INSERT INTO user
+       (user_id, full_name, password, role, scope_level, scope_id, qualification_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
   )
     .bind(
       parsed.user_id,
@@ -195,6 +228,7 @@ users.post('/', requireCap('user.write'), async (c) => {
       parsed.role,
       parsed.scope_level,
       parsed.scope_id,
+      parsed.qualification_id,
       now,
     )
     .first<{ id: number }>();
@@ -246,6 +280,22 @@ users.patch('/:id', requireCap('user.write'), async (c) => {
   const scopeError = await validateScope(c.env.DB, scopeLevel, scopeId);
   if (scopeError) return err(c, 'bad_request', 400, scopeError);
 
+  // qualification_id: undefined preserves, null clears, integer sets.
+  let qualificationId: number | null = existing.qualification_id;
+  if ('qualification_id' in body) {
+    if (body.qualification_id === null || body.qualification_id === undefined) {
+      qualificationId = null;
+    } else {
+      const n = Number(body.qualification_id);
+      if (!Number.isInteger(n) || n <= 0) {
+        return err(c, 'bad_request', 400, 'qualification_id must be a positive integer or null');
+      }
+      qualificationId = n;
+    }
+    const qualError = await validateQualification(c.env.DB, qualificationId);
+    if (qualError) return err(c, 'bad_request', 400, qualError);
+  }
+
   if (userId !== existing.user_id) {
     const conflict = await c.env.DB
       .prepare('SELECT id FROM user WHERE user_id = ? AND id != ?')
@@ -257,10 +307,11 @@ users.patch('/:id', requireCap('user.write'), async (c) => {
   await c.env.DB
     .prepare(
       `UPDATE user
-          SET user_id = ?, full_name = ?, role = ?, scope_level = ?, scope_id = ?
+          SET user_id = ?, full_name = ?, role = ?, scope_level = ?, scope_id = ?,
+              qualification_id = ?
         WHERE id = ?`,
     )
-    .bind(userId, fullName, role, scopeLevel, scopeId, id)
+    .bind(userId, fullName, role, scopeLevel, scopeId, qualificationId, id)
     .run();
   const fresh = await loadAdminUser(c.env.DB, id);
   return c.json({ user: fresh });

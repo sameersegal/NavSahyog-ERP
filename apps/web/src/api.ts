@@ -114,6 +114,8 @@ export type AdminUser = {
   scope_level: import('@navsahyog/shared').ScopeLevel;
   scope_id: number | null;
   scope_name: string | null;
+  qualification_id: number | null;
+  qualification_name: string | null;
 };
 
 export type GeoLevels = {
@@ -414,6 +416,7 @@ export const api = {
     full_name: string;
     role: import('@navsahyog/shared').Role;
     scope_id?: number | null;
+    qualification_id?: number | null;
   }) =>
     req<{ user: AdminUser }>('/api/users', {
       method: 'POST',
@@ -426,6 +429,7 @@ export const api = {
       full_name?: string;
       role?: import('@navsahyog/shared').Role;
       scope_id?: number | null;
+      qualification_id?: number | null;
     },
   ) =>
     req<{ user: AdminUser }>(`/api/users/${id}`, {

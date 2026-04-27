@@ -377,6 +377,8 @@
   "master.col.full_name": "ಪೂರ್ಣ ಹೆಸರು",
   "master.col.role": "ಪಾತ್ರ",
   "master.col.scope": "ವ್ಯಾಪ್ತಿ",
+  "master.col.qualification": "ಅರ್ಹತೆ",
+  "master.pick.qualification_none": "— ಯಾವುದೇ ಅರ್ಹತೆ ಇಲ್ಲ —",
   "master.kind.event": "ಕಾರ್ಯಕ್ರಮ",
   "master.kind.activity": "ಚಟುವಟಿಕೆ",
   "master.scope.village": "ಗ್ರಾಮ",
