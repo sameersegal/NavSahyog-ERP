@@ -179,8 +179,13 @@
   "outbox.status.dead_letter": "ತಿರಸ್ಕೃತ",
   "outbox.status.done": "ಸಿಂಕ್ ಆಗಿದೆ",
   "outbox.row.meta": "{when} ರಂದು ಸರತಿಯಲ್ಲಿ · ಪ್ರಯತ್ನಗಳು {attempts} · ಬಿಲ್ಡ್ {build} · ಸ್ಕೀಮಾ v{schema}",
+  "outbox.row.payload_label": "ಬೆಂಬಲ ವಿವರ (ಟಿಕೆಟ್‌ನಲ್ಲಿ ಅಂಟಿಸಿ)",
   "outbox.action.retry": "ಮರುಪ್ರಯತ್ನಿಸಿ",
   "outbox.action.discard": "ತೆಗೆದುಹಾಕಿ",
+  "outbox.action.show": "ವಿವರಗಳು",
+  "outbox.action.hide": "ಮರೆಮಾಡಿ",
+  "outbox.action.copy": "ನಕಲಿಸಿ",
+  "outbox.action.copied": "ನಕಲಿಸಲಾಗಿದೆ",
 
   "village.back": "← ಎಲ್ಲ ಗ್ರಾಮಗಳು",
   "village.invalid": "ಅಮಾನ್ಯ ಗ್ರಾಮ.",
