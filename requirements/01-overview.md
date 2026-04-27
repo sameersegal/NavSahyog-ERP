@@ -65,10 +65,12 @@ for every primitive.
 The NavSahyog public website hosts **program apps** — small,
 read-only, embeddable widgets that show what a given program is
 doing in the field. They run on `navsahyog.org` (or partner sites),
-not inside the ERP, and are consumed by donors, prospective
-partners, and the general public. The first program app is the
-Jal Vriddhi pond infographic; future programs (Dhan Kaushal,
-Prakriti Prem, …) follow the same pattern.
+not inside the ERP, and are visible to anyone who reaches the
+page: prospective partners, journalists, government counterparts,
+prospective field staff, supporters, and the general public. The
+first program app is the Jal Vriddhi pond infographic; future
+programs (Dhan Kaushal, Prakriti Prem, …) follow the same
+pattern.
 
 Each program app is backed by exactly one **public program API**
 under `/api/programs/<slug>` (contract pinned in §5.19). The
@@ -90,9 +92,10 @@ server-side rendering on our end. Concretely:
   a noisy widget on a partner page can't degrade the VC dashboard
   experience (§5.19).
 
-**Non-goals.** No NavSahyog-hosted SPA per program (the Donor
-React page floated in early L3.3 work was dropped — it duplicated
-work the website team already does). No per-donor dashboards or
-authenticated donor logins; once a workflow needs auth, it belongs
-inside the ERP, not on the public website.
+**Non-goals.** No NavSahyog-hosted SPA per program (the in-app
+public-infographic page floated in early L3.3 work was dropped —
+it duplicated work the website team already does). No
+authenticated visitor logins or per-visitor dashboards on the
+public surface; once a workflow needs auth, it belongs inside the
+ERP, not on the public website.
 

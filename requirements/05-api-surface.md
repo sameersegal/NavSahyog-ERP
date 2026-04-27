@@ -250,8 +250,9 @@ new program endpoint cannot weaken any of them:
 
 1. **No auth.** No session cookie, no `Authorization` header, no
    API key. The Worker rejects credentials if presented (drops
-   the cookie before lookup) so a session leak from a logged-in
-   donor's browser cannot accidentally elevate the response.
+   the cookie before lookup) so a session left over from a
+   logged-in NavSahyog user (e.g. a VC who happens to land on the
+   embedder page) cannot accidentally elevate the response.
 2. **GET only.** No POST/PATCH/DELETE. The CORS layer also
    refuses `Access-Control-Allow-Methods` beyond `GET, OPTIONS`,
    so a misconfigured route can't accidentally write.
