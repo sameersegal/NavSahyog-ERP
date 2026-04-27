@@ -36,6 +36,7 @@ preserved in prose so inline cross-references still make sense.
 |---|---|
 | [`review-findings-v1.md`](./review-findings-v1.md) | First-pass critical review. Blockers, gaps, over/under-specification, and factual issues flagged for the team meeting. Resolve these before implementation begins. |
 | [`decisions.md`](./decisions.md) | Durable record of decisions that have amended the spec. Each row lists what changed and which spec sections moved with it. |
+| [`offline-scope.md`](./offline-scope.md) | Authoritative list of which workflows are `online-only` / `offline-eligible` / `offline-required`. The contract surface bound by the additive-only rule (D30). Edit alongside §6 and decisions.md whenever a workflow's offline status changes. |
 
 ## Consolidated open items
 

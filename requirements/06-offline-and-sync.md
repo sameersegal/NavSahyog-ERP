@@ -10,6 +10,46 @@ in SQLite, then bulk-uploads. The bespoke app replaces that with a
 endpoints (§5.14). The schema never has twin tables — offline state
 is purely a client concern.
 
+### 6.0 Offline contract (L4 amendment)
+
+The original §6 was drafted for a 3-workflow lab demo. Field reality
+needs offline to be a platform that survives ongoing iteration —
+most VC / Cluster data-capture workflows will be offline-eligible,
+new workflows will land regularly, and queued mutations from
+older clients must keep draining cleanly. Decisions D29–D32 reframe
+§6 around four rules:
+
+1. **`offline-scope.md` is the authoritative scope doc.** Anything
+   listed there as `offline-eligible` or `offline-required` is
+   bound by the additive-only contract below; everything else is
+   `online-only` and free to evolve. New workflows opt in via a
+   D-numbered decision, never by accident.
+2. **Additive-only contract on offline-eligible endpoints.** New
+   nullable fields are fine; renames, removals, and tightened
+   validation require a new endpoint version. A CI regression
+   corpus replays real payloads from each release against the
+   current server — a failing payload means the contract was
+   violated.
+3. **N-7 client compat window.** Clients are expected to upgrade
+   same-day, with end-of-week as the hard ceiling (decisions.md
+   D31). Server adapters for offline-eligible endpoints cover
+   the last seven days of builds; outbox items older than that
+   dead-letter on drain. A "Update required" screen blocks new
+   queueing past the window.
+4. **Generic, versioned outbox.** Outbox rows carry
+   `{endpoint, body, schema_version, build_id, idempotency_key}`
+   and replay opaquely. Adding an offline-eligible workflow is a
+   route registration, not an outbox-processor change.
+
+The detailed sub-sections below describe the original 3-workflow
+implementation, which lands as L4.1. **§6.4 (manifest deltas) and
+parts of §6.9 are superseded**: under D32 the manifest endpoint
+returns a full per-user scope snapshot, not a `since=…` delta —
+per-user scopes are kilobyte-sized and the delta protocol's
+complexity buys nothing at that scale. Other sub-sections (§6.2
+storage layout, §6.3 row shape, §6.5 runner, §6.6 conflict
+resolution, §6.7 clock skew, §6.8 cache security) carry forward.
+
 ### 6.1 Scope (what works offline)
 
 Per §3.7, only three workflows run offline:
