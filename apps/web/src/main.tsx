@@ -5,6 +5,7 @@ import { App } from './App';
 import { AuthProvider } from './auth';
 import { ThemeProvider } from './theme';
 import { LanguageProvider } from './i18n';
+import { SyncStateProvider } from './lib/sync-state';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <BrowserRouter>
           <AuthProvider>
-            <App />
+            <SyncStateProvider>
+              <App />
+            </SyncStateProvider>
           </AuthProvider>
         </BrowserRouter>
       </ThemeProvider>

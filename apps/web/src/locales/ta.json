@@ -144,6 +144,14 @@
   "streak.toast.matches_best": "இந்த வாரத்தின் சிறந்ததற்குச் சமம்",
   "streak.toast.steady": "நிலையானது",
 
+  "sync.green": "ஆன்லைனில்",
+  "sync.yellow": "ஒத்திசைகிறது",
+  "sync.red": "ஆஃப்லைனில்",
+  "sync.update_required.label": "புதுப்பிப்பு தேவை",
+  "sync.update_required.title": "புதுப்பிப்பு தேவை",
+  "sync.update_required.body": "இந்த பதிப்பு ஆதரிக்கப்படும் காலத்தைத் தாண்டியது. புதுப்பிக்க புதுப்பிக்கவும்.",
+  "sync.update_required.action": "புதுப்பி",
+
   "village.back": "← அனைத்து கிராமங்கள்",
   "village.invalid": "தவறான கிராமம்.",
   "village.tab.children": "குழந்தைகள்",

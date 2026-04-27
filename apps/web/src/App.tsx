@@ -18,6 +18,7 @@ import { PondNew } from './pages/PondNew';
 import { PondDetail } from './pages/PondDetail';
 import { TrainingManuals } from './pages/TrainingManuals';
 import { Shell } from './pages/Shell';
+import { ForceUpgradeBanner } from './lib/sync-state';
 import { can } from './api';
 
 export function App() {
@@ -31,10 +32,13 @@ export function App() {
   }
   if (!user) {
     return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <>
+        <ForceUpgradeBanner />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </>
     );
   }
   // L3.1 Master Creations is Super-Admin only (via `user.write` cap).
@@ -48,6 +52,7 @@ export function App() {
   const canPondsWrite = can(user, 'pond.write');
   return (
     <Shell>
+      <ForceUpgradeBanner />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/village/:id" element={<Village />} />

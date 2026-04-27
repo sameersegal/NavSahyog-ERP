@@ -56,3 +56,15 @@ export type {
 } from './insights';
 export { AT_RISK_THRESHOLD_DAYS, KPI_SPARK_POINTS } from './insights';
 export { isIndianPhone, isIsoDate, isClockTime } from './validation';
+export type { CompatVerdict, SyncState } from './sync';
+export {
+  BUILD_ID_HEADER,
+  SCHEMA_VERSION_HEADER,
+  COMPAT_WINDOW_DAYS,
+  SYNC_STATES,
+  parseBuildDate,
+  daysBetweenIso,
+  checkCompat,
+  todayIso,
+  dominantState,
+} from './sync';

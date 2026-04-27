@@ -144,6 +144,14 @@
   "streak.toast.matches_best": "ಈ ವಾರದ ಅತ್ಯುತ್ತಮಕ್ಕೆ ಸಮ",
   "streak.toast.steady": "ಸ್ಥಿರ",
 
+  "sync.green": "ಆನ್‌ಲೈನ್",
+  "sync.yellow": "ಸಿಂಕ್ ಆಗುತ್ತಿದೆ",
+  "sync.red": "ಆಫ್‌ಲೈನ್",
+  "sync.update_required.label": "ನವೀಕರಣ ಅಗತ್ಯ",
+  "sync.update_required.title": "ನವೀಕರಣ ಅಗತ್ಯವಿದೆ",
+  "sync.update_required.body": "ಈ ಬಿಲ್ಡ್ ಬೆಂಬಲಿತ ವಿಂಡೋ ದಾಟಿದೆ. ನವೀಕರಿಸಲು ರಿಫ್ರೆಶ್ ಮಾಡಿ.",
+  "sync.update_required.action": "ರಿಫ್ರೆಶ್",
+
   "village.back": "← ಎಲ್ಲ ಗ್ರಾಮಗಳು",
   "village.invalid": "ಅಮಾನ್ಯ ಗ್ರಾಮ.",
   "village.tab.children": "ಮಕ್ಕಳು",

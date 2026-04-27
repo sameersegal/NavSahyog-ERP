@@ -190,12 +190,29 @@ export type ChildCorePatch = {
   photo_media_id?: number | null;
 };
 
+import { BUILD_ID_HEADER } from '@navsahyog/shared';
+import { BUILD_ID } from './lib/build';
+
+// Window event fired when any API response comes back 426
+// (upgrade_required). The sync-state provider listens for it and
+// flips the chip to `update_required` + surfaces the force-upgrade
+// banner. Dispatched here (the single fetch site) so every API
+// caller automatically participates without per-call wiring.
+export const UPGRADE_REQUIRED_EVENT = 'navsahyog:upgrade_required';
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      [BUILD_ID_HEADER]: BUILD_ID,
+      ...(init?.headers ?? {}),
+    },
   });
+  if (res.status === 426 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(UPGRADE_REQUIRED_EVENT));
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as {
       error?: { code?: string; message?: string };

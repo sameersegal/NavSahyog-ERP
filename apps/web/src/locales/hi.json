@@ -144,6 +144,14 @@
   "streak.toast.matches_best": "इस हफ़्ते के सर्वश्रेष्ठ के बराबर",
   "streak.toast.steady": "स्थिर",
 
+  "sync.green": "ऑनलाइन",
+  "sync.yellow": "सिंक हो रहा है",
+  "sync.red": "ऑफ़लाइन",
+  "sync.update_required.label": "अपडेट आवश्यक",
+  "sync.update_required.title": "अपडेट करना ज़रूरी है",
+  "sync.update_required.body": "यह बिल्ड समर्थित अवधि से बाहर है। अपडेट के लिए ताज़ा करें।",
+  "sync.update_required.action": "ताज़ा करें",
+
   "village.back": "← सभी गाँव",
   "village.invalid": "अमान्य गाँव।",
   "village.tab.children": "बच्चे",
