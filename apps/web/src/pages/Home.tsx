@@ -84,6 +84,15 @@ export function Home() {
 
       <HealthScoreCard score={data.health_score} />
 
+      {/* Village-scope users (VCs) need a permanent path into their
+          village page — that's where attendance + children + media
+          gallery live. The Mission card covers the "today's nudge"
+          case but is conditional on a live mission, so on a quiet
+          day a VC would otherwise have no clickable way in. */}
+      {user.scope_level === 'village' && user.scope_id !== null && (
+        <MyVillageCard villageId={user.scope_id} />
+      )}
+
       {hasAnyWrite && data.mission && (
         <MissionCard mission={data.mission} user={user} />
       )}
@@ -442,6 +451,26 @@ function CompareAllLink({
       className="block text-sm text-primary hover:underline px-3 min-h-[44px] flex items-center"
     >
       {t('home.compare.cta_all')}
+    </Link>
+  );
+}
+
+function MyVillageCard({ villageId }: { villageId: number }) {
+  const { t } = useI18n();
+  return (
+    <Link
+      to={`/village/${villageId}`}
+      className="block bg-card border border-border rounded-lg p-4 hover:bg-card-hover min-h-[44px]"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-xs text-muted-fg uppercase tracking-wide">
+          {t('home.village.title')}
+        </div>
+        <div className="text-xs text-muted-fg">
+          {t('home.village.cta')}
+        </div>
+      </div>
+      <p className="text-sm mt-1">{t('home.village.subtitle')}</p>
     </Link>
   );
 }

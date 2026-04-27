@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserMenu } from '../components/UserMenu';
 import { useI18n } from '../i18n';
@@ -49,7 +49,7 @@ export function Shell({ children }: { children: ReactNode }) {
               {t('app.name')}
             </span>
           </Link>
-          <nav className="flex gap-3 sm:gap-5 text-sm">
+          <nav className="flex items-center gap-3 sm:gap-5 text-sm">
             <NavLink to="/" active={pathname === '/'}>
               {t('nav.home')}
             </NavLink>
@@ -62,22 +62,41 @@ export function Shell({ children }: { children: ReactNode }) {
             <NavLink to="/dashboard" active={pathname === '/dashboard'}>
               {t('nav.dashboard')}
             </NavLink>
+            {/* Secondary destinations: shown inline from sm: up where
+                there's room; folded into the More menu on mobile. The
+                same items are rendered twice — once inline (hidden on
+                <sm) and once inside the dropdown (sm:hidden) — so the
+                visible set never overflows the header band. */}
             {canPonds && (
-              <NavLink to="/ponds" active={pathname.startsWith('/ponds')}>
+              <NavLink
+                to="/ponds"
+                active={pathname.startsWith('/ponds')}
+                className="hidden sm:inline"
+              >
                 {t('nav.ponds')}
               </NavLink>
             )}
             <NavLink
               to="/training-manuals"
               active={pathname === '/training-manuals'}
+              className="hidden sm:inline"
             >
               {t('nav.manuals')}
             </NavLink>
             {canMasters && (
-              <NavLink to="/masters" active={pathname.startsWith('/masters')}>
+              <NavLink
+                to="/masters"
+                active={pathname.startsWith('/masters')}
+                className="hidden sm:inline"
+              >
                 {t('nav.masters')}
               </NavLink>
             )}
+            <MoreMenu
+              pathname={pathname}
+              canPonds={canPonds}
+              canMasters={canMasters}
+            />
           </nav>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {streak && streak.current_streak_days > 0 && (
@@ -119,23 +138,150 @@ function StreakChip({ streak }: { streak: StreakResponse }) {
 function NavLink({
   to,
   active,
+  className,
   children,
 }: {
   to: string;
   active: boolean;
+  className?: string;
   children: ReactNode;
+}) {
+  const base =
+    'py-1 ' +
+    (active
+      ? 'underline underline-offset-4 font-medium'
+      : 'opacity-85 hover:opacity-100');
+  return (
+    <Link to={to} className={className ? `${base} ${className}` : base}>
+      {children}
+    </Link>
+  );
+}
+
+// Mobile-only "More" overflow menu. Holds secondary nav items that
+// would otherwise wrap or push the user-menu off the right edge on a
+// 360 px-wide phone. On sm: and above the inline links are visible, so
+// this whole control hides — keeping fast keyboard/desktop navigation
+// unchanged.
+function MoreMenu({
+  pathname,
+  canPonds,
+  canMasters,
+}: {
+  pathname: string;
+  canPonds: boolean;
+  canMasters: boolean;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handle);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  // Close after a tap so the menu doesn't linger over the destination
+  // page. The Link's navigation runs first, then this fires.
+  useEffect(() => { setOpen(false); }, [pathname]);
+
+  // Active highlight on the trigger when one of the folded routes is
+  // current — same underline treatment the inline links use.
+  const activeFolded =
+    pathname.startsWith('/ponds') ||
+    pathname === '/training-manuals' ||
+    pathname.startsWith('/masters');
+
+  return (
+    <div ref={ref} className="relative sm:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={
+          'py-1 inline-flex items-center gap-1 ' +
+          (activeFolded
+            ? 'underline underline-offset-4 font-medium'
+            : 'opacity-85 hover:opacity-100')
+        }
+      >
+        {t('nav.more')}
+        <svg
+          className="w-3.5 h-3.5"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 mt-2 w-48 bg-card text-fg border border-border rounded-lg shadow-lg overflow-hidden z-20"
+        >
+          {canPonds && (
+            <MoreItem
+              to="/ponds"
+              active={pathname.startsWith('/ponds')}
+              label={t('nav.ponds')}
+            />
+          )}
+          <MoreItem
+            to="/training-manuals"
+            active={pathname === '/training-manuals'}
+            label={t('nav.manuals')}
+          />
+          {canMasters && (
+            <MoreItem
+              to="/masters"
+              active={pathname.startsWith('/masters')}
+              label={t('nav.masters')}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MoreItem({
+  to,
+  active,
+  label,
+}: {
+  to: string;
+  active: boolean;
+  label: string;
 }) {
   return (
     <Link
       to={to}
+      role="menuitem"
       className={
-        'py-1 ' +
-        (active
-          ? 'underline underline-offset-4 font-medium'
-          : 'opacity-85 hover:opacity-100')
+        'block px-4 py-2.5 text-sm hover:bg-card-hover ' +
+        (active ? 'font-medium bg-card-hover' : '')
       }
     >
-      {children}
+      {label}
     </Link>
   );
 }
