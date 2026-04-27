@@ -60,7 +60,7 @@ for every primitive.
 | Sessions / OTP | KV. |
 | Live counters (optional) | Durable Objects per cluster. |
 
-### 1.5 Public program apps
+### 1.5 Program-based public apps
 
 The NavSahyog public website hosts **program apps** — small,
 read-only, embeddable widgets that show what a given program is
