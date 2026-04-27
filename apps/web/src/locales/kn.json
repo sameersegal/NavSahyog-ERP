@@ -355,6 +355,7 @@
   "capture.success": "ಉಳಿಸಲಾಗಿದೆ. ಗ್ರಾಮದ ಗ್ಯಾಲರಿ ನವೀಕರಿಸಲಾಗಿದೆ.",
   "capture.recent": "ಈ ಗ್ರಾಮದ ಇತ್ತೀಚಿನ ಸೆರೆಹಿಡಿಯುವಿಕೆಗಳು",
 
+  "nav.manuals": "ತರಬೇತಿ",
   "nav.masters": "ಮಾಸ್ಟರ್",
 
   "master.title": "ಮಾಸ್ಟರ್ ರಚನೆಗಳು",
@@ -363,6 +364,7 @@
   "master.tab.schools": "ಶಾಲೆಗಳು",
   "master.tab.events": "ಕಾರ್ಯಕ್ರಮಗಳು",
   "master.tab.qualifications": "ಅರ್ಹತೆಗಳು",
+  "master.tab.manuals": "ತರಬೇತಿ ಕೈಪಿಡಿಗಳು",
   "master.tab.users": "ಬಳಕೆದಾರರು",
   "master.action.edit": "ತಿದ್ದು",
   "master.empty": "ಇನ್ನೂ ಸಾಲುಗಳಿಲ್ಲ.",
@@ -378,6 +380,9 @@
   "master.col.full_name": "ಪೂರ್ಣ ಹೆಸರು",
   "master.col.role": "ಪಾತ್ರ",
   "master.col.scope": "ವ್ಯಾಪ್ತಿ",
+  "master.col.category": "ವರ್ಗ",
+  "master.col.link": "ಲಿಂಕ್",
+  "master.col.updated_at": "ಅಪ್‌ಡೇಟ್",
   "master.kind.event": "ಕಾರ್ಯಕ್ರಮ",
   "master.kind.activity": "ಚಟುವಟಿಕೆ",
   "master.scope.village": "ಗ್ರಾಮ",
@@ -399,6 +404,10 @@
   "master.events.kind_locked": "ಪ್ರಕಾರ ಸ್ಥಿರ — ಈ ಕಾರ್ಯಕ್ರಮಕ್ಕೆ ಈಗಾಗಲೇ ಹಾಜರಾತಿ ಅಥವಾ ಮಾಧ್ಯಮ ಇದೆ.",
   "master.qualifications.add": "ಅರ್ಹತೆ ಸೇರಿಸಿ",
   "master.qualifications.empty": "ಇನ್ನೂ ಯಾವುದೇ ಅರ್ಹತೆಗಳನ್ನು ವ್ಯಾಖ್ಯಾನಿಸಿಲ್ಲ.",
+  "master.manuals.add": "ತರಬೇತಿ ಕೈಪಿಡಿ ಸೇರಿಸಿ",
+  "master.manuals.empty": "ಇನ್ನೂ ಯಾವುದೇ ತರಬೇತಿ ಕೈಪಿಡಿಗಳಿಲ್ಲ.",
+  "master.manuals.category_hint": "ಮುಕ್ತ-ರೂಪ ಗುಂಪಿನ ಲೇಬಲ್, ಉದಾ. \"ಆನ್‌ಬೋರ್ಡಿಂಗ್\" ಅಥವಾ \"ಹಾಜರಾತಿ\".",
+  "master.manuals.link_hint": "http ಅಥವಾ https ಬಳಸಿ. ಕೈಪಿಡಿಗಳು ಹೊಸ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ತೆರೆಯುತ್ತವೆ.",
   "master.users.add": "ಬಳಕೆದಾರ ಸೇರಿಸಿ",
   "master.users.user_id_hint": "ಲೋವರ್‌ಕೇಸ್ ಲಾಗಿನ್ ಐಡಿ (ಉದಾ. vc-newville).",
   "master.users.password_note": "ಹೊಸ ಬಳಕೆದಾರರು ಲ್ಯಾಬ್ ಡೀಫಾಲ್ಟ್ ಪಾಸ್‌ವರ್ಡ್‌ನೊಂದಿಗೆ ಸೈನ್ ಇನ್ ಮಾಡುತ್ತಾರೆ. L5 ನಲ್ಲಿ Clerk ಗೆ ಬದಲಾಗುತ್ತದೆ.",
@@ -467,5 +476,10 @@
   "pond.detail.no_filename": "ಒಪ್ಪಂದ",
   "pond.detail.reupload.title": "ಹೊಸ ಆವೃತ್ತಿಯನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ",
   "pond.detail.reupload.hint": "ಹಿಂದಿನ ಆವೃತ್ತಿ ದಾಖಲೆಯಲ್ಲಿ ಉಳಿಯುತ್ತದೆ. ಏನು ಬದಲಾಯಿತು ಎಂಬುದನ್ನು ಸಂಕ್ಷಿಪ್ತವಾಗಿ ಸೇರಿಸಿ.",
-  "pond.detail.reupload.action.save": "v{n} ಆಗಿ ಉಳಿಸಿ"
+  "pond.detail.reupload.action.save": "v{n} ಆಗಿ ಉಳಿಸಿ",
+
+  "manuals.title": "ತರಬೇತಿ ಕೈಪಿಡಿಗಳು",
+  "manuals.description": "ಕೇಂದ್ರ ತಂಡದಿಂದ ಸಂಗ್ರಹಿಸಲಾದ ಉಲ್ಲೇಖ ಸಾಮಗ್ರಿ. ಶೀರ್ಷಿಕೆ ಟ್ಯಾಪ್ ಮಾಡಿದರೆ ಹೊಸ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ತೆರೆಯುತ್ತದೆ.",
+  "manuals.empty": "ಇನ್ನೂ ಯಾವುದೇ ತರಬೇತಿ ಕೈಪಿಡಿಗಳು ಲಭ್ಯವಿಲ್ಲ.",
+  "manuals.updated_at": "{when} ರಂದು ಅಪ್‌ಡೇಟ್"
 }

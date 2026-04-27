@@ -6,6 +6,7 @@
   "nav.achievements": "Achievements",
   "nav.dashboard": "Dashboard",
   "nav.ponds": "Ponds",
+  "nav.manuals": "Training",
   "nav.masters": "Masters",
 
   "auth.login.hint": "Lab build. Try {creds}.",
@@ -362,6 +363,7 @@
   "master.tab.schools": "Schools",
   "master.tab.events": "Events",
   "master.tab.qualifications": "Qualifications",
+  "master.tab.manuals": "Training manuals",
   "master.tab.users": "Users",
   "master.action.edit": "Edit",
   "master.empty": "No rows yet.",
@@ -377,6 +379,9 @@
   "master.col.full_name": "Full name",
   "master.col.role": "Role",
   "master.col.scope": "Scope",
+  "master.col.category": "Category",
+  "master.col.link": "Link",
+  "master.col.updated_at": "Updated",
   "master.kind.event": "Event",
   "master.kind.activity": "Activity",
   "master.scope.village": "Village",
@@ -398,6 +403,10 @@
   "master.events.kind_locked": "Kind is frozen — this event already has attendance or media.",
   "master.qualifications.add": "Add qualification",
   "master.qualifications.empty": "No qualifications defined yet.",
+  "master.manuals.add": "Add training manual",
+  "master.manuals.empty": "No training manuals yet.",
+  "master.manuals.category_hint": "Free-form group label, e.g. \"Onboarding\" or \"Attendance\".",
+  "master.manuals.link_hint": "Use http or https. Manuals open in a new tab on the read-only page.",
   "master.users.add": "Add user",
   "master.users.user_id_hint": "Lowercase login id (e.g. vc-newville).",
   "master.users.password_note": "New users sign in with the lab default password. Auth moves to Clerk in L5.",
@@ -466,5 +475,10 @@
   "pond.detail.no_filename": "agreement",
   "pond.detail.reupload.title": "Upload a new version",
   "pond.detail.reupload.hint": "The previous version stays on file. Add a short note describing what changed.",
-  "pond.detail.reupload.action.save": "Save as v{n}"
+  "pond.detail.reupload.action.save": "Save as v{n}",
+
+  "manuals.title": "Training manuals",
+  "manuals.description": "Reference material curated by the central team. Tap a title to open it in a new tab.",
+  "manuals.empty": "No training manuals available yet.",
+  "manuals.updated_at": "Updated {when}"
 }

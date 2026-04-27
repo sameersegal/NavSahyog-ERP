@@ -1,6 +1,7 @@
--- 0009_pond_agreement — Jal Vriddhi pond + farmer + agreement
--- versions (spec §3.10, §4.3.9). First non-child-development
--- workflow in the system.
+-- 0010_pond_agreement — Jal Vriddhi pond + farmer + agreement
+-- versions (spec §3.10, §4.3.10). First non-child-development
+-- workflow in the system. Numbered 0010 because main grew an
+-- 0009_training_manual.sql in parallel (L3.1.1).
 --
 -- A VC creates a pond on a farmer's plot, captures GPS, and uploads
 -- a signed agreement. Agreements are critical legal artefacts so we

@@ -115,6 +115,18 @@ surfaced as two endpoints for UI clarity.
 | `POST` / `PATCH` / `DELETE` | `/api/activities[/:uuid]` | Admin. |
 | `GET` / `POST` / `PATCH` / `DELETE` | `/api/qualifications[/:uuid]` | |
 
+### 5.7.1 Training manuals — `/api/training-manuals`
+
+Read-only catalogue surfaced at `/training-manuals` (§3.8.8).
+Reads gated on `training_manual.read` (every authenticated role);
+writes gated on `training_manual.write` (Super Admin only).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/training-manuals` | Returns `{ manuals: [{ id, category, name, link, updated_at }] }`, sorted by `category` then `name` (NOCASE). |
+| `POST` | `/api/training-manuals` | Body `{ category, name, link }`. `link` must be `http(s)`; non-URL or other-scheme inputs return 400. Duplicate `(category, name)` returns 409. Server stamps `created_at = updated_at = now`. |
+| `PATCH` | `/api/training-manuals/:id` | Partial update of the same fields. Same validation; `updated_at` is bumped to the current epoch second on every PATCH. |
+
 ### 5.8 Media — `/api/media/*`
 
 Two-step upload: **presign → direct PUT to R2 → commit metadata**.

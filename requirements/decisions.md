@@ -20,7 +20,7 @@ justification.
 
 ### What the implementation PR ships (lands with this commit)
 
-- **Schema:** `db/migrations/0009_pond_agreement.sql` — three new
+- **Schema:** `db/migrations/0010_pond_agreement.sql` — three new
   tables (`farmer`, `pond`, `pond_agreement_version`) with the
   indexes called out in §4.3.10. No FK consumer yet on
   `pond_agreement_version` — append-only by design.

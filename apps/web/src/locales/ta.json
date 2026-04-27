@@ -355,6 +355,7 @@
   "capture.success": "சேமிக்கப்பட்டது. கிராமக் கேலரி புதுப்பிக்கப்பட்டது.",
   "capture.recent": "இந்தக் கிராமத்தின் சமீபத்திய பதிவுகள்",
 
+  "nav.manuals": "பயிற்சி",
   "nav.masters": "மாஸ்டர்",
 
   "master.title": "மாஸ்டர் உருவாக்கங்கள்",
@@ -363,6 +364,7 @@
   "master.tab.schools": "பள்ளிகள்",
   "master.tab.events": "நிகழ்வுகள்",
   "master.tab.qualifications": "தகுதிகள்",
+  "master.tab.manuals": "பயிற்சி கையேடுகள்",
   "master.tab.users": "பயனர்கள்",
   "master.action.edit": "திருத்து",
   "master.empty": "இன்னும் வரிசைகள் இல்லை.",
@@ -378,6 +380,9 @@
   "master.col.full_name": "முழுப் பெயர்",
   "master.col.role": "பங்கு",
   "master.col.scope": "எல்லை",
+  "master.col.category": "வகைப்பாடு",
+  "master.col.link": "இணைப்பு",
+  "master.col.updated_at": "புதுப்பிக்கப்பட்டது",
   "master.kind.event": "நிகழ்வு",
   "master.kind.activity": "செயல்பாடு",
   "master.scope.village": "கிராமம்",
@@ -399,6 +404,10 @@
   "master.events.kind_locked": "வகை நிலையானது — இந்த நிகழ்வுக்கு ஏற்கனவே வருகை அல்லது மீடியா உள்ளது.",
   "master.qualifications.add": "தகுதியைச் சேர்",
   "master.qualifications.empty": "இன்னும் தகுதிகள் வரையறுக்கப்படவில்லை.",
+  "master.manuals.add": "பயிற்சி கையேட்டைச் சேர்",
+  "master.manuals.empty": "இன்னும் பயிற்சி கையேடுகள் இல்லை.",
+  "master.manuals.category_hint": "திறந்த வடிவ குழு லேபிள், உதா. \"ஆன்போர்டிங்\" அல்லது \"வருகை\".",
+  "master.manuals.link_hint": "http அல்லது https பயன்படுத்தவும். கையேடுகள் புதிய தாவலில் திறக்கும்.",
   "master.users.add": "பயனரைச் சேர்",
   "master.users.user_id_hint": "சிறிய எழுத்தில் உள்நுழைவு ஐடி (உதா. vc-newville).",
   "master.users.password_note": "புதிய பயனர்கள் ஆய்வக இயல்புநிலை கடவுச்சொல்லுடன் உள்நுழைகிறார்கள். L5 இல் Clerk க்கு மாறும்.",
@@ -467,5 +476,10 @@
   "pond.detail.no_filename": "ஒப்பந்தம்",
   "pond.detail.reupload.title": "புதிய பதிப்பை பதிவேற்று",
   "pond.detail.reupload.hint": "முந்தைய பதிப்பு பதிவில் உள்ளது. என்ன மாறியது என்பதை சுருக்கமாக எழுது.",
-  "pond.detail.reupload.action.save": "v{n} ஆக சேமி"
+  "pond.detail.reupload.action.save": "v{n} ஆக சேமி",
+
+  "manuals.title": "பயிற்சி கையேடுகள்",
+  "manuals.description": "மைய குழுவால் தயாரிக்கப்பட்ட குறிப்புப் பொருட்கள். தலைப்பைத் தட்டினால் அது புதிய தாவலில் திறக்கும்.",
+  "manuals.empty": "இன்னும் பயிற்சி கையேடுகள் கிடைக்கவில்லை.",
+  "manuals.updated_at": "{when} அன்று புதுப்பிக்கப்பட்டது"
 }

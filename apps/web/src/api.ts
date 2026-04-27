@@ -127,6 +127,14 @@ export type Qualification = {
   description: string | null;
 };
 
+export type TrainingManual = {
+  id: number;
+  category: string;
+  name: string;
+  link: string;
+  updated_at: number;
+};
+
 export type AdminUser = {
   id: number;
   user_id: string;
@@ -426,6 +434,27 @@ export const api = {
     body: { name?: string; description?: string | null },
   ) =>
     req<{ qualification: Qualification }>(`/api/qualifications/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  // Training manuals — read by every authenticated role; write
+  // gated server-side on `training_manual.write` (Super Admin only).
+  trainingManuals: () =>
+    req<{ manuals: TrainingManual[] }>('/api/training-manuals'),
+  createTrainingManual: (body: {
+    category: string;
+    name: string;
+    link: string;
+  }) =>
+    req<{ manual: TrainingManual }>('/api/training-manuals', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateTrainingManual: (
+    id: number,
+    body: { category?: string; name?: string; link?: string },
+  ) =>
+    req<{ manual: TrainingManual }>(`/api/training-manuals/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),

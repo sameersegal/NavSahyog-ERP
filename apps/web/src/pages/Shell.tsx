@@ -67,6 +67,12 @@ export function Shell({ children }: { children: ReactNode }) {
                 {t('nav.ponds')}
               </NavLink>
             )}
+            <NavLink
+              to="/training-manuals"
+              active={pathname === '/training-manuals'}
+            >
+              {t('nav.manuals')}
+            </NavLink>
             {canMasters && (
               <NavLink to="/masters" active={pathname === '/masters'}>
                 {t('nav.masters')}

@@ -10,6 +10,7 @@ import { Masters } from './pages/Masters';
 import { Ponds } from './pages/Ponds';
 import { PondNew } from './pages/PondNew';
 import { PondDetail } from './pages/PondDetail';
+import { TrainingManuals } from './pages/TrainingManuals';
 import { Shell } from './pages/Shell';
 import { can } from './api';
 
@@ -47,6 +48,7 @@ export function App() {
         <Route path="/capture" element={<Capture />} />
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/training-manuals" element={<TrainingManuals />} />
         {canMasters && <Route path="/masters" element={<Masters />} />}
         {canPondsRead && <Route path="/ponds" element={<Ponds />} />}
         {canPondsWrite && <Route path="/ponds/new" element={<PondNew />} />}
