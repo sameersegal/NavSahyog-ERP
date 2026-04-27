@@ -9,6 +9,50 @@ justification.
 
 ---
 
+## 2026-04-26 — L3.3 Jal Vriddhi pond + agreement form
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D25 | **Jal Vriddhi gets its own first-class workflow surface (§3.10) — three new tables (`farmer`, `pond`, `pond_agreement_version`), a new `pond.write` / `pond.read` capability pair, and a dedicated form / list / detail UI.** Up to now Jal Vriddhi existed only as one of nine `event.kind = 'activity'` rows used to tag photos. The new request — VC populates farmer + GPS + uploads a signed agreement, with full version history — does not fit the child-development surface (no `student`, no `attendance_session`), so the new entity types are scope-bound to `village` but otherwise standalone. Schema slotted as **§4.3.10** (out-of-source-order so §4.3.9 Audit keeps its existing cross-references) and routes as **§5.18** (same reasoning vs §5.16 / §5.17). Capability matrix in §2.3 grows two rows; matrix-as-data in `packages/shared/src/capabilities.ts` adds `pond.read` to the read-only base + `pond.write` to the write tier. **Online-only**: pond creation is rare relative to attendance and the agreement file is the high-stakes artefact in the workflow — better to fail fast on a bad-network day than risk a placeholder version. | Earlier framing that left "Jal Vriddhi" implicit as a media tag. |
+| D26 | **Agreements are append-only versions, never overwrites.** Re-uploading creates a new `pond_agreement_version` row with `version = MAX(version) + 1`; the prior R2 object stays in place. The "current" agreement is `MAX(version) WHERE pond_id = ?`. There is no PATCH or DELETE on `pond_agreement_version` at the API surface; soft-deleting a pond hides the chain but leaves the version rows in place for audit. Each new version may carry an optional 200-char "what changed" note (free-text — no enum) so the audit value is captured without forcing a taxonomy that hasn't been designed. | Any "edit-in-place" framing that would have made the agreement a single mutable column on `pond`. |
+| D27 | **Agreement uploads ride a parallel HMAC token machinery, not the media token.** The media token signs `kind` (image/video/audio) and `village_id`; agreements have no `kind`, sign `village_id` only, and a shorter MIME allow-list (`application/pdf`, `image/jpeg`, `image/png`). The token version marker is `agreement-v1`, distinct from media's `v1`, so a media-presign token cannot be replayed against `/api/ponds/agreements/upload/:uuid`. The R2 binding is reused (single bucket); top-level prefix `agreement/` keeps the listing namespaces separate. The presign is bound to a `village_id` (scope check) but not to a `pond_id` — the same presign serves both initial-create and re-upload flows, with the `pond_id` binding happening server-side at commit. **Cap is 25 MiB** (vs media's 50 MiB) — agreements are scanned PDFs and image scans, not videos. | An earlier shape that overloaded the media presign for agreement uploads. The token coupling and the kind-shaped allow-list both leaked badly enough that two narrow tokens read cleaner than one generic one. |
+| D28 | **Read access is broad, write is village-scoped.** `pond.read` is granted to every authenticated role including read-only geo admins (District+) — the agreement trail is exactly the kind of artefact those audits depend on. `pond.write` is granted to VC / AF / Cluster Admin / Super Admin, mirroring how attendance and media writes are gated. There is no separate "originating VC only" rule on re-uploads — any user with `pond.write` whose effective scope covers the pond's village can append a new version. Phone is collected as Indian mobile (validated via the existing `isIndianPhone`) but optional; KYC / Aadhaar capture for the farmer is **explicitly out of scope** until §9 calls for it. | An earlier draft that gated re-upload to the originating VC only — too narrow once a pond outlives the original VC's posting. |
+
+### What the implementation PR ships (lands with this commit)
+
+- **Schema:** `db/migrations/0010_pond_agreement.sql` — three new
+  tables (`farmer`, `pond`, `pond_agreement_version`) with the
+  indexes called out in §4.3.10. No FK consumer yet on
+  `pond_agreement_version` — append-only by design.
+- **Capabilities:** `packages/shared/src/capabilities.ts` adds
+  `pond.read` to `READ_ONLY` and `pond.write` to the `WRITE`
+  layer. Both ride the existing `requireCap(...)` middleware in
+  `apps/api/src/policy.ts` — no new gating shape.
+- **Shared types:** `packages/shared/src/pond.ts` — wire shapes
+  for `Farmer`, `Pond`, `PondAgreementVersion`, the list / detail
+  views, and the presign / commit request bodies. Re-exported
+  from `packages/shared/src/index.ts` so server + client read
+  from the same module.
+- **API routes:** `apps/api/src/routes/ponds.ts` (new file) wires
+  the seven endpoints from §5.18. `apps/api/src/lib/agreement.ts`
+  carries the parallel HMAC machinery (D27). `index.ts` adds the
+  staging-basic-auth carve-out for the token-gated upload PUT
+  and routes `/api/ponds` into the new tree.
+- **UI:** `apps/web/src/pages/PondNew.tsx` (create form),
+  `Ponds.tsx` (list), `PondDetail.tsx` (versions + re-upload).
+  `apps/web/src/lib/agreement.ts` carries the client-side
+  presign → PUT helper. `App.tsx` adds three routes gated on
+  `pond.read` / `pond.write`; `Shell.tsx` adds the nav link gated
+  on `pond.read`.
+- **i18n:** `pond.*` namespace added to all four catalogs
+  (en + hi + kn + ta) plus `nav.ponds`. Hindi gets full
+  translations; Kannada and Tamil ship with reasonable
+  approximations consistent with prior levels' standards (would
+  benefit from a native-speaker pass before public launch — same
+  posture as L1/L2 strings).
+
+---
+
 ## 2026-04-26 — L3.1 Master Creations scope + delivery
 
 | # | Decision | Supersedes |

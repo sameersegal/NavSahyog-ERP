@@ -20,6 +20,25 @@ export type {
   MediaPresignResponse,
   MediaCommitRequest,
 } from './media';
+export type {
+  Farmer,
+  Pond,
+  PondStatus,
+  PondAgreementVersion,
+  PondListItem,
+  PondDetail,
+  AgreementPresignRequest,
+  AgreementPresignResponse,
+  AgreementCommitRef,
+  CreatePondRequest,
+  AppendAgreementRequest,
+} from './pond';
+export {
+  POND_STATUSES,
+  isPondStatus,
+  AGREEMENT_MIMES,
+  AGREEMENT_MAX_BYTES,
+} from './pond';
 export type { GeoLevel, DashboardMetric } from './dashboard';
 export {
   GEO_LEVELS,

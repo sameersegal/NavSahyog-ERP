@@ -22,6 +22,11 @@ DELETE FROM attendance_mark;
 DELETE FROM attendance_session;
 DELETE FROM student;
 DELETE FROM media;
+-- Jal Vriddhi (§3.10, §4.3.10): pond_agreement_version → pond →
+-- farmer. All hang off user + village, so they drop before either.
+DELETE FROM pond_agreement_version;
+DELETE FROM pond;
+DELETE FROM farmer;
 DELETE FROM event;
 DELETE FROM school;
 DELETE FROM session;

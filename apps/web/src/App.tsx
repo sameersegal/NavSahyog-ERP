@@ -7,6 +7,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Achievements } from './pages/Achievements';
 import { Capture } from './pages/Capture';
 import { Masters } from './pages/Masters';
+import { Ponds } from './pages/Ponds';
+import { PondNew } from './pages/PondNew';
+import { PondDetail } from './pages/PondDetail';
 import { TrainingManuals } from './pages/TrainingManuals';
 import { Shell } from './pages/Shell';
 import { can } from './api';
@@ -32,6 +35,11 @@ export function App() {
   // Non-admins reaching `/masters` get bounced back to the Home —
   // the route is also hidden from the nav for the same audience.
   const canMasters = can(user, 'user.write');
+  // L3.3 Jal Vriddhi pond agreements (§3.10). Read tier: every
+  // authenticated user has `pond.read`. Write tier (the create form):
+  // VC / AF / Cluster / Super only — gated server-side too.
+  const canPondsRead = can(user, 'pond.read');
+  const canPondsWrite = can(user, 'pond.write');
   return (
     <Shell>
       <Routes>
@@ -42,6 +50,9 @@ export function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/training-manuals" element={<TrainingManuals />} />
         {canMasters && <Route path="/masters" element={<Masters />} />}
+        {canPondsRead && <Route path="/ponds" element={<Ponds />} />}
+        {canPondsWrite && <Route path="/ponds/new" element={<PondNew />} />}
+        {canPondsRead && <Route path="/ponds/:id" element={<PondDetail />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

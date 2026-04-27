@@ -36,6 +36,8 @@ within the user's effective scope; `—` = denied.
 | Add / edit / graduate child | ✔ | ✔ | ✔ | — | ✔ |
 | Capture / upload media | ✔ | ✔ | ✔ | — | ✔ |
 | Add achievement | ✔ | ✔ | ✔ | — | ✔ |
+| Create pond + agreement (§3.10) | ✔ | ✔ | ✔ | — | ✔ |
+| View ponds + agreement history (§3.10) | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Drill-down dashboard | own village | cluster | cluster | own level | global |
 | Consolidated dashboard | — | cluster | cluster | own level | global |
 | CSV export | — | ✔ | ✔ | ✔ | ✔ |

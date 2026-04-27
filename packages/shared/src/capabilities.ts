@@ -24,6 +24,8 @@ export type Capability =
   | 'achievement.write'
   | 'media.read'
   | 'media.write'
+  | 'pond.read'
+  | 'pond.write'
   | 'qualification.write'
   | 'training_manual.read'
   | 'training_manual.write'
@@ -40,6 +42,7 @@ const READ_ONLY: readonly Capability[] = [
   'attendance.read',
   'achievement.read',
   'media.read',
+  'pond.read',
   'training_manual.read',
   'dashboard.read',
 ];
@@ -50,6 +53,7 @@ const WRITE: readonly Capability[] = [
   'attendance.write',
   'achievement.write',
   'media.write',
+  'pond.write',
 ];
 
 // L3.1 Master-Creations writes (decisions.md D22). Granted only to

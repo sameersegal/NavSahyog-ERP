@@ -210,6 +210,29 @@ Supports the offline outbox (§6). Full semantics in Part 4.
 |---|---|---|
 | `GET` | `/api/audit-log?actor=&action=&from=&to=` | Super Admin only. |
 
+### 5.18 Jal Vriddhi ponds — `/api/ponds/*`
+
+Routes for §3.10. Numbered out of source-order so §5.16 / §5.17
+keep their existing cross-references. All gated by `pond.read`
+(reads) or `pond.write` (writes); scope-bound through
+`assertVillageInScope` against `farmer.village_id` or, for the
+upload endpoints, the village_id signed into the HMAC token.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/ponds?village_id=` | Scope-filtered list of ponds; each row carries the farmer + the latest agreement version inline. |
+| `GET` | `/api/ponds/:id` | Pond detail with the full agreement history (versions descending). |
+| `POST` | `/api/ponds` | Create farmer + pond + version 1 in one call. Agreement bytes must already be in R2 via `/agreements/presign` + PUT. |
+| `POST` | `/api/ponds/:id/agreements` | Append a new agreement version (`MAX(version) + 1`). Append-only — re-uploads never overwrite. |
+| `POST` | `/api/ponds/agreements/presign` | HMAC presign for an agreement upload. Bound to `village_id`, not `pond_id`, so the same presign serves both create + re-upload. |
+| `PUT` | `/api/ponds/agreements/upload/:uuid?token=` | Token-gated R2 receiver. No session cookie. Mirrors `/api/media/upload/:uuid`. |
+| `GET` | `/api/ponds/agreements/raw/:uuid` | Authenticated read-through to the R2 object. Scope-checked against the owning pond. |
+
+Allowed agreement MIMEs: `application/pdf`, `image/jpeg`,
+`image/png`. App-level cap: 25 MiB raw. Token version marker is
+`agreement-v1`, distinct from media's `v1` so a media-presign
+token can't be replayed against an agreement endpoint.
+
 ### 5.16 Summary
 
 Route count: **≈ 30** top-level paths (many supporting multiple

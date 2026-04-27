@@ -18,6 +18,10 @@ export function Shell({ children }: { children: ReactNode }) {
   // Masters tab is Super-Admin only (decisions.md D22). `user.write`
   // is in the SUPER_ADMIN_ONLY set, so checking it here is enough.
   const canMasters = can(user, 'user.write');
+  // Ponds tab is everyone with `pond.read` — that's every
+  // authenticated user today, but the cap is the gate so a future
+  // role with no pond.read drops the link automatically.
+  const canPonds = can(user, 'pond.read');
 
   useEffect(() => {
     if (!canLog) {
@@ -58,6 +62,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <NavLink to="/dashboard" active={pathname === '/dashboard'}>
               {t('nav.dashboard')}
             </NavLink>
+            {canPonds && (
+              <NavLink to="/ponds" active={pathname.startsWith('/ponds')}>
+                {t('nav.ponds')}
+              </NavLink>
+            )}
             <NavLink
               to="/training-manuals"
               active={pathname === '/training-manuals'}

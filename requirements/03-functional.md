@@ -499,3 +499,69 @@ reviews, and sends manually via email or WhatsApp.
   per §9.4.
 - Online-only workflow; not in the §6.1 offline scope.
 
+---
+
+### 3.10 Jal Vriddhi — pond + agreement
+
+NavSahyog's Jal Vriddhi programme creates a pond on a farmer's plot
+under a written agreement between the foundation and the farmer.
+This is the first non-child-development workflow — distinct from
+the children/attendance/media surface in §3.2–§3.6 — and its data
+model intentionally does not borrow from `student`. A farmer is not
+a participant in the same sense; the pond is a long-lived asset on
+their plot.
+
+#### 3.10.1 Create
+- Home → **Ponds** → `+ Add pond` (VC-and-above, gated on
+  `pond.write` per §2.3).
+- Fields:
+  - **Farmer**: full name (required); phone (optional, validated as
+    Indian mobile per §9.2 if supplied); plot identifier (free text,
+    e.g. "Survey No. 42/3").
+  - **Pond**: latitude + longitude (required, decimal degrees);
+    status (`planned` default, also `dug` / `active` / `inactive`);
+    notes (free text, max 500 chars, optional).
+  - **Agreement**: PDF, JPEG, or PNG up to 25 MiB.
+- GPS source: `navigator.geolocation` via a "Use my location"
+  button. Numeric override is allowed for a desk-entered pond.
+- Acceptance: a successful submit creates one row each in `farmer`,
+  `pond`, and `pond_agreement_version` (version = 1) inside a
+  single API call, with the agreement bytes already in R2 at
+  `agreement/{yyyy}/{mm}/{village_id}/{uuid}.{ext}` (presigned PUT).
+
+#### 3.10.2 Versioning
+- Re-uploading an agreement (e.g. renewal, correction, termination
+  letter) **never overwrites** the prior file. It appends a new
+  `pond_agreement_version` row with `version = MAX(version) + 1`,
+  pointing at a fresh R2 object.
+- The "current" agreement is `MAX(version) WHERE pond_id = ?`.
+  Older versions remain reachable via the pond detail page and
+  the `/api/ponds/:id` response.
+- Each new version may carry an optional free-text note (max 200
+  chars) describing what changed (e.g. "Renewal for 2026").
+
+#### 3.10.3 Scope and capabilities
+- A pond is anchored to a village via `farmer.village_id`. Every
+  read and write is scope-bound through the standard
+  `assertVillageInScope` check (§5.1, mirrors §3.2).
+- `pond.write` is granted to VC / AF / Cluster Admin / Super
+  Admin. `pond.read` is granted to every authenticated user
+  (read-only geo admins included), so District+ admins can audit
+  the agreement trail without the create surface.
+
+#### 3.10.4 Acceptance
+- The agreement upload flow uses the same two-phase R2 pattern as
+  media (§7.3): a `/api/ponds/agreements/presign` returns an HMAC
+  upload URL; the client `PUT`s bytes; the create / append commit
+  verifies the R2 object's size and key before inserting the
+  metadata row.
+- The version table is append-only — there is no PATCH or DELETE
+  on `pond_agreement_version`. Soft-deleting a pond
+  (`pond.deleted_at`) hides it from list/detail responses but
+  leaves the version rows in the table for audit.
+- Online-only workflow; not in the §6.1 offline scope. (Pond
+  creation is rare relative to attendance, the agreement file is
+  often heavier than the offline payload budget tolerates, and
+  agreement integrity is high-stakes — better to fail fast on a
+  bad-network day than to risk a placeholder version.)
+
