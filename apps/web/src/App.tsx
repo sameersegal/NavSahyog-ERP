@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
@@ -11,11 +11,19 @@ import { Ponds } from './pages/Ponds';
 import { PondNew } from './pages/PondNew';
 import { PondDetail } from './pages/PondDetail';
 import { TrainingManuals } from './pages/TrainingManuals';
+import { Donor } from './pages/Donor';
 import { Shell } from './pages/Shell';
 import { can } from './api';
 
 export function App() {
   const { user, loading } = useAuth();
+  const location = useLocation();
+  // `/donor` is the public, no-auth donor infographic. Render it
+  // regardless of session state (or while the me() probe is still in
+  // flight) so external visitors don't see the login redirect.
+  if (location.pathname === '/donor') {
+    return <Donor />;
+  }
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-muted-fg">

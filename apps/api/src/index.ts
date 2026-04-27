@@ -16,6 +16,7 @@ import qualifications from './routes/qualifications';
 import trainingManuals from './routes/training_manuals';
 import users from './routes/users';
 import ponds from './routes/ponds';
+import publicRoutes from './routes/public';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
 
@@ -44,6 +45,11 @@ app.use('*', async (c, next) => {
   // Same carve-out for the agreement upload endpoint — already
   // token-gated by the HMAC in the query string.
   if (path.startsWith('/api/ponds/agreements/upload/')) return next();
+  // Donor-facing public surface (`/donor` SPA route + its data API)
+  // is intentionally outside the staging gate. The page returns
+  // PII-scrubbed pond data (no phones, first names only); browsing
+  // it from a donor's link should not need staging credentials.
+  if (path === '/donor' || path.startsWith('/api/public/')) return next();
 
   const header = c.req.header('authorization') ?? '';
   const match = /^Basic (.+)$/i.exec(header);
@@ -113,6 +119,7 @@ app.route('/api/qualifications', qualifications);
 app.route('/api/training-manuals', trainingManuals);
 app.route('/api/users', users);
 app.route('/api/ponds', ponds);
+app.route('/api/public', publicRoutes);
 
 app.onError((e, c) => {
   console.error(e);

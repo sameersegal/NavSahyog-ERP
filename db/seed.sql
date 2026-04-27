@@ -790,3 +790,82 @@ SELECT
   26.331, 94.509,
   19, 3 + (n % 6), 26
 FROM days WHERE n IN (6, 21, 37, 52, 69, 83);
+
+-- Jal Vriddhi (§3.10, §4.3.10) — pond seed for the donor-facing map.
+-- One farmer + one pond per village across v3..v19 (17 villages),
+-- plus a second pond in two "star" villages (v8, v19) for visual
+-- density. Each pond carries a single committed agreement (version
+-- 1) — metadata only, no R2 object behind the r2_key, mirroring the
+-- L2.4 media seed pattern.
+--
+-- Why v1 and v2 are deliberately empty: they are the L1 fixture
+-- villages that the pond test suite (apps/api/test/ponds.test.ts)
+-- exercises against. Keeping them pond-free preserves the tests'
+-- "VC creates a pond and sees exactly that pond" invariant without
+-- the suite having to bake in a baseline count.
+--
+-- Status mix is donor-friendly: heavy on `active` and `dug` so the
+-- public infographic shows progress, with a small tail of `planned`
+-- and two `inactive` rows for variety. Coordinates are real-ish
+-- village centroids, enough to land each marker in the correct
+-- district on a small-zoom map.
+INSERT INTO farmer (id, village_id, full_name, phone, plot_identifier, created_at, created_by) VALUES
+  (1,  3,  'Bharath Reddy',      '+919876500001', 'Survey 8/2B',       unixepoch('now', '-140 days'), 3),
+  (2,  4,  'Sushila Gowda',      '+919876500002', 'Plot 19',           unixepoch('now', '-130 days'), 11),
+  (3,  5,  'Manjunath Urs',      NULL,            'Survey 44/2',       unixepoch('now', '-120 days'), 12),
+  (4,  6,  'Veeresh Patil',      '+919876500004', NULL,                unixepoch('now', '-110 days'), 13),
+  (5,  7,  'Imran Sheikh',       '+919876500005', 'Plot 6',            unixepoch('now', '-100 days'), 14),
+  (6,  8,  'Saravanan Mani',     '+919876500006', 'Survey 110/3',      unixepoch('now', '-95 days'),  15),
+  (7,  9,  'Lakshmi Subbiah',    NULL,            'Plot 22',           unixepoch('now', '-80 days'),  16),
+  (8,  10, 'Murali Krishnan',    '+919876500008', 'Survey 5/1A',       unixepoch('now', '-75 days'),  17),
+  (9,  11, 'Devi Pillai',        '+919876500009', NULL,                unixepoch('now', '-65 days'),  18),
+  (10, 12, 'Abdul Karim',        '+919876500010', 'Plot 14',           unixepoch('now', '-60 days'),  19),
+  (11, 13, 'Selvi Raja',         '+919876500011', 'Survey 88/2',       unixepoch('now', '-55 days'),  20),
+  (12, 14, 'Pandi Thevar',       '+919876500012', 'Survey 33/1B',      unixepoch('now', '-45 days'),  21),
+  (13, 15, 'Karuppayee Velu',    NULL,            'Plot 9',            unixepoch('now', '-40 days'),  22),
+  (14, 16, 'Imkongmeren Ao',     '+919876500014', NULL,                unixepoch('now', '-35 days'),  23),
+  (15, 17, 'Niedonuo Angami',    '+919876500015', 'Plot Jakhama-3',    unixepoch('now', '-25 days'),  24),
+  (16, 18, 'Tsukjem Pongen',     '+919876500016', 'Survey 7',          unixepoch('now', '-20 days'),  25),
+  (17, 19, 'Bendang Longchar',   '+919876500017', 'Plot Longsa-12',    unixepoch('now', '-15 days'),  26),
+  (18, 8,  'Kanaga Pandian',     '+919876500018', 'Plot Tiruvallur-7', unixepoch('now', '-30 days'),  15),
+  (19, 19, 'Toshi Jamir',        NULL,            'Plot Longsa-22',    unixepoch('now', '-10 days'),  26);
+
+INSERT INTO pond (id, farmer_id, village_id, latitude, longitude, status, notes, created_at, created_by) VALUES
+  (1,  1,  3,  17.860, 77.620, 'active',   'Pond filled to 80% capacity through monsoon.', unixepoch('now', '-138 days'), 3),
+  (2,  2,  4,  12.215, 76.165, 'active',   'Ground water table improved by ~2m.',          unixepoch('now', '-128 days'), 11),
+  (3,  3,  5,  12.418, 76.694, 'dug',      'Lining work pending start of monsoon.',        unixepoch('now', '-118 days'), 12),
+  (4,  4,  6,  17.567, 76.572, 'planned',  'Awaiting JCB schedule for next month.',        unixepoch('now', '-105 days'), 13),
+  (5,  5,  7,  17.200, 76.367, 'inactive', 'Borewell collapse upstream — rework plan.',    unixepoch('now', '-98 days'),  14),
+  (6,  6,  8,  13.144, 79.910, 'active',   'Recharge well linked, supplying 3 farms.',     unixepoch('now', '-92 days'),  15),
+  (7,  7,  9,  13.046, 80.097, 'planned',  NULL,                                            unixepoch('now', '-78 days'),  16),
+  (8,  8,  10, 12.949, 78.870, 'active',   NULL,                                            unixepoch('now', '-72 days'),  17),
+  (9,  9,  11, 12.910, 79.319, 'dug',      'Bund work 70% complete.',                      unixepoch('now', '-62 days'),  18),
+  (10, 10, 12, 12.792, 78.717, 'active',   'Two crop cycles since dig.',                   unixepoch('now', '-58 days'),  19),
+  (11, 11, 13, 12.682, 78.620, 'planned',  NULL,                                            unixepoch('now', '-52 days'),  20),
+  (12, 12, 14, 10.030, 78.342, 'dug',      NULL,                                            unixepoch('now', '-42 days'),  21),
+  (13, 13, 15, 9.962,  77.788, 'active',   'Drip irrigation tied in.',                     unixepoch('now', '-38 days'),  22),
+  (14, 14, 16, 25.679, 94.106, 'planned',  'Hill terrain — survey ongoing.',               unixepoch('now', '-32 days'),  23),
+  (15, 15, 17, 25.605, 94.130, 'dug',      NULL,                                            unixepoch('now', '-22 days'),  24),
+  (16, 16, 18, 26.301, 94.508, 'active',   NULL,                                            unixepoch('now', '-18 days'),  25),
+  (17, 17, 19, 26.331, 94.509, 'inactive', 'Silted — cleanout planned for Q3.',            unixepoch('now', '-12 days'),  26),
+  (18, 18, 8,  13.150, 79.918, 'active',   'Second pond on the same farm.',                unixepoch('now', '-28 days'),  15),
+  (19, 19, 19, 26.337, 94.515, 'dug',      NULL,                                            unixepoch('now', '-8 days'),   26);
+
+-- Version 1 of the agreement for every pond. r2_key mirrors §7.1
+-- layout (`agreement/{yyyy}/{mm}/{village_id}/{uuid}.{ext}`); bytes
+-- + filenames are dummies. The donor surface never reads these so
+-- the absence of a real R2 object is invisible to the public app.
+INSERT INTO pond_agreement_version (pond_id, version, uuid, r2_key, mime, bytes, original_filename, notes, uploaded_at, uploaded_by)
+SELECT
+  p.id,
+  1,
+  'seed-pond-agr-' || printf('%03d', p.id),
+  'agreement/' || strftime('%Y/%m', date(p.created_at, 'unixepoch')) || '/' ||
+    p.village_id || '/seed-pond-agr-' || printf('%03d', p.id) || '.pdf',
+  'application/pdf',
+  180000 + (p.id * 1000),
+  'agreement-' || printf('%03d', p.id) || '.pdf',
+  CASE WHEN p.id = 1 THEN 'Original signed copy.' ELSE NULL END,
+  p.created_at,
+  p.created_by
+FROM pond p;
