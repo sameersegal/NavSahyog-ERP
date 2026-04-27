@@ -16,7 +16,7 @@ import qualifications from './routes/qualifications';
 import trainingManuals from './routes/training_manuals';
 import users from './routes/users';
 import ponds from './routes/ponds';
-import publicRoutes from './routes/public';
+import programs from './routes/programs';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
 
@@ -45,11 +45,10 @@ app.use('*', async (c, next) => {
   // Same carve-out for the agreement upload endpoint — already
   // token-gated by the HMAC in the query string.
   if (path.startsWith('/api/ponds/agreements/upload/')) return next();
-  // Donor-facing public surface (`/donor` SPA route + its data API)
-  // is intentionally outside the staging gate. The page returns
-  // PII-scrubbed pond data (no phones, first names only); browsing
-  // it from a donor's link should not need staging credentials.
-  if (path === '/donor' || path.startsWith('/api/public/')) return next();
+  // Public, embeddable program APIs (no auth, PII-scrubbed). These
+  // are designed to be called cross-origin from third-party sites,
+  // so they cannot live behind the staging basic-auth gate.
+  if (path.startsWith('/api/programs/')) return next();
 
   const header = c.req.header('authorization') ?? '';
   const match = /^Basic (.+)$/i.exec(header);
@@ -78,15 +77,29 @@ app.use('*', async (c, next) => {
   return next();
 });
 
-// CORS: explicit allowlist driven by the ALLOWED_ORIGINS Worker
-// var (comma-separated). Same-origin requests carry no `Origin`
-// header from the browser and are unaffected. Anything from an
-// origin not on the list gets no ACAO header back, so the
-// browser refuses the credentialed request.
-// Single-Worker same-origin deploys leave ALLOWED_ORIGINS empty —
-// the web bundle served by [assets] is already same-origin, and
-// any cross-origin caller is refused by default.
+// CORS — two regimes, picked per-request by path:
+//
+//   * `/api/programs/*` is an embeddable, no-auth, no-cookie public
+//     surface. Any origin can read it, so we return ACAO `*` and
+//     refuse credentials. Restricted to GET + OPTIONS so the surface
+//     stays read-only at the CORS layer too.
+//
+//   * Everything else is the credentialed app API. Origin must
+//     appear in ALLOWED_ORIGINS (comma-separated Worker var); the
+//     browser refuses the request otherwise. Same-origin callers
+//     carry no `Origin` header and are unaffected. Single-Worker
+//     same-origin deploys leave ALLOWED_ORIGINS empty so any stray
+//     cross-origin caller is refused by default.
 app.use('*', async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  if (path.startsWith('/api/programs/')) {
+    return cors({
+      origin: '*',
+      credentials: false,
+      allowHeaders: ['Content-Type'],
+      allowMethods: ['GET', 'OPTIONS'],
+    })(c, next);
+  }
   const allowed = (c.env.ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -119,7 +132,7 @@ app.route('/api/qualifications', qualifications);
 app.route('/api/training-manuals', trainingManuals);
 app.route('/api/users', users);
 app.route('/api/ponds', ponds);
-app.route('/api/public', publicRoutes);
+app.route('/api/programs', programs);
 
 app.onError((e, c) => {
   console.error(e);
