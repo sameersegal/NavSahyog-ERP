@@ -8,6 +8,7 @@
   "nav.ponds": "Ponds",
   "nav.manuals": "Training",
   "nav.masters": "Masters",
+  "nav.more": "More",
 
   "auth.login.hint": "Lab build. Try {creds}.",
   "auth.login.user_id": "User ID",
