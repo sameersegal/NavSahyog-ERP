@@ -192,13 +192,13 @@ export type ChildCorePatch = {
 
 import { BUILD_ID_HEADER } from '@navsahyog/shared';
 import { BUILD_ID } from './lib/build';
+import { UPGRADE_REQUIRED_EVENT } from './lib/events';
 
-// Window event fired when any API response comes back 426
-// (upgrade_required). The sync-state provider listens for it and
-// flips the chip to `update_required` + surfaces the force-upgrade
-// banner. Dispatched here (the single fetch site) so every API
-// caller automatically participates without per-call wiring.
-export const UPGRADE_REQUIRED_EVENT = 'navsahyog:upgrade_required';
+// Re-export so callers that already imported it from `../api` keep
+// working — the canonical home is `lib/events.ts` so the drain
+// runner and other sync-platform pieces don't have to import from
+// the api module.
+export { UPGRADE_REQUIRED_EVENT };
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {

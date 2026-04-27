@@ -17,7 +17,8 @@ ships first; workflows opt in incrementally.
 | Sub | Scope | Status |
 |---|---|---|
 | L4.0a | Foundation primitives — `X-App-Build` header, server compat middleware (426 past N-7), client build-id injection, real network detection (HEAD probe, not `navigator.onLine`), sync-state taxonomy (green/yellow/red/update_required) chip in chrome, force-upgrade banner. **No outbox or IDB yet.** | in flight |
-| L4.0 | Offline platform — versioned generic outbox, IDB migration framework, service-worker upgrade, build-id pinning, additive-only CI guard, sync-state taxonomy. **No new offline workflows ship in this slice.** | in flight (L4.0a in review) |
+| L4.0b | Generic versioned outbox — IDB migration framework, ULID-keyed `outbox` store, opaque drain runner with backoff + 426 handling, dead-letter pathway, hard outbox cap, `/outbox` UI screen with retry/discard/manual sync, sync chip wired to queued/dead-letter counts. **No live workflows enqueue yet.** | in flight |
+| L4.0 | Offline platform — versioned generic outbox, IDB migration framework, service-worker upgrade, build-id pinning, additive-only CI guard, sync-state taxonomy. **No new offline workflows ship in this slice.** | in flight (L4.0a + L4.0b in review) |
 | L4.1 | Onboard the §6.1 three workflows (attendance, achievements, media) onto the L4.0 platform. | not started |
 | L4.2+ | Progressive opt-in per workflow as `requirements/offline-scope.md` grows. Each new offline-eligible workflow is its own small PR with a decision entry. | not started |
 

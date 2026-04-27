@@ -1,16 +1,16 @@
 // Sync-state taxonomy + chrome chip + force-upgrade banner
-// (L4.0a — decisions.md D29, D32; level-4.md "Working principles" rule 5).
+// (L4.0a/b — decisions.md D29, D32; level-4.md "Working principles" rule 5).
 //
 // Single source of truth for the green / yellow / red / update_required
-// indicator surfaced in the app header. Two signals feed it today:
+// indicator surfaced in the app header. Signals feeding it:
 //   * Real network detectability (lib/network.ts HEAD probe). Offline
 //     → red.
-//   * 426 responses from the API (api.ts dispatches an event on
-//     `UPGRADE_REQUIRED_EVENT`). 426 → update_required, latched
+//   * 426 responses from the API (api.ts + drain.ts dispatch an event
+//     on `UPGRADE_REQUIRED_EVENT`). 426 → update_required, latched
 //     until the page reloads.
-//
-// Future signals (outbox queued count, dead-letter presence) plug in
-// here when L4.0b ships.
+//   * Outbox state (lib/outbox.ts emits OUTBOX_CHANGED_EVENT after
+//     every mutation). Pending / in_flight / failed → yellow;
+//     dead_letter → red (action required).
 
 import {
   createContext,
@@ -21,15 +21,34 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { Link } from 'react-router-dom';
 import type { SyncState } from '@navsahyog/shared';
 import { useI18n } from '../i18n';
-import { UPGRADE_REQUIRED_EVENT } from '../api';
+import { UPGRADE_REQUIRED_EVENT } from './events';
 import { detectNetwork, type NetworkStatus } from './network';
+import { counts as outboxCounts, OUTBOX_CHANGED_EVENT } from './outbox';
+import { drain } from './drain';
+
+type OutboxCounts = {
+  pending: number;
+  in_flight: number;
+  failed: number;
+  dead_letter: number;
+};
 
 type SyncStateValue = {
   state: SyncState;
   network: NetworkStatus;
+  outbox: OutboxCounts;
   refresh: () => void;
+  syncNow: () => Promise<void>;
+};
+
+const ZERO_COUNTS: OutboxCounts = {
+  pending: 0,
+  in_flight: 0,
+  failed: 0,
+  dead_letter: 0,
 };
 
 const Ctx = createContext<SyncStateValue | null>(null);
@@ -39,15 +58,37 @@ const PROBE_INTERVAL_MS = 30_000;
 export function SyncStateProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<NetworkStatus>('unknown');
   const [upgradeRequired, setUpgradeRequired] = useState(false);
+  const [outbox, setOutbox] = useState<OutboxCounts>(ZERO_COUNTS);
 
   const probe = useCallback(async (force = false) => {
     const result = await detectNetwork({ force });
     setNetwork(result);
   }, []);
 
-  // Initial probe + interval. We deliberately use a HEAD probe rather
-  // than `navigator.onLine` (level-4.md rule 8). The cache inside
-  // detectNetwork keeps the actual network traffic light.
+  const refreshCounts = useCallback(async () => {
+    try {
+      const c = await outboxCounts();
+      setOutbox({
+        pending: c.pending,
+        in_flight: c.in_flight,
+        failed: c.failed,
+        dead_letter: c.dead_letter,
+      });
+    } catch {
+      // IDB may be unavailable (private browsing, quota, jsdom in a
+      // test that didn't install fake-indexeddb). Treat as empty
+      // outbox rather than crashing the chip.
+      setOutbox(ZERO_COUNTS);
+    }
+  }, []);
+
+  const syncNow = useCallback(async () => {
+    await drain({ isOnline: () => network !== 'offline' });
+    await refreshCounts();
+  }, [network, refreshCounts]);
+
+  // Initial network probe + interval. The cache inside detectNetwork
+  // keeps the actual network traffic light.
   useEffect(() => {
     let cancelled = false;
     const tick = () => {
@@ -56,7 +97,11 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
     };
     tick();
     const interval = window.setInterval(tick, PROBE_INTERVAL_MS);
-    const handleOnline = () => void probe(true);
+    const handleOnline = () => {
+      void probe(true);
+      // Coming back online — drain whatever's queued.
+      void syncNow();
+    };
     const handleOffline = () => setNetwork('offline');
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -66,7 +111,26 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+    // syncNow depends on `network`; we deliberately don't refire the
+    // mount effect on every network change (the probe + listeners
+    // handle that). Captured `syncNow` reads `network` via closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [probe]);
+
+  // Initial outbox count + subscribe to mutations from any tab/page.
+  useEffect(() => {
+    void refreshCounts();
+    const handler = () => void refreshCounts();
+    window.addEventListener(OUTBOX_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(OUTBOX_CHANGED_EVENT, handler);
+  }, [refreshCounts]);
+
+  // App-start drain — fire-and-forget, only if we believe we're
+  // online. The drain runner itself is single-flight.
+  useEffect(() => {
+    if (network !== 'online') return;
+    void drain({ isOnline: () => true }).then(refreshCounts);
+  }, [network, refreshCounts]);
 
   // 426 latch. Once the server has rejected a request as too old,
   // any subsequent request from the same client will keep failing
@@ -77,18 +141,45 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(UPGRADE_REQUIRED_EVENT, handler);
   }, []);
 
-  const state: SyncState = upgradeRequired
-    ? 'update_required'
-    : network === 'offline'
-      ? 'red'
-      : 'green';
+  const state = reduceState({ network, upgradeRequired, outbox });
 
   const value = useMemo<SyncStateValue>(
-    () => ({ state, network, refresh: () => void probe(true) }),
-    [state, network, probe],
+    () => ({
+      state,
+      network,
+      outbox,
+      refresh: () => void probe(true),
+      syncNow,
+    }),
+    [state, network, outbox, probe, syncNow],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+// State reduction. Pure function — exported for tests.
+//
+//   update_required → highest priority (latched on 426).
+//   dead_letter > 0 → red (user action required).
+//   network offline → red.
+//   anything in flight or queued → yellow.
+//   else → green.
+export function reduceState(args: {
+  network: NetworkStatus;
+  upgradeRequired: boolean;
+  outbox: OutboxCounts;
+}): SyncState {
+  if (args.upgradeRequired) return 'update_required';
+  if (args.outbox.dead_letter > 0) return 'red';
+  if (args.network === 'offline') return 'red';
+  if (
+    args.outbox.pending > 0 ||
+    args.outbox.in_flight > 0 ||
+    args.outbox.failed > 0
+  ) {
+    return 'yellow';
+  }
+  return 'green';
 }
 
 export function useSyncState(): SyncStateValue {
@@ -97,7 +188,13 @@ export function useSyncState(): SyncStateValue {
     // Outside the provider — return a benign default rather than
     // throwing. Login screen (which mounts before the provider in
     // some flows) shouldn't crash because of an indicator chip.
-    return { state: 'green', network: 'unknown', refresh: () => {} };
+    return {
+      state: 'green',
+      network: 'unknown',
+      outbox: ZERO_COUNTS,
+      refresh: () => {},
+      syncNow: async () => {},
+    };
   }
   return ctx;
 }
@@ -122,20 +219,35 @@ const DOT_STYLE: Record<SyncState, string> = {
 
 export function SyncChip() {
   const { t } = useI18n();
-  const { state } = useSyncState();
-  const label =
-    state === 'green'
-      ? t('sync.green')
-      : state === 'yellow'
-        ? t('sync.yellow')
-        : state === 'red'
-          ? t('sync.red')
-          : t('sync.update_required.label');
+  const { state, network, outbox } = useSyncState();
+  const queued = outbox.pending + outbox.in_flight + outbox.failed;
+
+  // Label is finer-grained than the SyncState enum:
+  //   * yellow → "{n} queued" so the user sees backlog at a glance.
+  //   * red → distinguish "Offline" (network down) from "Action
+  //     required" (dead-letter present and online).
+  let label: string;
+  if (state === 'update_required') {
+    label = t('sync.update_required.label');
+  } else if (state === 'yellow') {
+    label = t('sync.yellow.queued', { n: queued });
+  } else if (state === 'red') {
+    label =
+      outbox.dead_letter > 0
+        ? t('sync.red.action_required')
+        : t('sync.red.offline');
+  } else {
+    label = t('sync.green');
+  }
+  // Title carries the underlying network state for diagnostics on
+  // hover, even when the visible label is about the dead-letter.
+  const title = network === 'offline' ? `${label} · ${t('sync.red.offline')}` : label;
   return (
-    <span
+    <Link
+      to="/outbox"
       role="status"
       aria-label={label}
-      title={label}
+      title={title}
       className={
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ' +
         CHIP_STYLE[state]
@@ -146,7 +258,7 @@ export function SyncChip() {
         className={'w-2 h-2 rounded-full ' + DOT_STYLE[state]}
       />
       <span className="hidden sm:inline">{label}</span>
-    </span>
+    </Link>
   );
 }
 
