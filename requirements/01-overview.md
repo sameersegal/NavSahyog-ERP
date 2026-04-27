@@ -60,3 +60,42 @@ for every primitive.
 | Sessions / OTP | KV. |
 | Live counters (optional) | Durable Objects per cluster. |
 
+### 1.5 Program-based public apps
+
+The NavSahyog public website hosts **program apps** — small,
+read-only, embeddable widgets that show what a given program is
+doing in the field. They run on `navsahyog.org` (or partner sites),
+not inside the ERP, and are visible to anyone who reaches the
+page: prospective partners, journalists, government counterparts,
+prospective field staff, supporters, and the general public. The
+first program app is the Jal Vriddhi pond infographic; future
+programs (Dhan Kaushal, Prakriti Prem, …) follow the same
+pattern.
+
+Each program app is backed by exactly one **public program API**
+under `/api/programs/<slug>` (contract pinned in §5.19). The
+website embeds these via custom JS — no auth, no cookies, no
+server-side rendering on our end. Concretely:
+
+- **Read-only.** No write or mutation surface is ever exposed to
+  the public.
+- **Aggregate + per-row.** The API returns the stats and markers
+  the embedder needs to render its widget; the embedder owns the
+  visual design.
+- **PII-scrubbed at the response builder, not just at display.**
+  Names, phone numbers, plot identifiers, free-text notes,
+  agreement metadata, and internal user ids never reach the wire.
+  Coordinates are coarsened to ~110 m so an exact farm plot can't
+  be pinpointed (§5.19, §9.5).
+- **Isolated from the authenticated app.** Public traffic is rate-
+  limited at the edge and CORS-locked to known embedder origins so
+  a noisy widget on a partner page can't degrade the VC dashboard
+  experience (§5.19).
+
+**Non-goals.** No NavSahyog-hosted SPA per program (the in-app
+public-infographic page floated in early L3.3 work was dropped —
+it duplicated work the website team already does). No
+authenticated visitor logins or per-visitor dashboards on the
+public surface; once a workflow needs auth, it belongs inside the
+ERP, not on the public website.
+

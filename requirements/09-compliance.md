@@ -47,6 +47,15 @@
 - **Rotate the Google Maps API key** (currently baked into
   `index.html` in the vendor APK) before any public release.
 - No third-party analytics; use Cloudflare Web Analytics.
+- **Public program APIs (§1.5, §5.19) carry a stricter PII floor
+  than the authenticated app.** The deny-list — names (full or
+  first), phone numbers, plot identifiers / addresses, free-text
+  VC notes, agreement metadata (uuid, r2_key, filenames, byte
+  counts), internal user ids — never reaches the wire. Per §5.19
+  rule 3 the response builder allowlists fields explicitly, and a
+  CI test asserts the JSON.stringify of a response matches none
+  of those patterns. GPS is coarsened to ~110 m (§5.19 rule 4)
+  so an exact plot can't be pinpointed from a marker.
 
 ### 9.6 Open items for stakeholder confirmation
 - [x] Which languages are actually in field use? **Resolved April

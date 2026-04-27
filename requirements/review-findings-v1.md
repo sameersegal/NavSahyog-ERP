@@ -270,6 +270,42 @@ files link to it.
   `apps/api/src/routes/dashboard.ts` to `total_marks /
   sessions_with_marks`.
 
+### U9 — Public program APIs: rate limit not yet enforced (§5.19 rule 6)
+
+- §5.19 requires Cloudflare Rate Limiting on `/api/programs/*` at
+  60 req/min/IP. The runtime ships without it; today a single IP
+  can drain the public surface (and through it the D1 budget the
+  authenticated app shares).
+- **Sequencing.** Deferred — we are currently on dummy data with
+  no public consumers. Wire the rule before the first real
+  embedder goes live (typically alongside L5 production
+  hardening, since both need a real Cloudflare account zoned
+  against `navsahyog.org`).
+- **Fix.** Cloudflare dashboard → Security → Rate Limiting Rules,
+  scoped to path prefix `/api/programs/`, threshold 60 req/min
+  per source IP, action `block` or `challenge`. Worth pinning the
+  exact threshold in `requirements/defaults.md` once that file
+  lands per §3 above.
+
+### U10 — Public program APIs: production CORS allowlist not yet wired (§5.19 rule 5)
+
+- §5.19 requires production to tighten the public-API CORS from
+  `Access-Control-Allow-Origin: *` to an env-driven allowlist of
+  embedder origins (`navsahyog.org` + partner sites). The runtime
+  currently returns `*` unconditionally — fine for the dummy-data
+  phase but a free-rider risk in production.
+- **Sequencing.** Deferred until the prod embedder origins are
+  actually known. Same gating as U9 — both belong in the L5
+  production-readiness pass, not before.
+- **Fix.** Add a Worker env var `PUBLIC_PROGRAM_ALLOWED_ORIGINS`
+  (comma-separated). The `/api/programs/*` CORS branch in
+  `apps/api/src/index.ts` falls back to `*` when the var is
+  empty (dev / staging) and switches to a credential-less
+  origin allowlist when populated. One test in
+  `apps/api/test/programs.test.ts` already covers the wildcard
+  branch; add a sibling test for the allowlist branch when the
+  var lands.
+
 ---
 
 ## 5. LOW

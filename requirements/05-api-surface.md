@@ -233,6 +233,68 @@ Allowed agreement MIMEs: `application/pdf`, `image/jpeg`,
 `agreement-v1`, distinct from media's `v1` so a media-presign
 token can't be replayed against an agreement endpoint.
 
+### 5.19 Public program APIs — `/api/programs/*`
+
+Backs the program apps embedded on the NavSahyog public website
+(§1.5). Numbered after §5.18 to keep existing cross-references
+stable. Currently exposes **one** route — Jal Vriddhi (§3.10) —
+with each new program added as a sibling.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/programs/jal-vriddhi` | Aggregate stats + per-pond markers for the Jal Vriddhi infographic. |
+
+**Contract.** Every route under `/api/programs/*` MUST satisfy
+all six rules below. The contract is global, not per-route, so a
+new program endpoint cannot weaken any of them:
+
+1. **No auth.** No session cookie, no `Authorization` header, no
+   API key. The Worker rejects credentials if presented (drops
+   the cookie before lookup) so a session left over from a
+   logged-in NavSahyog user (e.g. a VC who happens to land on the
+   embedder page) cannot accidentally elevate the response.
+2. **GET only.** No POST/PATCH/DELETE. The CORS layer also
+   refuses `Access-Control-Allow-Methods` beyond `GET, OPTIONS`,
+   so a misconfigured route can't accidentally write.
+3. **PII allowlist on the response builder.** Each route declares
+   the exact field set it returns, populated from a typed mapper
+   (not a `SELECT *` passthrough). The full deny-list lives in
+   §9.5; the field-level rule is "if a column carries a name, a
+   number, an address, a free-text note, or an internal id, it
+   does not appear in the response, period". A test in
+   `apps/api/test/programs.test.ts` enforces this against the
+   wire bytes (regex on JSON.stringify) so a future passthrough
+   regression fails CI.
+4. **Coordinate coarsening.** GPS columns served publicly are
+   rounded to **3 decimal places** (~110 m) at the response
+   builder. The full-precision value stays in D1 for the
+   authenticated app.
+5. **Permissive CORS, scoped.** `Access-Control-Allow-Origin: *`
+   with `credentials: false` for `/api/programs/*` only. The rest
+   of the API keeps its credentialed allowlist (§5.1). For
+   production we tighten this to an env-driven allowlist of known
+   embedder origins (`navsahyog.org` + partner sites) — browser-
+   only protection, but enough to discourage casual third-party
+   embedding that would consume our bandwidth.
+6. **Edge rate-limit.** Cloudflare Rate Limiting on
+   `/api/programs/*` capped at **60 req/min/IP** (tunable per
+   environment). Bot floor without API keys; protects D1 from a
+   single IP draining the budget.
+
+**Performance isolation.** Public traffic must not degrade the
+authenticated app. The contract above (rate limit + CORS lock)
+plus the lean response shape gets us to a workable floor; if
+demand grows past it, the upgrade path is **edge-cache the JSON
+response** via the Cloudflare Cache API with a 60 s TTL (the data
+changes in days/weeks; up to a minute of staleness is acceptable
+for an infographic). Deferred — only land it once we see real
+traffic. A cache-purge step in the pond create / update path
+keeps freshness if/when we adopt it.
+
+**Staging gate.** Public program APIs are carved out of the
+staging basic-auth gate (§7 / Cloudflare deploy). They have to be
+reachable from any browser regardless of staging credentials.
+
 ### 5.16 Summary
 
 Route count: **≈ 30** top-level paths (many supporting multiple
