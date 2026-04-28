@@ -4,6 +4,19 @@ name: Deploy staging
 # on Cloudflare. Same-origin single-Worker setup per
 # mvp/deploy-staging.md and the PR #26 review.
 #
+# Build-id discipline (decisions.md D31, L4.0c):
+#   * Every deploy stamps the bundle and the Worker with the same
+#     `YYYY-MM-DD.<short-sha>` build identifier, so the X-Server-Build
+#     response header on the live worker matches what the bundle
+#     stamps on its outgoing X-App-Build header.
+#   * MIN_SUPPORTED_BUILD is set to max(today - 7 days, previous
+#     deploy's build date). That keeps the N-7 ceiling enforced even
+#     when deploys are sparse, while same-week deploys leave
+#     one-version-back grace in place. Same-day re-deploys are safe
+#     because checkFloor compares only the date prefix.
+#   * The vars are inert until L4.0c (#56) lands the floor-aware
+#     middleware. Setting them earlier is harmless.
+#
 # Secrets required on the repo:
 #   CLOUDFLARE_API_TOKEN            — Workers/D1/R2 Edit scopes.
 #   CLOUDFLARE_ACCOUNT_ID           — target Cloudflare account.
@@ -60,9 +73,85 @@ jobs:
           pnpm typecheck
           pnpm test
 
+      # Compute the deploy's build identifier. Format must match
+      # packages/shared/src/sync.ts BUILD_ID_RE: `YYYY-MM-DD[.suffix]`.
+      # CI uses UTC date plus the 7-char commit SHA so each deploy
+      # has a unique, reproducible stamp traceable back to git.
+      - name: Compute BUILD_ID
+        id: build_id
+        run: |
+          DATE="$(date -u +%Y-%m-%d)"
+          SHA="${GITHUB_SHA:0:7}"
+          BUILD_ID="${DATE}.${SHA}"
+          echo "build_id=${BUILD_ID}" >> "$GITHUB_OUTPUT"
+          echo "today=${DATE}" >> "$GITHUB_OUTPUT"
+          echo "Computed BUILD_ID=${BUILD_ID}"
+
+      # Read the X-Server-Build header from the currently-deployed
+      # Worker (if any). Drives the MIN_SUPPORTED_BUILD floor below.
+      # On the very first deploy or when the running Worker pre-dates
+      # L4.0c (no header stamping yet) this comes back empty; we
+      # fall back to the N-7 ceiling.
+      - name: Capture previously-deployed SERVER_BUILD_ID
+        id: prev_build
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          URL="$(pnpm exec wrangler deployments list --env staging 2>/dev/null \
+            | grep -oE 'https://[a-z0-9.-]+workers\.dev' \
+            | head -n1 || true)"
+          if [ -z "$URL" ]; then
+            echo "No live Worker URL discovered — first deploy or workers.dev URL not advertised." >&2
+            echo "previous=" >> "$GITHUB_OUTPUT"
+            echo "previous_date=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PREV="$(curl -sI --max-time 10 "${URL}/health" \
+            | tr -d '\r' \
+            | awk -F': ' 'tolower($1) == "x-server-build" { print $2 }' \
+            | head -n1 || true)"
+          PREV_DATE="${PREV%%.*}"
+          # Ignore malformed values — empty PREV_DATE later falls back
+          # to the N-7 ceiling, same as no-prev-deploy.
+          if ! [[ "$PREV_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            PREV_DATE=""
+          fi
+          echo "previous=${PREV}" >> "$GITHUB_OUTPUT"
+          echo "previous_date=${PREV_DATE}" >> "$GITHUB_OUTPUT"
+          echo "Previous SERVER_BUILD_ID=${PREV:-<unset>} (date=${PREV_DATE:-<unset>})"
+
+      # Floor = max(today - 7 days, previous deploy's build-date).
+      # Same-day re-deploys: previous_date == today → floor = today,
+      # but checkFloor compares date prefixes so a same-day client
+      # still passes (daysBetween = 0 → ok). Sparse deploys: when
+      # the previous deploy is >7 days ago, the N-7 ceiling kicks in
+      # automatically.
+      - name: Compute MIN_SUPPORTED_BUILD
+        id: floor
+        env:
+          PREV_DATE: ${{ steps.prev_build.outputs.previous_date }}
+        run: |
+          SEVEN_DAYS_AGO="$(date -u -d '7 days ago' +%Y-%m-%d)"
+          if [ -z "${PREV_DATE}" ]; then
+            FLOOR="${SEVEN_DAYS_AGO}"
+            REASON="no previous deploy — defaulting to today-7"
+          elif [[ "${PREV_DATE}" > "${SEVEN_DAYS_AGO}" ]]; then
+            FLOOR="${PREV_DATE}"
+            REASON="previous deploy within 7 days — using its date"
+          else
+            FLOOR="${SEVEN_DAYS_AGO}"
+            REASON="previous deploy older than 7 days — N-7 ceiling kicks in"
+          fi
+          echo "min_supported_build=${FLOOR}" >> "$GITHUB_OUTPUT"
+          echo "MIN_SUPPORTED_BUILD=${FLOOR} (${REASON})"
+
       - name: Build web bundle
         # Workers Static Assets reads from apps/web/dist/ per the
-        # [assets] block in apps/api/wrangler.toml.
+        # [assets] block in apps/api/wrangler.toml. APP_BUILD is
+        # baked into the bundle as the BUILD_ID stamped on every
+        # X-App-Build request header (apps/web/src/lib/build.ts).
+        env:
+          APP_BUILD: ${{ steps.build_id.outputs.build_id }}
         run: pnpm --filter @navsahyog/web build
 
       # D1 migrations first — independent of the Worker service,
@@ -78,9 +167,20 @@ jobs:
       # run the Worker doesn't exist yet, so secret-put-first would
       # abort the workflow. After this step the Worker exists (with
       # stale or no secret); the next step attaches the current one.
+      #
+      # `--var` injects build-id discipline vars at deploy time.
+      # MIN_SUPPORTED_BUILD is always set so the floor is explicit
+      # rather than implicit-empty.
       - name: Deploy Worker
         working-directory: apps/api
-        run: pnpm exec wrangler deploy --env staging
+        env:
+          NEW_BUILD: ${{ steps.build_id.outputs.build_id }}
+          FLOOR: ${{ steps.floor.outputs.min_supported_build }}
+        run: |
+          pnpm exec wrangler deploy \
+            --env staging \
+            --var "SERVER_BUILD_ID:${NEW_BUILD}" \
+            --var "MIN_SUPPORTED_BUILD:${FLOOR}"
 
       # Push the current MEDIA_PRESIGN_SECRET onto the live Worker.
       # Cloudflare propagates secret changes to the runtime without
