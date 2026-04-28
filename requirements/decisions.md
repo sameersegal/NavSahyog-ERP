@@ -9,6 +9,22 @@ justification.
 
 ---
 
+## 2026-04-27 — L4.0e (replay tool + cache integrity) deferred
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D33 | **The two L4.0 platform items not landed in L4.0a–d — the internal replay tool and the cache integrity check — are deferred, not omitted.** Both have a "wait until something else lands" dependency that makes shipping them now low-value. **Replay tool**: a CLI / staging endpoint that takes an exported outbox dump from a problem user and replays it against staging. Genuinely useful only once we have field users with real outbox state to debug; lab-only mode lets engineers inspect IDB via DevTools, which covers the same need at zero engineering cost. Revisit when L5 lands real data. **Cache integrity check**: a per-online-session checksum compare between cached scope and a server-computed value, with drop-and-resync on divergence. Only meaningful if cache stores exist; L4.0a–d ships only the `outbox` store. The cache stores (`cache_villages`, `cache_schools`, `cache_students`, `cache_events`) arrive with L4.1's manifest sync, so the integrity check folds naturally into that PR rather than shipping speculatively here. **L4.0 is functionally complete** with L4.0a–d; "L4.0e" exists in the ladder only as a marker for these two deferred items. | The original L4.0 in-scope list in `mvp/level-4.md` that listed both items as platform deliverables. The platform doesn't *need* them to enable L4.1 onboarding — adding them now would be premature work for a future scenario. |
+
+### Status
+
+- **Replay tool** — revisit when real users / real PII / real
+  field deployment lands (L5 territory, possibly later).
+- **Cache integrity check** — fold into the L4.1 PR that
+  introduces cache stores. Tracked here so it's not silently
+  forgotten.
+
+---
+
 ## 2026-04-27 — L4 reframed as offline-as-platform
 
 | # | Decision | Supersedes |

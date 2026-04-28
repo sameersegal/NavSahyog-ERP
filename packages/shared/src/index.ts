@@ -60,6 +60,7 @@ export type { CompatVerdict, SyncState, OutboxRow, OutboxStatus } from './sync';
 export {
   BUILD_ID_HEADER,
   SCHEMA_VERSION_HEADER,
+  SERVER_BUILD_HEADER,
   COMPAT_WINDOW_DAYS,
   SYNC_STATES,
   OUTBOX_STATUSES,
@@ -68,6 +69,7 @@ export {
   parseBuildDate,
   daysBetweenIso,
   checkCompat,
+  checkFloor,
   todayIso,
   dominantState,
   nextBackoffMs,

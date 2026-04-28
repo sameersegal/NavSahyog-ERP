@@ -21,6 +21,14 @@ export const BUILD_ID_HEADER = 'X-App-Build';
 // from the start.
 export const SCHEMA_VERSION_HEADER = 'X-Schema-Version';
 
+// Header on every server response carrying the server's own build id
+// (L4.0c — decisions.md D31 deploy-grace fix). The client compares
+// it against its local BUILD_ID to detect that a newer build has
+// been deployed and surface the "Update available" banner. This is
+// the *soft* nudge; the *hard* floor is enforced separately via
+// MIN_SUPPORTED_BUILD on the server.
+export const SERVER_BUILD_HEADER = 'X-Server-Build';
+
 // Build identifier format: `YYYY-MM-DD[.<suffix>]`. The date prefix
 // is what enforces the N-7 window via simple lexicographic compare;
 // the optional suffix (a short git SHA in CI, a literal "dev" locally)
@@ -53,9 +61,12 @@ export type CompatVerdict =
   | { kind: 'unknown_build' }       // header missing or malformed
   | { kind: 'too_old'; days: number }; // older than COMPAT_WINDOW_DAYS
 
-// Pure compat check. Server middleware uses this directly; the client
-// uses it to predict a 426 before sending (so it can surface the
-// "Update required" screen without round-tripping to find out).
+// Pure compat check. Time-based — used by the *client* to derive the
+// soft "Update available" banner once a newer SERVER_BUILD_ID has
+// been observed via the response header. It is **not** what the
+// server middleware uses to gate requests; that's `checkFloor` below
+// (decisions.md D31 deploy-grace fix — operator-managed floor, not
+// wall-clock).
 export function checkCompat(
   clientBuildId: string | null | undefined,
   serverDateIso: string,
@@ -70,6 +81,34 @@ export function checkCompat(
   // build can't have been authored against an unreleased contract.
   if (diff <= windowDays) return { kind: 'ok' };
   return { kind: 'too_old', days: diff };
+}
+
+// Hard-floor check used by the server middleware (apps/api/src/lib/build.ts).
+//
+// Deploy-grace semantics (decisions.md D31, L4.0c): operators set
+// `MIN_SUPPORTED_BUILD` to a build-id (typically the *previous*
+// deploy's build, so one-version-back keeps working through a fresh
+// deploy). Anything older than that floor is 426'd. When the env
+// var is unset, no floor applies and any well-formed build is
+// accepted.
+//
+// This is intentionally not time-based — wall-clock comparisons bite
+// the moment a new build lands, force-upgrading the entire fleet
+// against a window the clients haven't had a chance to enter.
+export function checkFloor(
+  clientBuildId: string | null | undefined,
+  minSupportedBuild: string | null | undefined,
+): CompatVerdict {
+  const clientDate = parseBuildDate(clientBuildId);
+  if (!clientDate) return { kind: 'unknown_build' };
+  if (!minSupportedBuild) return { kind: 'ok' };
+  const floorDate = parseBuildDate(minSupportedBuild);
+  if (!floorDate) return { kind: 'ok' }; // misconfigured floor — fail open
+  const diff = daysBetweenIso(floorDate, clientDate);
+  if (diff === null) return { kind: 'unknown_build' };
+  // diff >= 0 means client is at or after the floor → ok.
+  if (diff >= 0) return { kind: 'ok' };
+  return { kind: 'too_old', days: -diff };
 }
 
 // Today as `YYYY-MM-DD` in UTC. Both server and client use UTC for

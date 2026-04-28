@@ -1,29 +1,39 @@
-// Build-id compat middleware (L4.0a — decisions.md D29, D31).
+// Build-id middleware family (L4.0a/c — decisions.md D29, D31).
 //
-// Reads the `X-App-Build` header from inbound requests, parses the
-// `YYYY-MM-DD[.suffix]` shape, and rejects clients past the N-7
-// compat window with HTTP 426 + a JSON diagnostic. Anything that's
-// in-window or malformed/missing falls through — `unknown_build`
-// is treated as transitional (clients pre-dating L4.0a have no
-// header). When every shipped client carries the header we'll flip
-// the missing-header case to 426 too.
+// Two concerns, two middlewares:
 //
-// The middleware only runs against authenticated API surfaces. Public
-// or token-gated paths are carved out for the same reasons the
-// staging gate carves them out (see src/index.ts).
+//  * `buildCompat` (request gate): reads `X-App-Build` from the
+//    inbound request and 426s clients older than `MIN_SUPPORTED_BUILD`.
+//    The floor is operator-managed (typically set to the *previous*
+//    deploy's build-id at deploy time so one-version-back keeps
+//    working). When the env var is unset there is no floor and any
+//    well-formed client build is accepted. This intentionally is
+//    **not** wall-clock-based — comparing client build to "today"
+//    would 426 every existing client the moment a new build deploys.
+//
+//  * `serverBuildStamp` (response stamp): adds `X-Server-Build` to
+//    every response so clients can detect a newer deploy and surface
+//    the soft "Update available" banner. Independent of the gate —
+//    runs even on the carve-out paths so even unauthenticated clients
+//    learn the deploy version.
+//
+// The middleware only runs `buildCompat` against authenticated API
+// surfaces; the staging gate's carve-outs apply (public surfaces,
+// upload PUTs, /health).
 
 import type { MiddlewareHandler } from 'hono';
 import type { Bindings, Variables } from '../types';
 import {
   BUILD_ID_HEADER,
   SCHEMA_VERSION_HEADER,
-  checkCompat,
+  SERVER_BUILD_HEADER,
+  checkFloor,
   parseBuildDate,
-  todayIso,
 } from '@navsahyog/shared';
 import { err } from './errors';
 
-// Paths that bypass the compat check. They either:
+// Paths that bypass the compat check (not the response stamp). They
+// either:
 //   * answer to platform probes that must always succeed (`/health`),
 //   * are public, no-auth surfaces consumed by third parties that we
 //     can't force to ship a build-id header (`/api/programs/*`),
@@ -55,18 +65,32 @@ export const buildCompat: MiddlewareHandler<{
   c.set('clientBuildDate', parseBuildDate(buildId));
   c.set('clientSchemaVersion', schemaVersion);
 
-  const verdict = checkCompat(buildId, todayIso());
+  const minSupported = c.env.MIN_SUPPORTED_BUILD ?? null;
+  const verdict = checkFloor(buildId, minSupported);
   if (verdict.kind === 'too_old') {
     return err(
       c,
       'upgrade_required',
       426,
-      `Client build is ${verdict.days} days old; max supported window is 7 days. Refresh the app to upgrade.`,
+      `Client build is ${verdict.days} days behind the supported floor (${minSupported}). Refresh the app to upgrade.`,
     );
   }
 
-  // `unknown_build` — header missing or malformed. Pass through for
-  // now; flip to 426 once all deployed clients are stamping the
-  // header (gate it on a Worker env var when that day comes).
+  // `unknown_build` (header missing or malformed) is transitional —
+  // pass through. Once all shipped clients carry the header, this
+  // case can flip to 426 too (gated behind another env var when
+  // that day comes).
   return next();
+};
+
+// Stamps `X-Server-Build` on every response when SERVER_BUILD_ID is
+// set. Runs ahead of the route handler so the header lands on
+// successful and error responses alike.
+export const serverBuildStamp: MiddlewareHandler<{
+  Bindings: Bindings;
+  Variables: Variables;
+}> = async (c, next) => {
+  await next();
+  const buildId = c.env.SERVER_BUILD_ID;
+  if (buildId) c.header(SERVER_BUILD_HEADER, buildId);
 };

@@ -24,7 +24,11 @@ import {
 import { Link } from 'react-router-dom';
 import type { SyncState } from '@navsahyog/shared';
 import { useI18n } from '../i18n';
-import { UPGRADE_REQUIRED_EVENT } from './events';
+import {
+  UPGRADE_REQUIRED_EVENT,
+  SERVER_BUILD_OBSERVED_EVENT,
+  type ServerBuildObservedDetail,
+} from './events';
 import { detectNetwork, type NetworkStatus } from './network';
 import { counts as outboxCounts, OUTBOX_CHANGED_EVENT } from './outbox';
 import { drain } from './drain';
@@ -40,6 +44,12 @@ type SyncStateValue = {
   state: SyncState;
   network: NetworkStatus;
   outbox: OutboxCounts;
+  // Most recent newer server build the client has observed via
+  // `X-Server-Build`. Drives the soft, dismissible "Update available"
+  // banner. `null` until either no signal has arrived or the user
+  // dismissed it for the current session.
+  newerServerBuild: string | null;
+  dismissUpdateAvailable: () => void;
   refresh: () => void;
   syncNow: () => Promise<void>;
 };
@@ -59,6 +69,8 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<NetworkStatus>('unknown');
   const [upgradeRequired, setUpgradeRequired] = useState(false);
   const [outbox, setOutbox] = useState<OutboxCounts>(ZERO_COUNTS);
+  const [newerServerBuild, setNewerServerBuild] = useState<string | null>(null);
+  const [dismissedBuild, setDismissedBuild] = useState<string | null>(null);
 
   const probe = useCallback(async (force = false) => {
     const result = await detectNetwork({ force });
@@ -141,17 +153,44 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(UPGRADE_REQUIRED_EVENT, handler);
   }, []);
 
+  // Soft "Update available" — dispatched by lib/events.ts when any
+  // response carries an `X-Server-Build` newer than the local build.
+  // The banner is dismissible per-build; if a still-newer build
+  // arrives later, the banner re-surfaces for that one.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<ServerBuildObservedDetail>).detail;
+      setNewerServerBuild(detail.serverBuild);
+    };
+    window.addEventListener(SERVER_BUILD_OBSERVED_EVENT, handler);
+    return () =>
+      window.removeEventListener(SERVER_BUILD_OBSERVED_EVENT, handler);
+  }, []);
+
   const state = reduceState({ network, upgradeRequired, outbox });
+
+  const dismissUpdateAvailable = useCallback(() => {
+    if (newerServerBuild) setDismissedBuild(newerServerBuild);
+  }, [newerServerBuild]);
+
+  // Hide the banner if the user already dismissed *this* build. A
+  // later, even-newer build resets the dismissal automatically.
+  const visibleNewerBuild =
+    newerServerBuild && newerServerBuild !== dismissedBuild
+      ? newerServerBuild
+      : null;
 
   const value = useMemo<SyncStateValue>(
     () => ({
       state,
       network,
       outbox,
+      newerServerBuild: visibleNewerBuild,
+      dismissUpdateAvailable,
       refresh: () => void probe(true),
       syncNow,
     }),
-    [state, network, outbox, probe, syncNow],
+    [state, network, outbox, visibleNewerBuild, dismissUpdateAvailable, probe, syncNow],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -192,6 +231,8 @@ export function useSyncState(): SyncStateValue {
       state: 'green',
       network: 'unknown',
       outbox: ZERO_COUNTS,
+      newerServerBuild: null,
+      dismissUpdateAvailable: () => {},
       refresh: () => {},
       syncNow: async () => {},
     };
@@ -286,6 +327,52 @@ export function ForceUpgradeBanner() {
       >
         {t('sync.update_required.action')}
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Update available banner (L4.0c — soft, dismissible)
+// ---------------------------------------------------------------------------
+//
+// Shown when the client observed a newer SERVER_BUILD_ID via the
+// `X-Server-Build` response header. Dismissal is per-build — if a
+// still-newer build appears later, the banner re-surfaces.
+// Suppressed when the force-upgrade banner is up so the user only
+// sees one update prompt at a time.
+
+export function UpdateAvailableBanner() {
+  const { t } = useI18n();
+  const { state, newerServerBuild, dismissUpdateAvailable } = useSyncState();
+  if (state === 'update_required') return null;
+  if (!newerServerBuild) return null;
+  return (
+    <div
+      role="status"
+      className="bg-sky-100 text-sky-950 px-4 py-2.5 text-sm flex items-center justify-between gap-3 border-b border-sky-200"
+    >
+      <div className="min-w-0">
+        <p className="font-medium">{t('sync.update_available.title')}</p>
+        <p className="text-sky-900 text-xs">
+          {t('sync.update_available.body', { build: newerServerBuild })}
+        </p>
+      </div>
+      <div className="shrink-0 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={dismissUpdateAvailable}
+          className="text-xs rounded border border-sky-300 px-2 py-1 hover:bg-sky-200"
+        >
+          {t('sync.update_available.dismiss')}
+        </button>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="text-xs rounded bg-sky-700 text-sky-50 px-3 py-1.5 font-semibold hover:bg-sky-800"
+        >
+          {t('sync.update_available.action')}
+        </button>
+      </div>
     </div>
   );
 }
