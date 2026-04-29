@@ -45,7 +45,6 @@ this.
   §3.8.1–§3.8.7). L4 (offline) and L5 (auth + compliance)
   remain not started; L5 is gated on the decision to move
   past dummy data.
-- Demo-recording guide: `mvp/demo-script.md`.
 
 ## Repo map
 
@@ -62,7 +61,6 @@ this.
 ├── mvp/
 │   ├── README.md                             ← MVP ladder (canonical MVP status)
 │   ├── level-1.md  …  level-5.md             ← per-level scope + status
-│   ├── demo-script.md                        ← TTS-narrated demo recording guide
 │   └── screenshots/                          ← per-level UI captures for PR bodies
 └── requirements/
     ├── README.md                             ← index
