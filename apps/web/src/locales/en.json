@@ -138,7 +138,11 @@
   "home.focus.kpi.video": "Video",
   "home.focus.kpi.som": "SoM",
   "home.compare.cta_all": "Compare all in your scope on the Dashboard ›",
-  "home.fab.label": "Capture",
+  "home.fab.label": "Log",
+  "home.fab.menu_label": "Quick actions",
+  "home.fab.menu.attendance": "Mark attendance",
+  "home.fab.menu.achievements": "Add Star of the Month",
+  "home.fab.menu.capture": "Capture photo / video",
 
   "village.header.vc": "VC {name}",
   "village.header.vc_unassigned": "No VC assigned",

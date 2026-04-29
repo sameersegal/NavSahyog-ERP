@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   api,
   can,
@@ -28,6 +28,11 @@ import { useI18n } from '../i18n';
 
 type Tab = 'children' | 'attendance' | 'media';
 
+const TABS: readonly Tab[] = ['children', 'attendance', 'media'];
+function isTab(v: unknown): v is Tab {
+  return typeof v === 'string' && (TABS as readonly string[]).includes(v);
+}
+
 // Today as an IST 'YYYY-MM-DD' string. Must match the server's
 // `todayIstDate` in apps/api/src/lib/time.ts.
 function todayIstDate(): string {
@@ -39,7 +44,19 @@ export function Village() {
   const { t } = useI18n();
   const { id } = useParams();
   const villageId = Number(id);
-  const [tab, setTab] = useState<Tab>('children');
+  // Deep-linkable tab state — `?tab=attendance` takes the user
+  // straight to the attendance pane (Home FAB + mission link rely on
+  // this). Bad / missing values fall back to children. Tab changes
+  // mirror back to the URL so refresh / back-button preserve the pane.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const tab: Tab = isTab(tabFromUrl) ? tabFromUrl : 'children';
+  function setTab(next: Tab) {
+    const sp = new URLSearchParams(searchParams);
+    if (next === 'children') sp.delete('tab');
+    else sp.set('tab', next);
+    setSearchParams(sp, { replace: true });
+  }
   const [village, setVillage] = useState<VillageT | null>(null);
 
   useEffect(() => {
