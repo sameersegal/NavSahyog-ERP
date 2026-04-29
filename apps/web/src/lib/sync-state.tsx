@@ -74,6 +74,15 @@ const PROBE_INTERVAL_OFFLINE_MS = 2 * 60_000;
 
 export function SyncStateProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<NetworkStatus>('unknown');
+  // OS-level online flag from `navigator.onLine`. The HEAD probe in
+  // `network.ts` is the truth on captive portals (where onLine lies),
+  // but for the *opposite* case — airplane mode / radio off — onLine
+  // flips instantly while the cached probe could still read 'online'
+  // for up to 30s. Tracking both lets the chrome chip reflect a real
+  // disconnect immediately, without waiting for the cache TTL.
+  const [browserOnline, setBrowserOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
+  );
   const [upgradeRequired, setUpgradeRequired] = useState(false);
   const [outbox, setOutbox] = useState<OutboxCounts>(ZERO_COUNTS);
   const [newerServerBuild, setNewerServerBuild] = useState<string | null>(null);
@@ -129,10 +138,14 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
     void probe();
     schedule();
     const handleOnline = () => {
+      setBrowserOnline(true);
       void probe(true);
       void syncNow();
     };
-    const handleOffline = () => setNetwork('offline');
+    const handleOffline = () => {
+      setBrowserOnline(false);
+      setNetwork('offline');
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -185,7 +198,15 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(SERVER_BUILD_OBSERVED_EVENT, handler);
   }, []);
 
-  const state = reduceState({ network, upgradeRequired, outbox });
+  // The chrome surfaces a single combined view of "is the network
+  // reachable". OS-level offline trumps an optimistic cached probe;
+  // otherwise we use the probe result.
+  const effectiveNetwork: NetworkStatus = !browserOnline ? 'offline' : network;
+  const state = reduceState({
+    network: effectiveNetwork,
+    upgradeRequired,
+    outbox,
+  });
 
   const dismissUpdateAvailable = useCallback(() => {
     if (newerServerBuild) setDismissedBuild(newerServerBuild);
@@ -201,14 +222,22 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SyncStateValue>(
     () => ({
       state,
-      network,
+      network: effectiveNetwork,
       outbox,
       newerServerBuild: visibleNewerBuild,
       dismissUpdateAvailable,
       refresh: () => void probe(true),
       syncNow,
     }),
-    [state, network, outbox, visibleNewerBuild, dismissUpdateAvailable, probe, syncNow],
+    [
+      state,
+      effectiveNetwork,
+      outbox,
+      visibleNewerBuild,
+      dismissUpdateAvailable,
+      probe,
+      syncNow,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
