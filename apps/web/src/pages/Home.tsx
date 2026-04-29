@@ -21,7 +21,7 @@
 //     decision table: image/video → /capture, attendance → village
 //     page (VC) or /capture (AF+), som → /achievements.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   api,
@@ -107,7 +107,7 @@ export function Home() {
         <CompareAllLink window={windowKey} scope={data.scope} />
       )}
 
-      {canFab && <CaptureFab />}
+      {canFab && <CaptureFab user={user} />}
     </div>
   );
 }
@@ -141,7 +141,7 @@ function missionHref(kind: HomeMissionKind, user: User): string {
   if (kind === 'som') return '/achievements';
   if (kind === 'attendance') {
     if (user.scope_level === 'village' && user.scope_id) {
-      return `/village/${user.scope_id}`;
+      return `/village/${user.scope_id}?tab=attendance`;
     }
     return '/capture';
   }
@@ -459,7 +459,7 @@ function MyVillageCard({ villageId }: { villageId: number }) {
   const { t } = useI18n();
   return (
     <Link
-      to={`/village/${villageId}`}
+      to={`/village/${villageId}?tab=attendance`}
       className="block bg-card border border-border rounded-lg p-4 hover:bg-card-hover min-h-[44px]"
     >
       <div className="flex items-baseline justify-between gap-2">
@@ -475,16 +475,171 @@ function MyVillageCard({ villageId }: { villageId: number }) {
   );
 }
 
-function CaptureFab() {
+// FAB: tap = primary action (attendance), long-press = options menu.
+//
+//   * VC has a single village, so the primary tap routes straight to
+//     /village/<id>?tab=attendance. AF+ have no implicit village, so
+//     they fall back to /capture (where they pick one) — long-press
+//     menu still offers the alternates.
+//   * Long-press surfaces Attendance / Achievements (SoM) / Capture
+//     media, scoped to the user's caps. Same trigger pattern works on
+//     touch (touchstart) and pointer (mousedown) — we use Pointer
+//     Events with a 500 ms timer.
+//   * The browser's contextmenu (long-press on iOS Safari, right-
+//     click on desktop) is suppressed to avoid a duplicate menu.
+const LONG_PRESS_MS = 500;
+
+function CaptureFab({ user }: { user: User }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+
+  const isVcVillage =
+    user.scope_level === 'village' && user.scope_id !== null;
+  const primaryHref = isVcVillage
+    ? `/village/${user.scope_id}?tab=attendance`
+    : '/capture';
+
+  const canAttendance = isVcVillage && can(user, 'attendance.write');
+  const canSom = can(user, 'achievement.write');
+  const canMedia = can(user, 'media.write');
+
+  function clearTimer() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    // Only the primary button on mouse / pen; touch always.
+    if (e.pointerType !== 'touch' && e.button !== 0) return;
+    longPressFiredRef.current = false;
+    clearTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      setMenuOpen(true);
+      longPressTimerRef.current = null;
+    }, LONG_PRESS_MS);
+  }
+
+  function onPointerUpOrCancel() {
+    clearTimer();
+  }
+
+  function onClick(e: React.MouseEvent) {
+    // The long-press path opens the menu; swallow the synthetic click
+    // that follows so we don't navigate underneath it.
+    if (longPressFiredRef.current) {
+      e.preventDefault();
+      longPressFiredRef.current = false;
+      return;
+    }
+    e.preventDefault();
+    navigate(primaryHref);
+  }
+
+  function onContextMenu(e: React.MouseEvent) {
+    // Suppress the platform menu — our long-press handler owns this
+    // gesture. Without this, iOS Safari shows the link-share sheet
+    // and Chrome desktop shows the right-click menu.
+    e.preventDefault();
+    setMenuOpen(true);
+    longPressFiredRef.current = true;
+  }
+
+  // Outside-click + Escape close, mirroring UserMenu / MoreMenu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handle);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => () => clearTimer(), []);
+
+  return (
+    <div ref={ref} className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-20">
+      {menuOpen && (
+        <div
+          role="menu"
+          aria-label={t('home.fab.menu_label')}
+          className="absolute bottom-full right-0 mb-2 w-56 bg-card text-fg border border-border rounded-lg shadow-lg overflow-hidden"
+        >
+          {canAttendance && (
+            <FabMenuItem
+              to={`/village/${user.scope_id}?tab=attendance`}
+              onSelect={() => setMenuOpen(false)}
+              label={t('home.fab.menu.attendance')}
+            />
+          )}
+          {canSom && (
+            <FabMenuItem
+              to="/achievements"
+              onSelect={() => setMenuOpen(false)}
+              label={t('home.fab.menu.achievements')}
+            />
+          )}
+          {canMedia && (
+            <FabMenuItem
+              to="/capture"
+              onSelect={() => setMenuOpen(false)}
+              label={t('home.fab.menu.capture')}
+            />
+          )}
+        </div>
+      )}
+      <a
+        href={primaryHref}
+        onClick={onClick}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUpOrCancel}
+        onPointerCancel={onPointerUpOrCancel}
+        onPointerLeave={onPointerUpOrCancel}
+        onContextMenu={onContextMenu}
+        aria-label={t('home.fab.label')}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="select-none touch-none flex items-center gap-2 bg-primary text-primary-fg rounded-full shadow-lg px-4 py-3 min-h-[56px] hover:opacity-90"
+      >
+        <span aria-hidden="true" className="text-xl leading-none">+</span>
+        <span className="text-sm font-medium">{t('home.fab.label')}</span>
+      </a>
+    </div>
+  );
+}
+
+function FabMenuItem({
+  to,
+  onSelect,
+  label,
+}: {
+  to: string;
+  onSelect: () => void;
+  label: string;
+}) {
   return (
     <Link
-      to="/capture"
-      aria-label={t('home.fab.label')}
-      className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 flex items-center gap-2 bg-primary text-primary-fg rounded-full shadow-lg px-4 py-3 min-h-[56px] hover:opacity-90"
+      to={to}
+      role="menuitem"
+      onClick={onSelect}
+      className="block px-4 py-2.5 text-sm hover:bg-card-hover"
     >
-      <span aria-hidden="true" className="text-xl leading-none">+</span>
-      <span className="text-sm font-medium">{t('home.fab.label')}</span>
+      {label}
     </Link>
   );
 }

@@ -39,18 +39,23 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-full flex flex-col bg-bg">
       <header className="bg-primary text-primary-fg shadow">
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3 sm:gap-6">
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-6">
+          <Link to="/" className="flex items-center gap-2 min-w-0 shrink-0">
             <img
               src="/logo.png"
-              alt=""
+              alt={t('app.name')}
               className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full p-0.5 shrink-0"
             />
-            <span className="font-semibold text-sm sm:text-base truncate">
+            {/* App name hidden below sm: a 360 px-wide phone can't fit
+                logo + title + 4 nav links + sync chip + avatar without
+                pushing the right-edge controls off screen. The logo
+                itself carries the brand on mobile; the alt text keeps
+                screen readers covered. */}
+            <span className="hidden sm:inline font-semibold text-sm sm:text-base truncate">
               {t('app.name')}
             </span>
           </Link>
-          <nav className="flex items-center gap-3 sm:gap-5 text-sm">
+          <nav className="flex items-center gap-2.5 sm:gap-5 text-sm min-w-0">
             <NavLink to="/" active={pathname === '/'}>
               {t('nav.home')}
             </NavLink>
@@ -99,7 +104,7 @@ export function Shell({ children }: { children: ReactNode }) {
               canMasters={canMasters}
             />
           </nav>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-3 shrink-0">
             {streak && streak.current_streak_days > 0 && (
               <StreakChip streak={streak} />
             )}
