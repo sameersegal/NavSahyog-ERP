@@ -9,8 +9,18 @@ import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
 import { withIdempotency } from '../lib/idempotency';
+import type { RouteMeta } from '../lib/route-meta';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'programs',
+  resource: 'attendance',
+  cra: 'create-only',
+  offline: { write: 'required', read: 'cached' },
+  refs: ['§3.3.1', '§3.3.3', 'L4.1c'],
+};
 
 type Mark = { student_id: number; present: boolean };
 type PostBody = {
