@@ -12,9 +12,11 @@
     "db:migrate:new": "wrangler d1 migrations create navsahyog_db",
     "db:seed": "wrangler d1 execute navsahyog_db --local --file=../../db/seed.sql",
     "db:reset": "pnpm db:drop && pnpm db:migrate && pnpm db:seed",
-    "db:drop": "rm -rf .wrangler/state/v3/d1"
+    "db:drop": "rm -rf .wrangler/state/v3/d1",
+    "seed:clerk": "node scripts/seed-clerk.mjs"
   },
   "dependencies": {
+    "@clerk/backend": "^3.4.2",
     "@navsahyog/shared": "workspace:*",
     "hono": "^4.6.12"
   },

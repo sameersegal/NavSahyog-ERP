@@ -10,3 +10,4 @@ dist/
 .vscode/
 coverage/
 mvp/recordings/
+db/seed-clerk-link.sql

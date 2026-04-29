@@ -225,10 +225,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  login: (user_id: string, password: string) =>
-    req<{ user: AuthUser }>('/auth/login', {
+  // D36 layer-1 → layer-2 bridge. Called once per Clerk session
+  // by AuthProvider; the returned user payload + freshly-minted
+  // nsf_session cookie are what the rest of the app rides on.
+  exchange: (token: string) =>
+    req<{ user: AuthUser }>('/auth/exchange', {
       method: 'POST',
-      body: JSON.stringify({ user_id, password }),
+      body: JSON.stringify({ token }),
     }),
   logout: () => req<{ ok: true }>('/auth/logout', { method: 'POST' }),
   me: () => req<{ user: AuthUser }>('/auth/me'),

@@ -217,6 +217,19 @@ files link to it.
   `captured_at` to an IST calendar date. Sweep these in a later
   fix — not a regression, but newly user-visible wherever the
   numbers feed a KPI. Flagged by PR #31 review #5.
+- **L8.** **Clerk integration architecture resolved — see D36.**
+  The Clerk SDK was wired into `apps/web` ahead of L5 on branch
+  `claude/add-clerk-auth-xGMCK`. The architectural questions
+  this entry originally raised (bridge vs replace homegrown
+  session, role mapping shape, Worker-side JWT verification)
+  are resolved by D36 (four-layer split: Clerk for online
+  identity, Worker for authz + cookie session, PWA for offline
+  cache + outbox, Worker again for sync-time final authority).
+  Implementation is tracked under D36's "What ships" list, not
+  here. The §9 residency question (whether Clerk's US data
+  plane is acceptable for identity-only) is the only open
+  reconciliation that survives D36 and is carried in D36's open
+  follow-ups against L5 / §9.
 
 ---
 

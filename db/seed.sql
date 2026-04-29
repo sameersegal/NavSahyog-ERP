@@ -210,6 +210,13 @@ INSERT INTO user (id, user_id, full_name, password, role, scope_level, scope_id,
   -- Second zone admin (z2 Northeast Zone).
   (57, 'zone-ne', 'Temsula Longkumer', 'password', 'zone_admin', 'zone', 2, unixepoch());
 
+-- Email back-fill (D36). The user_id is the username; we derive a
+-- predictable lab-only email so the step-5 Clerk seed bridge has
+-- something to provision against, and so /auth/exchange's
+-- email-claim self-heal has a key to look up by. The `@nsf.local`
+-- domain makes it obvious these are dummy mailboxes.
+UPDATE user SET email = user_id || '@nsf.local' WHERE email IS NULL;
+
 -- Students. 96 total across 19 villages.
 --   v1 Anandpur     (BID01): 7   ids 1..7    (L1 seed)
 --   v2 Belur        (BID01): 6   ids 8..13   (L1 seed)
