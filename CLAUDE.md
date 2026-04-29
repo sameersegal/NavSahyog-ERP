@@ -15,11 +15,6 @@ Read these three files, in order:
    list. Anything you're about to edit may already be flagged as
    a blocker or open decision. Check before changing it.
 
-The NGO onboarding doc (`NSF-App-Process-Document-English.txt`)
-is the **authoritative source for user-facing workflows**. If a
-requirement disagrees with it, flag that as a finding — don't
-"fix" the onboarding doc.
-
 ## Project in one paragraph
 
 Bespoke replacement for the NavSahyog vendor app (package
@@ -58,8 +53,6 @@ this.
 /
 ├── README.md                                 ← project landing page (for humans on GitHub)
 ├── CLAUDE.md                                 ← you are here
-├── NSF-App-Process-Document-English.txt      ← onboarding doc (authoritative for workflows)
-├── Navshayog-4.5.2.apk                       ← the vendor app being replaced
 ├── apps/
 │   ├── web/                                  ← React + Vite PWA on Cloudflare Pages
 │   └── api/                                  ← Cloudflare Worker (routes + D1 + R2 + KV)
@@ -178,18 +171,11 @@ flag it in `review-findings-v1.md` under Medium.
 
 - Create docs the user didn't ask for.
 - Use emojis unless the user is using them first.
-- Commit `.env`, credentials, new `.apk` files, or other large
-  binaries. The existing `Navshayog-4.5.2.apk` is intentional.
-- Rotate the Google Maps API key baked into the vendor APK in
-  place — it's a vendor artefact, marked "rotate before public
-  release" of the bespoke app.
+- Commit `.env`, credentials, `.apk` files, or other large binaries.
 - Force-push to `main`. Never.
 - Delete `origin` branches without explicit permission. The git
   proxy may 403 deletes anyway — ask the user to clean up via
   GitHub UI.
-- "Fix" the onboarding doc to match a requirement. The doc is
-  authoritative; the requirement must be made to match, or the
-  divergence flagged as a finding.
 
 ## When in doubt
 

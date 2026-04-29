@@ -10,7 +10,7 @@ and decision prompts.
 **Scope.** Covers sections 1–11 of the requirements. Based on a
 structured read against the project's core design principles (bespoke
 vs. vendor-generic, single-tenant, India-only, PWA on Cloudflare) and
-the NGO onboarding doc `NSF-App-Process-Document-English.txt`.
+the NGO onboarding doc that requirements were originally mined from.
 
 **How to use in the meeting.** Walk the four lists below in order
 (Blockers → High → Medium → Low). Each item gives the problem,
