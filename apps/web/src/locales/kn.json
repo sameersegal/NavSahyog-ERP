@@ -136,7 +136,11 @@
   "home.focus.kpi.video": "ವೀಡಿಯೊ",
   "home.focus.kpi.som": "ತಾರೆ",
   "home.compare.cta_all": "ನಿಮ್ಮ ವ್ಯಾಪ್ತಿಯ ಎಲ್ಲವನ್ನೂ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್‌ನಲ್ಲಿ ಹೋಲಿಸಿ ›",
-  "home.fab.label": "ಸೆರೆಹಿಡಿಯಿರಿ",
+  "home.fab.label": "ದಾಖಲಿಸಿ",
+  "home.fab.menu_label": "ತ್ವರಿತ ಕ್ರಿಯೆಗಳು",
+  "home.fab.menu.attendance": "ಹಾಜರಾತಿ ದಾಖಲಿಸಿ",
+  "home.fab.menu.achievements": "ತಿಂಗಳ ತಾರೆ ಸೇರಿಸಿ",
+  "home.fab.menu.capture": "ಫೋಟೋ / ವೀಡಿಯೋ ಸೆರೆಹಿಡಿಯಿರಿ",
 
   "village.header.vc": "ವಿಸಿ {name}",
   "village.header.vc_unassigned": "ವಿಸಿ ನಿಯೋಜಿಸಿಲ್ಲ",

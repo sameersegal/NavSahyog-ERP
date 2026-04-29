@@ -136,7 +136,11 @@
   "home.focus.kpi.video": "वीडियो",
   "home.focus.kpi.som": "स्टार",
   "home.compare.cta_all": "अपने दायरे में सबकी तुलना डैशबोर्ड पर ›",
-  "home.fab.label": "कैप्चर",
+  "home.fab.label": "दर्ज करें",
+  "home.fab.menu_label": "त्वरित क्रियाएँ",
+  "home.fab.menu.attendance": "उपस्थिति दर्ज करें",
+  "home.fab.menu.achievements": "महीने का सितारा जोड़ें",
+  "home.fab.menu.capture": "फ़ोटो / वीडियो कैप्चर करें",
 
   "village.header.vc": "वीसी {name}",
   "village.header.vc_unassigned": "कोई वीसी नियुक्त नहीं",

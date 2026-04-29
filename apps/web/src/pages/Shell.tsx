@@ -39,35 +39,50 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-full flex flex-col bg-bg">
       <header className="bg-primary text-primary-fg shadow">
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3 sm:gap-6">
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-6">
+          <Link to="/" className="flex items-center gap-2 min-w-0 shrink-0">
             <img
               src="/logo.png"
-              alt=""
+              alt={t('app.name')}
               className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full p-0.5 shrink-0"
             />
-            <span className="font-semibold text-sm sm:text-base truncate">
+            {/* App name hidden below sm: a 360 px-wide phone can't fit
+                logo + title + 4 nav links + sync chip + avatar without
+                pushing the right-edge controls off screen. The logo
+                itself carries the brand on mobile; the alt text keeps
+                screen readers covered. */}
+            <span className="hidden sm:inline font-semibold text-sm sm:text-base truncate">
               {t('app.name')}
             </span>
           </Link>
-          <nav className="flex items-center gap-3 sm:gap-5 text-sm">
+          <nav className="flex items-center gap-2.5 sm:gap-5 text-sm min-w-0">
+            {/* Core destinations always inline. On mobile we keep
+                only Home + Dashboard so the SyncChip and UserMenu
+                survive a 375 px viewport; from sm: up the rest of
+                the primary nav reappears inline. The items folded
+                into More on mobile (Capture, Achievements) are also
+                reachable from the Home FAB long-press, so this
+                isn't the only path to them. */}
             <NavLink to="/" active={pathname === '/'}>
               {t('nav.home')}
             </NavLink>
-            <NavLink to="/capture" active={pathname === '/capture'}>
+            <NavLink
+              to="/capture"
+              active={pathname === '/capture'}
+              className="hidden sm:inline"
+            >
               {t('nav.capture')}
             </NavLink>
-            <NavLink to="/achievements" active={pathname === '/achievements'}>
+            <NavLink
+              to="/achievements"
+              active={pathname === '/achievements'}
+              className="hidden sm:inline"
+            >
               {t('nav.achievements')}
             </NavLink>
             <NavLink to="/dashboard" active={pathname === '/dashboard'}>
               {t('nav.dashboard')}
             </NavLink>
-            {/* Secondary destinations: shown inline from sm: up where
-                there's room; folded into the More menu on mobile. The
-                same items are rendered twice — once inline (hidden on
-                <sm) and once inside the dropdown (sm:hidden) — so the
-                visible set never overflows the header band. */}
             {canPonds && (
               <NavLink
                 to="/ponds"
@@ -99,7 +114,7 @@ export function Shell({ children }: { children: ReactNode }) {
               canMasters={canMasters}
             />
           </nav>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-3 shrink-0">
             {streak && streak.current_streak_days > 0 && (
               <StreakChip streak={streak} />
             )}
@@ -201,8 +216,13 @@ function MoreMenu({
   useEffect(() => { setOpen(false); }, [pathname]);
 
   // Active highlight on the trigger when one of the folded routes is
-  // current — same underline treatment the inline links use.
+  // current — same underline treatment the inline links use. Capture
+  // and Achievements are folded on mobile too, so they participate in
+  // the active check (no harm on sm+ since the trigger itself is
+  // hidden there).
   const activeFolded =
+    pathname === '/capture' ||
+    pathname === '/achievements' ||
     pathname.startsWith('/ponds') ||
     pathname === '/training-manuals' ||
     pathname.startsWith('/masters');
@@ -240,6 +260,16 @@ function MoreMenu({
           role="menu"
           className="absolute left-0 mt-2 w-48 bg-card text-fg border border-border rounded-lg shadow-lg overflow-hidden z-20"
         >
+          <MoreItem
+            to="/capture"
+            active={pathname === '/capture'}
+            label={t('nav.capture')}
+          />
+          <MoreItem
+            to="/achievements"
+            active={pathname === '/achievements'}
+            label={t('nav.achievements')}
+          />
           {canPonds && (
             <MoreItem
               to="/ponds"
