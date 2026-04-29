@@ -1,7 +1,8 @@
 # Level 4 — Offline mode
 
-**Status:** not started. Re-scoped from "3-workflow lab demo" to
-"offline-as-platform" — see decisions.md D29–D32. Requires L3 landed.
+**Status:** in flight. Re-scoped from "3-workflow lab demo" to
+"offline-as-platform" — see decisions.md D29–D32. L4.0f landed; L4.0a–d
+in review; L4.1a–c landed; L4.1d + L4.2+ not started.
 
 ## Goal
 
