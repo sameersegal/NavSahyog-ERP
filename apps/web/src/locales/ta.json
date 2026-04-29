@@ -365,6 +365,8 @@
   "achievements.form.village.pick": "ஒரு கிராமத்தைத் தேர்வு செய்க",
   "achievements.form.student": "மாணவர்",
   "achievements.form.student.pick": "ஒரு மாணவரைத் தேர்வு செய்க",
+  "achievements.form.cache_empty": "கிராமங்கள் மற்றும் மாணவர்களை ஏற்ற ஒத்திசை செய்க. ஆன்லைனாகி இந்தப் படிவத்தை மீண்டும் திறக்கவும்.",
+  "achievements.form.no_students_cached": "இந்தக் கிராமத்திற்கு இன்னும் மாணவர்கள் இல்லை. நிரப்ப ஆன்லைனில் ஒத்திசைக்கவும்.",
   "achievements.form.type": "வகை",
   "achievements.form.date": "தேதி",
   "achievements.form.medal_count": "பதக்கங்களின் எண்ணிக்கை",

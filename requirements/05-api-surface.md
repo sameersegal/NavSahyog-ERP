@@ -202,7 +202,7 @@ Supports the offline outbox (§6). Full semantics in Part 4.
 | Method | Path | Notes |
 |---|---|---|
 | `POST` | `/api/sync/outbox` | Body `{ items: [{ idempotency_key, method, path, body }] }`. Applies each item in order, returning per-item results. Each item is equivalent to calling its `method path body` directly. |
-| `GET` | `/api/sync/manifest?since=<epoch>` | Returns the list of records the client should pull for its scope since the given time (used by "Download Server Data"). |
+| `GET` | `/api/sync/manifest` | Returns the full read-cache snapshot scoped to the user's authority — `{ generated_at, scope, villages, students }`. **Replace-snapshot per D32**, supersedes the prior `?since=` delta protocol. Additive-only contract (D30) — future fields land without breaking deployed clients. L4.1a ships villages + students; events / schools follow in L4.1b/L4.1c. |
 
 ### 5.15 Audit log — `/api/audit-log`
 

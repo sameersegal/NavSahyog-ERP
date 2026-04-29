@@ -278,6 +278,49 @@ function increment32(syms: number[]): boolean {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Manifest snapshot (L4.1a — D32 replace-snapshot, supersedes §6.9 deltas)
+// ---------------------------------------------------------------------------
+//
+// The full read-cache scope for an authenticated user. The client
+// wipes its `cache_villages` and `cache_students` IDB stores and
+// reseeds from this response; the rule is "what's in the response
+// is what's in the cache". Per offline-scope.md "Scope-bound
+// caching", this is kilobytes for a VC.
+//
+// Schema is **additive-only** under D30. New nullable fields, new
+// arrays, new objects on existing entries are all fine. Renames or
+// removals are not — they require a new endpoint version.
+
+export type ManifestVillage = {
+  id: number;
+  name: string;
+  code: string;
+  cluster_id: number;
+  cluster_name: string;
+};
+
+export type ManifestStudent = {
+  id: number;
+  village_id: number;
+  school_id: number;
+  first_name: string;
+  last_name: string;
+};
+
+export type ManifestResponse = {
+  // Server epoch seconds. Stored as `last_synced_at` on the client
+  // for diagnostics; not used for delta calc (D32).
+  generated_at: number;
+  scope: {
+    level: string;
+    id: number | null;
+    village_ids: number[];
+  };
+  villages: ManifestVillage[];
+  students: ManifestStudent[];
+};
+
 // `rng` returns a number in [0, 1) — exposed for deterministic tests.
 // When omitted, the implementation prefers crypto.getRandomValues and
 // falls back to Math.random.

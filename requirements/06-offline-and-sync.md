@@ -237,26 +237,48 @@ Backoff schedule: 1s, 5s, 30s, 2m, 10m. Cap at 5 attempts, then
 
 ### 6.9 Manifest pull
 
-`GET /api/sync/manifest?since=<epoch>` returns, per §5.14:
+**D32 amendment** — the original delta protocol (`?since=` +
+tombstones) is replaced by a **full-snapshot replace** scoped to
+the user's authority. The client wipes its `cache_*` stores and
+reseeds from the response. Per-user scopes are kilobytes (one
+village, dozens of students), so the delta protocol's complexity
+(timestamps, tombstones, ordering, fence tokens) buys nothing.
+
+`GET /api/sync/manifest` returns:
 
 ```jsonc
 {
-  "server_time": 1713500000,
-  "villages":   { "upserts": [...], "tombstones": ["uuid", ...] },
-  "schools":    { "upserts": [...], "tombstones": [...] },
-  "students":   { "upserts": [...], "tombstones": [...] },
-  "events":     { "upserts": [...], "tombstones": [...] }
+  "generated_at": 1713500000,        // server epoch seconds
+  "scope": {
+    "level": "village",              // user's authoritative scope
+    "id": 1,
+    "village_ids": [1]               // expanded scope for sanity checks
+  },
+  "villages":  [ /* ManifestVillage[] */ ],
+  "students":  [ /* ManifestStudent[] — active only */ ]
+  // events + schools land with L4.1c (attendance) and L4.1b
+  // (offline child create) respectively. Adding nullable fields or
+  // new arrays is additive-only (D30) and doesn't break L4.1a
+  // clients.
 }
 ```
 
-Client applies upserts (INSERT OR REPLACE by uuid), removes
-tombstoned rows, and writes `server_time` into `session.last_manifest_at`.
+L4.1a ships villages + students. The contract is **additive-only**
+(D30) — future slices may extend the response but never rename or
+remove. Triggers (client side):
 
-On first sync (`since=0`), payloads can be large. The endpoint
-supports gzip + `Range` headers; Workers Cache stores the full
-response keyed by `(scope_hash, since=0)` with a 5-minute TTL so a
-training session of 50 field staff hitting it simultaneously warms
-once.
+- App-start when the auth resume succeeds.
+- The `online` window event firing.
+- After a successful drain that reached `done` (so the cache picks
+  up server-side state the queued mutations may have changed).
+
+The client's read cache (§6.2) — `cache_villages` and
+`cache_students` today, more later — is the offline source for
+the AchievementForm picker and other workflows. The drain runner
+does not touch these stores; only the manifest pull does.
+
+`session.last_manifest_at` lives on the IDB `meta` store, keyed
+`last_synced_at`. Used for diagnostics, not for delta calculation.
 
 ### 6.10 Capacity & performance targets
 

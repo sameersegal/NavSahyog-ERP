@@ -1,0 +1,36 @@
+{
+  "release": "L4.1a",
+  "endpoint": "POST /api/achievements",
+  "schema_version": 1,
+  "payloads": [
+    {
+      "name": "som — current month, replaces server row idempotently",
+      "body": {
+        "student_id": 1,
+        "description": "Star of the Month — first place in the science fair, regression-corpus baseline.",
+        "date": "2026-04-29",
+        "type": "som"
+      }
+    },
+    {
+      "name": "gold — single medal, regression-corpus baseline",
+      "body": {
+        "student_id": 1,
+        "description": "Gold medal — district-level chess tournament.",
+        "date": "2026-04-29",
+        "type": "gold",
+        "gold_count": 1
+      }
+    },
+    {
+      "name": "silver — multi-count, regression-corpus baseline",
+      "body": {
+        "student_id": 1,
+        "description": "Silver medal — state-level swimming finals.",
+        "date": "2026-04-29",
+        "type": "silver",
+        "silver_count": 2
+      }
+    }
+  ]
+}

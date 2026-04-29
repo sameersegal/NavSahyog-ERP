@@ -367,6 +367,8 @@
   "achievements.form.village.pick": "Select a village",
   "achievements.form.student": "Student",
   "achievements.form.student.pick": "Select a student",
+  "achievements.form.cache_empty": "Sync to load villages and students. Connect online and reopen this form.",
+  "achievements.form.no_students_cached": "No students yet for this village. Sync online to populate.",
   "achievements.form.type": "Type",
   "achievements.form.date": "Date",
   "achievements.form.medal_count": "Medal count",

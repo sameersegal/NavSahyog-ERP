@@ -32,6 +32,7 @@ import {
 import { detectNetwork, type NetworkStatus } from './network';
 import { counts as outboxCounts, OUTBOX_CHANGED_EVENT } from './outbox';
 import { drain } from './drain';
+import { pullManifest } from './manifest';
 
 type OutboxCounts = {
   pending: number;
@@ -141,6 +142,11 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
       setBrowserOnline(true);
       void probe(true);
       void syncNow();
+      // Read-cache may have drifted while offline — refresh from the
+      // server now that we're back. Single-flight inside the helper
+      // means a burst of triggers (probe + syncNow + this) only runs
+      // one network call. (L4.1a)
+      void pullManifest();
     };
     const handleOffline = () => {
       setBrowserOnline(false);
