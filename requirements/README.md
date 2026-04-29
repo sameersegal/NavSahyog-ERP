@@ -3,8 +3,8 @@
 Status: **complete draft v1**, under review.
 
 This folder holds the requirements for replacing the NavSahyog vendor
-app (`Navshayog-4.5.2.apk`, package `io.ionic.ngo`)
-with a bespoke ERP on the Cloudflare stack.
+app (Ionic React, package `io.ionic.ngo`) with a bespoke ERP on the
+Cloudflare stack.
 
 ## How the doc is split
 

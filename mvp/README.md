@@ -18,38 +18,33 @@ both docs can evolve independently.
 - **Lab-only, dummy data.** No field users, no real child PII, no
   migration target (yet). We are figuring out the approach, not
   shipping to production.
-- **Auth and compliance are deferred** to the last level because
-  they only matter once real data is involved.
-- **Offline is deferred** because bad connectivity is not a current
-  constraint; we ship it in L4 to prove the architecture, not to
-  solve a field problem.
+- **Auth and compliance are deferred** to L5 because they only
+  matter once real data is involved.
 - **Multi-role + dashboards are pulled forward** because role /
   scope is load-bearing for every other feature and dashboards are
   how stakeholders evaluate progress.
 
 ## The ladder
 
-| Level | Theme | File |
-|---|---|---|
-| 1 | Multi-role skeleton, one cluster | [`level-1.md`](./level-1.md) |
-| 2 | Full write loop + full drill-down dashboards | [`level-2.md`](./level-2.md) |
-| 2.4b | Media-pipeline follow-ups (thumbnails, transcode, multipart, EXIF GPS, AWS4) | [`level-2.4b.md`](./level-2.4b.md) |
-| 2.5 | Dashboard polish (mobile-first) + §3.6.2 fold | [`level-2.5.md`](./level-2.5.md) |
-| 3 | Master CRUD + Profile + Field-Dashboard Home | [`level-3.md`](./level-3.md) |
-| 4 | Offline mode | [`level-4.md`](./level-4.md) |
-| 5 | Auth + compliance hardening (gated on approach decision) | [`level-5.md`](./level-5.md) |
+| Level | Theme | Status | File |
+|---|---|---|---|
+| 1 | Multi-role skeleton, one cluster | landed | [`level-1.md`](./level-1.md) |
+| 2 | Full write loop + full drill-down dashboards | landed | [`level-2.md`](./level-2.md) |
+| 2.4b | Media-pipeline follow-ups (thumbnails, transcode, multipart, EXIF GPS, AWS4) | pending | [`level-2.4b.md`](./level-2.4b.md) |
+| 2.5 | Dashboard polish (mobile-first) + §3.6.2 fold | landed | [`level-2.5.md`](./level-2.5.md) |
+| 3 | Master CRUD + Profile + Field-Dashboard Home | in flight | [`level-3.md`](./level-3.md) |
+| 4 | Offline mode (platform + workflow opt-in per `offline-scope.md`) | platform + 3 of 4 vertical slices landed | [`level-4.md`](./level-4.md) |
+| 5 | Auth + compliance hardening (gated on approach decision) | not started | [`level-5.md`](./level-5.md) |
 
-**L2.4b is pending**, not landed — the L2.4 shipped with a deferred
-backlog (decisions.md D7–D11) that's easy to forget when reading
-the ladder top-to-bottom. Listing it here makes the pending scope
-visible without reshuffling L2.4's status.
+L2.4b, L3.2, L4.1d, and L4.2+ remain pending — see each level file
+for the specifics.
 
 ## Rules
 
 1. **Each level is shippable in isolation.** A level ends with a
    demo-able build, not a half-finished feature.
 2. **Later levels replace, not extend, trivial earlier stand-ins.**
-   L1 uses plain-text passwords; L5 replaces that with Argon2id.
+   L1 uses plain-text passwords; L5 replaces that with proper auth.
    Don't carry "temporary" hacks forward silently.
 3. **Requirements sections referenced by a level are in scope for
    that level.** Anything not referenced is deferred by default.

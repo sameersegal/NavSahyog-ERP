@@ -319,10 +319,8 @@ because:
 
 - [ ] Confirm route prefix (`/api/` vs `/v1/`). Part 5 may pin this
       when Cloudflare Pages + Workers routing is nailed down.
-- [ ] Decide whether to expose `/api/sync/manifest` as a single
-      endpoint or per-resource (`/api/children?since=`, …). Single
-      endpoint keeps the client simple; per-resource is easier to
-      cache at the edge.
 - [ ] Confirm whether District+ admins need any write endpoints at
       all, or if the §2.3 capability matrix (read-only) holds.
+
+Resolved: manifest granularity (D32, single replace-snapshot endpoint).
 

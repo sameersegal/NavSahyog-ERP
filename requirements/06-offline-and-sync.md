@@ -320,13 +320,10 @@ wall time, oldest pending item age.
 
 ### 6.13 Open items
 
-- [ ] Decide whether offline student-creation is permitted (§6.6
-      assumes yes). Field practice may prefer forcing online for
-      child registration to validate Aadhaar-free parent data in
-      real time.
-- [ ] Pick manifest granularity: full-scope vs per-resource
-      (also flagged in §5.17).
 - [ ] Confirm device-bound key storage is acceptable for
       NSNOP/legal — alternative is key in password-derived form,
       which loses data on password reset.
+
+Resolved: offline student-creation policy (D35, visibility-after-sync);
+manifest granularity (D32, single full-snapshot replace).
 

@@ -1,7 +1,13 @@
 #!/usr/bin/env node
-// L1 screenshot harness. Drives a headless chromium against the
-// local dev stack (vite + wrangler) and captures the 27 reference
-// images used in the PR body and mvp/screenshots/l1/.
+// Screenshot harness — template. Drives headless chromium against
+// the local dev stack and captures reference images for a PR body.
+//
+// This file currently still implements the L1 capture set
+// (desktop, mobile, themes, i18n). It's kept as a working
+// reference: copy this file, change `OUT` to the target subdir
+// under `mvp/screenshots/`, and rewrite the per-shot bodies for
+// the new screen / flow. Delete the copy when the PR ships — the
+// PNGs are the lasting artefact, the script is throwaway.
 //
 // Prereqs, run from the repo root:
 //   pnpm db:reset

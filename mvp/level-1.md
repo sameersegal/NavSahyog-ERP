@@ -1,111 +1,50 @@
 # Level 1 — Multi-role skeleton, one cluster
 
-**Status:** scaffold landed, plus a UI polish pass (logo, three
-themes, user menu, responsive layout, attendance mass-ops,
-en + hi i18n). Typechecks pass, dev smoke tests green,
-screenshots in `mvp/screenshots/l1/` (desktop + mobile +
-per-theme + i18n). Open questions below remain unresolved.
+**Status: landed** (PRs #18–#21). Scaffold + UI polish pass: logo,
+three themes (light / dark / sunlight), user menu, responsive
+layout, attendance mass-ops, en + hi i18n. Screenshots in
+`mvp/screenshots/l1/`.
 
-## Goal
+## What L1 proved
 
-Prove the stack end-to-end (Pages + Workers + D1) and lock in the
-role / scope model on the smallest possible feature surface.
+End-to-end stack (Pages + Workers + D1) and the role / scope model
+on a minimal feature surface.
 
-## In scope
+## What shipped
 
-- **Auth (§3.1.1, trivial form only).** User ID + password in a
-  POST form. Plain-text comparison against a seeded `user` table.
-  Session is a signed token stored in KV with a 12h TTL. No
-  lockout, no OTP, no forced password change, no default-password
-  flow.
+- **Auth (§3.1.1, trivial form).** User ID + password, plain-text
+  comparison against seeded `user`. Signed token in KV, 12h TTL.
 - **Roles (§2.1, §2.3).** VC / AF / Cluster Admin / Super Admin
-  wired end-to-end. Scope claim in the session; every write
-  endpoint enforces it server-side per the capability matrix.
+  wired end-to-end. Scope claim in the session; every write enforces
+  it server-side via `requireCap(...)`.
 - **Geo seed (§2.2, §4.3.2).** One Zone → State → Region → District
-  → Cluster → 3–5 Villages, all dummy. Seeded via `seed.sql`.
-- **Children (§3.2.1, §3.2.2 partial).**
-  - `GET /api/children?village_id=…` — list active children in
-    scope.
-  - `POST /api/children` — required fields only: first name, last
-    name, gender, DOB, village (pre-filled), school (picker from
-    seeded schools). No photo, no parents, no alt contact.
-- **Attendance (§3.3).** Today only, no event picker, no voice
-  note.
-  - `POST /api/attendance` — `{ village_id, student_marks: [{student_id, present}] }`.
-  - `GET /api/attendance?village_id=…&date=…`.
-- **Drill-down dashboard (§3.6.1, 2 tiles).** Children + Attendance
-  only. Cluster → village drill. No CSV export.
-- **PWA shell (§11.2).** React + Vite on Cloudflare Pages. Install
-  prompt out of scope.
-- **Themes (not in requirements).** Three themes shipped: `light`
-  (default back-office), `dark` (low-light / evening review), and
-  `sunlight` (high-contrast, thicker borders, larger base font,
-  intended for outdoor field use on Android). Theme is stored in
-  localStorage and applied via a `data-theme` attribute on
-  `<html>`; all surfaces read HSL CSS vars so adding a fourth is
-  a one-file change. Exposed on Login and in the user menu.
-- **Language toggle (en + hi).** Catalogs shipped, exposed on Login
-  and in the user menu. Pulled into L1 early because the cost was
-  low and the field-staff UI is Hindi-first. Adding more languages
-  is a two-step change (drop a `locales/<code>.json` and register
-  it in `apps/web/src/i18n.tsx`). The dedicated §3.8.6 Language
-  switcher screen was cancelled in decisions.md D15; the in-menu
-  toggle is the only switcher affordance.
+  → Cluster → 3–5 Villages.
+- **Children (§3.2.1, §3.2.2 partial).** List + create (required
+  fields only — no photo, no parents).
+- **Attendance (§3.3).** Today only. `POST /api/attendance` with
+  `{ village_id, student_marks: [...] }`.
+- **Drill-down dashboard (§3.6.1, 2 tiles).** Children + Attendance,
+  cluster → village drill. No CSV export yet.
+- **PWA shell (§11.2).** React + Vite on Cloudflare Pages.
+- **Themes.** Three themes — `light` (default), `dark` (evening),
+  `sunlight` (outdoor / high-contrast). HSL CSS vars; adding a
+  fourth is a one-file change. Persisted in localStorage.
+- **Language toggle (en + hi).** Pulled forward because field-staff
+  UI is Hindi-first. The dedicated §3.8.6 switcher screen was
+  cancelled in D15; the in-menu toggle is the only affordance.
 
-## Explicitly deferred
+## Stack choices established here
 
-- Photos, media capture, R2, EXIF (§3.4, §7).
-- Achievements (§3.5).
-- Consolidated dashboard (§3.6.2).
-- Master Creations (§3.8.7).
-- Profile (§3.8.1) — L3.
-- *(Notice board §3.8.2, About Us §3.8.3, Reference links §3.8.4,
-  Quick Phone / Quick Video §3.8.5, Language switcher screen §3.8.6
-  — cancelled in decisions.md D15.)*
-- Offline mode, IndexedDB outbox (§3.7, §6).
-- Password hashing, lockout, OTP, forced change (§3.1.2–§3.1.4).
-- CSV export (§3.6.3).
-- Audit log (§9.4).
-- Retention cron (§9.3).
-- Migration (§10).
+- pnpm workspaces — `apps/web`, `apps/api`, `db/`.
+- Hand-rolled fetch handler + small router in the Worker.
+- Auth state in KV: `session:<token>` → JSON claim.
+- Local dev: `wrangler dev` + `vite` + D1 local binding.
 
-## Acceptance
+## Explicitly deferred (still)
 
-1. Seed produces one cluster with one VC, one AF, one Cluster
-   Admin, one Super Admin, 3–5 villages, ~20 children total.
-2. VC login → sees own village only in child + attendance UIs.
-3. AF login → sees all villages in the cluster; can mark
-   attendance for any of them.
-4. Cluster Admin login → identical visibility to AF (for now; L3
-   adds master CRUD).
-5. Super Admin login → sees the full cluster.
-6. A request with a VC session that tampers `village_id` to a
-   village outside their scope returns `403`, not `404`, and the
-   attempt is logged to server logs (audit log proper is L5).
-7. Drill-down dashboard renders the correct counts; numbers match
-   a direct SQL query against D1.
-8. Language toggle (en ↔ hi) flips every page including nav,
-   forms, roles, theme labels, and plural counters; `<html lang>`
-   updates; choice persists across reload.
-9. Theme toggle (light / dark / sunlight) recolours every page;
-   sunlight increases base font and border weight for outdoor
-   legibility; choice persists across reload.
-
-## Stack choices for this level
-
-- **Monorepo** with pnpm workspaces: `apps/web` (React + Vite
-  PWA), `apps/api` (Cloudflare Worker), `db/` (schema + seed).
-- **Routing** in Worker: hand-rolled `fetch` handler with a small
-  router. No framework dependency.
-- **Auth state** in KV: `session:<token>` → JSON claim.
-- **Local dev**: `wrangler dev` for the Worker, `vite` for the
-  web app, D1 local binding for the DB.
-
-## Open questions
-
-- [ ] Do we want seeded users to have memorable IDs
-      (`vc-village1`, `af-cluster1`) or should we mimic the vendor
-      format (`VC-BID01-007`)? Memorable wins for a lab demo;
-      vendor format is closer to what migration (L5) will face.
-- [ ] Dashboards in L1: render in-table counts only, or also a
-      tiny bar chart? Counts-only keeps the level tight.
+Photos / R2 (§3.4, §7) — landed in L2. Achievements (§3.5) —
+landed in L2. Consolidated dashboard (§3.6.2) — folded into
+drill-down per D12, landed in L2.5. Master Creations (§3.8.7) —
+L3. Profile (§3.8.1) — L3.2. §3.8.2–§3.8.6 cancelled (D15).
+Offline (§3.7, §6) — L4. Password hashing / OTP / lockout
+(§3.1.2–§3.1.4) — L5. Audit log (§9.4) — L5. Migration (§10) — L5.
