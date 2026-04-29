@@ -5,6 +5,7 @@ import { requireCap } from '../policy';
 import { err } from '../lib/errors';
 import { nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 // Role determines scope_level uniquely (every seed row follows this
 // pattern, and the §2.3 matrix is structured the same way). Pinning
@@ -48,6 +49,15 @@ type AdminBody = {
   full_name?: string;
   role?: string;
   scope_id?: number | null;
+};
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'identity',
+  resource: 'users',
+  cra: 'create-only',
+  offline: { write: 'online-only', read: 'online-only' },
+  refs: ['§3.8.7'],
 };
 
 const users = new Hono<{ Bindings: Bindings; Variables: Variables }>();

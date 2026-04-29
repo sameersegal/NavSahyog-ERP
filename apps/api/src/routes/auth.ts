@@ -11,8 +11,18 @@ import {
 import { capabilitiesFor } from '../policy';
 import { err } from '../lib/errors';
 import type { Bindings, SessionUser, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 type LoginBody = { user_id?: string; password?: string };
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'identity',
+  resource: 'auth',
+  cra: 'create-only',
+  offline: { write: 'online-only', read: 'online-only' },
+  refs: ['§3.1'],
+};
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

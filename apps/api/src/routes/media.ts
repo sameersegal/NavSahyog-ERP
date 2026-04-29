@@ -40,6 +40,18 @@ import {
   verifyUploadToken,
 } from '../lib/media';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
+
+// Walked by scripts/gen-matrix.mjs. Capture is offline-required
+// per offline-scope.md §3.5; the outbox runner orchestrates the
+// presign → PUT → commit chain as a single workflow.
+export const meta: RouteMeta = {
+  context: 'media',
+  resource: 'media',
+  cra: 'create-only',
+  offline: { write: 'required', read: 'online-only' },
+  refs: ['§3.5', '§5.8'],
+};
 
 const media = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

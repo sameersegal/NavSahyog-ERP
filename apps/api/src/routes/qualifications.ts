@@ -4,6 +4,7 @@ import { requireCap } from '../policy';
 import { err } from '../lib/errors';
 import { nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 const MAX_DESCRIPTION_LEN = 500;
 
@@ -16,6 +17,15 @@ type Qualification = {
 type AdminBody = {
   name?: string;
   description?: string | null;
+};
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'masters',
+  resource: 'qualifications',
+  cra: 'create-only',
+  offline: { write: 'online-only', read: 'online-only' },
+  refs: ['§3.8.7'],
 };
 
 const qualifications = new Hono<{ Bindings: Bindings; Variables: Variables }>();

@@ -4,6 +4,7 @@ import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 type School = { id: number; village_id: number; name: string };
 
@@ -12,6 +13,15 @@ type AdminRow = School & { village_name: string };
 type AdminBody = {
   name?: string;
   village_id?: number;
+};
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'masters',
+  resource: 'schools',
+  cra: 'create-only',
+  offline: { write: 'online-only', read: 'online-only' },
+  refs: ['§3.8.7'],
 };
 
 const schools = new Hono<{ Bindings: Bindings; Variables: Variables }>();

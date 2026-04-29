@@ -39,6 +39,16 @@ import {
   type VillageActivity,
 } from '@navsahyog/shared';
 import type { Bindings, SessionUser, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'dashboard',
+  resource: 'insights',
+  cra: 'read-only',
+  offline: { read: 'online-only' },
+  refs: ['§3.6'],
+};
 
 const insights = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

@@ -11,6 +11,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "matrix": "node scripts/gen-matrix.mjs",
+    "matrix:check": "node scripts/gen-matrix.mjs --check",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "db:migrate": "pnpm --filter @navsahyog/api db:migrate",
     "db:seed": "pnpm --filter @navsahyog/api db:seed",

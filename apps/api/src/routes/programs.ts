@@ -19,6 +19,18 @@
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
+
+// Walked by scripts/gen-matrix.mjs. Public, embeddable program
+// APIs — no auth, no cookies, CORS open. Capability column shows
+// `public` in the generated matrix.
+export const meta: RouteMeta = {
+  context: 'programs',
+  resource: 'programs',
+  cra: 'read-only',
+  offline: { read: 'online-only' },
+  refs: ['§3.10'],
+};
 
 const programs = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

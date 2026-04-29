@@ -7,6 +7,7 @@ import { err } from '../lib/errors';
 import { withIdempotency } from '../lib/idempotency';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 type ProfileBody = {
   father_name?: string | null;
@@ -58,6 +59,18 @@ const STUDENT_COLUMNS = `
   alt_contact_name, alt_contact_phone, alt_contact_relationship,
   photo_media_id
 `;
+
+// Walked by scripts/gen-matrix.mjs. POST is offline-eligible
+// (D35 — server-side create with a client ULID idempotency key);
+// PATCH and /graduate are online-only per offline-scope.md §3.2.2.
+// File-level `offline.write` reflects the primary write (POST).
+export const meta: RouteMeta = {
+  context: 'beneficiaries',
+  resource: 'children',
+  cra: 'create-only',
+  offline: { write: 'eligible', read: 'cached' },
+  refs: ['§3.2.2', 'D35'],
+};
 
 const children = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

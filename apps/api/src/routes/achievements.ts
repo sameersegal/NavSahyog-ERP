@@ -10,6 +10,7 @@ import { err } from '../lib/errors';
 import { withIdempotency } from '../lib/idempotency';
 import { isIsoDate, nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 const MAX_DESCRIPTION_LEN = 500;
 const ACHIEVEMENT_TYPES: readonly AchievementType[] = ['som', 'gold', 'silver'];
@@ -47,6 +48,15 @@ const BASE_FROM = `
   JOIN student s ON s.id = a.student_id
   JOIN village v ON v.id = s.village_id
 `;
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'programs',
+  resource: 'achievements',
+  cra: 'create-only',
+  offline: { write: 'required', read: 'online-only' },
+  refs: ['§3.4', 'L4.1a'],
+};
 
 const achievements = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

@@ -49,10 +49,22 @@ import {
   verifyUploadToken,
 } from '../lib/agreement';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 const NOTES_MAX_LEN = 500;
 const AGREEMENT_NOTES_MAX_LEN = 200;
 const FILENAME_MAX_LEN = 255;
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'programs',
+  resource: 'ponds',
+  cra: 'create-only',
+  // D25: online-only because the agreement scan is the high-stakes
+  // artefact in this workflow. Revisit at L4.2.
+  offline: { write: 'online-only', read: 'online-only' },
+  refs: ['§3.10', 'D25'],
+};
 
 const ponds = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
