@@ -365,6 +365,8 @@
   "achievements.form.village.pick": "गाँव चुनें",
   "achievements.form.student": "छात्र",
   "achievements.form.student.pick": "छात्र चुनें",
+  "achievements.form.cache_empty": "गाँव और छात्र लोड करने के लिए सिंक करें। ऑनलाइन हों और यह फ़ॉर्म फिर खोलें।",
+  "achievements.form.no_students_cached": "इस गाँव के लिए अभी कोई छात्र नहीं। ऑनलाइन सिंक करके भरें।",
   "achievements.form.type": "प्रकार",
   "achievements.form.date": "तिथि",
   "achievements.form.medal_count": "पदक संख्या",

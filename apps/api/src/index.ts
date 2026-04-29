@@ -17,6 +17,7 @@ import trainingManuals from './routes/training_manuals';
 import users from './routes/users';
 import ponds from './routes/ponds';
 import programs from './routes/programs';
+import sync from './routes/sync';
 import { buildCompat, serverBuildStamp } from './lib/build';
 import { err } from './lib/errors';
 import type { Bindings, Variables } from './types';
@@ -148,6 +149,7 @@ app.route('/api/training-manuals', trainingManuals);
 app.route('/api/users', users);
 app.route('/api/ponds', ponds);
 app.route('/api/programs', programs);
+app.route('/api/sync', sync);
 
 app.onError((e, c) => {
   console.error(e);

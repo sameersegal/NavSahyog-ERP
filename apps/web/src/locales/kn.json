@@ -365,6 +365,8 @@
   "achievements.form.village.pick": "ಒಂದು ಗ್ರಾಮ ಆಯ್ಕೆ ಮಾಡಿ",
   "achievements.form.student": "ವಿದ್ಯಾರ್ಥಿ",
   "achievements.form.student.pick": "ಒಬ್ಬ ವಿದ್ಯಾರ್ಥಿಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿ",
+  "achievements.form.cache_empty": "ಗ್ರಾಮಗಳು ಮತ್ತು ವಿದ್ಯಾರ್ಥಿಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಸಿಂಕ್ ಮಾಡಿ. ಆನ್‌ಲೈನ್‌ಗೆ ಬಂದು ಈ ಫಾರ್ಮ್ ಮತ್ತೆ ತೆರೆಯಿರಿ.",
+  "achievements.form.no_students_cached": "ಈ ಗ್ರಾಮಕ್ಕೆ ಇನ್ನೂ ವಿದ್ಯಾರ್ಥಿಗಳಿಲ್ಲ. ತುಂಬಲು ಆನ್‌ಲೈನ್ ಸಿಂಕ್ ಮಾಡಿ.",
   "achievements.form.type": "ಪ್ರಕಾರ",
   "achievements.form.date": "ದಿನಾಂಕ",
   "achievements.form.medal_count": "ಪದಕಗಳ ಸಂಖ್ಯೆ",

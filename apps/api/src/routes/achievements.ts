@@ -7,6 +7,7 @@ import { requireAuth } from '../auth';
 import { requireCap } from '../policy';
 import { assertVillageInScope, villageIdsInScope } from '../scope';
 import { err } from '../lib/errors';
+import { withIdempotency } from '../lib/idempotency';
 import { isIsoDate, nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
@@ -184,6 +185,10 @@ achievements.get('/:id', requireCap('achievement.read'), async (c) => {
 });
 
 achievements.post('/', requireCap('achievement.write'), async (c) => {
+  // Pre-validate the body shape outside the idempotency wrapper.
+  // Validation errors are deterministic for a given input — they
+  // don't need to be cached, and short-circuiting here avoids
+  // polluting the idempotency table with "bad_request" replies.
   const user = c.get('user');
   const body = await c.req.json<PostBody>().catch(() => ({}) as PostBody);
   const studentId = body.student_id;
@@ -213,59 +218,65 @@ achievements.post('/', requireCap('achievement.write'), async (c) => {
     return err(c, 'forbidden', 403);
   }
 
-  const now = nowEpochSeconds();
+  return withIdempotency(c, async () => {
+    const now = nowEpochSeconds();
 
-  if (type === 'som') {
-    // "One SoM per student per month — a second SoM replaces the
-    // existing row" (§3.5). UPSERT on the partial unique index.
-    // `substr(date, 1, 7)` extracts 'YYYY-MM' to match the index
-    // expression; the WHERE predicate narrows the conflict target
-    // to the partial index. D1 / SQLite supports this form.
-    //
-    // `was_update` is the RETURNING expression that distinguishes
-    // an insert from a replace: the UPDATE branch always writes a
-    // non-null `updated_at`, the INSERT branch leaves it NULL. Used
-    // to pick 201 vs 200 — a replace isn't a creation.
-    const row = await c.env.DB.prepare(
+    if (type === 'som') {
+      // "One SoM per student per month — a second SoM replaces the
+      // existing row" (§3.5). UPSERT on the partial unique index.
+      // `substr(date, 1, 7)` extracts 'YYYY-MM' to match the index
+      // expression; the WHERE predicate narrows the conflict target
+      // to the partial index. D1 / SQLite supports this form.
+      //
+      // `was_update` is the RETURNING expression that distinguishes
+      // an insert from a replace: the UPDATE branch always writes a
+      // non-null `updated_at`, the INSERT branch leaves it NULL. Used
+      // to pick 201 vs 200 — a replace isn't a creation.
+      const row = await c.env.DB.prepare(
+        `INSERT INTO achievement
+           (student_id, description, date, type, created_at, created_by)
+         VALUES (?, ?, ?, 'som', ?, ?)
+         ON CONFLICT (student_id, substr(date, 1, 7)) WHERE type = 'som'
+         DO UPDATE SET
+           description = excluded.description,
+           date = excluded.date,
+           updated_at = ?,
+           updated_by = ?
+         RETURNING id, (updated_at IS NOT NULL) AS was_update`,
+      )
+        .bind(studentId, description, date, now, user.id, now, user.id)
+        .first<{ id: number; was_update: number }>();
+      if (!row) {
+        return { status: 500, body: { error: { code: 'internal_error', message: 'upsert failed' } } };
+      }
+      const fresh = await loadAchievement(c.env.DB, row.id);
+      return { status: row.was_update ? 200 : 201, body: { achievement: fresh } };
+    }
+
+    const rs = await c.env.DB.prepare(
       `INSERT INTO achievement
-         (student_id, description, date, type, created_at, created_by)
-       VALUES (?, ?, ?, 'som', ?, ?)
-       ON CONFLICT (student_id, substr(date, 1, 7)) WHERE type = 'som'
-       DO UPDATE SET
-         description = excluded.description,
-         date = excluded.date,
-         updated_at = ?,
-         updated_by = ?
-       RETURNING id, (updated_at IS NOT NULL) AS was_update`,
+         (student_id, description, date, type, gold_count, silver_count,
+          created_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING id`,
     )
-      .bind(studentId, description, date, now, user.id, now, user.id)
-      .first<{ id: number; was_update: number }>();
-    if (!row) return err(c, 'internal_error', 500, 'upsert failed');
-    const fresh = await loadAchievement(c.env.DB, row.id);
-    return c.json({ achievement: fresh }, row.was_update ? 200 : 201);
-  }
-
-  const rs = await c.env.DB.prepare(
-    `INSERT INTO achievement
-       (student_id, description, date, type, gold_count, silver_count,
-        created_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     RETURNING id`,
-  )
-    .bind(
-      studentId,
-      description,
-      date,
-      type,
-      medal.gold,
-      medal.silver,
-      now,
-      user.id,
-    )
-    .first<{ id: number }>();
-  if (!rs) return err(c, 'internal_error', 500, 'insert failed');
-  const fresh = await loadAchievement(c.env.DB, rs.id);
-  return c.json({ achievement: fresh }, 201);
+      .bind(
+        studentId,
+        description,
+        date,
+        type,
+        medal.gold,
+        medal.silver,
+        now,
+        user.id,
+      )
+      .first<{ id: number }>();
+    if (!rs) {
+      return { status: 500, body: { error: { code: 'internal_error', message: 'insert failed' } } };
+    }
+    const fresh = await loadAchievement(c.env.DB, rs.id);
+    return { status: 201, body: { achievement: fresh } };
+  });
 });
 
 // PATCH updates description, date, and the matching medal count.

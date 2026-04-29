@@ -16,7 +16,7 @@ const DB_NAME = 'navsahyog';
 
 // Bump this with every new migration. Migrations array length must
 // equal LATEST_VERSION; the assertion at module load catches drift.
-const LATEST_VERSION = 1;
+const LATEST_VERSION = 2;
 
 type MigrationStep = (db: IDBDatabase, tx: IDBTransaction) => void;
 
@@ -39,6 +39,19 @@ const migrations: readonly MigrationStep[] = [
     store.createIndex('by_next_attempt_at', 'next_attempt_at', {
       unique: false,
     });
+  },
+  // v2 — read-cache stores for L4.1a (D32 replace-snapshot). The
+  // manifest pull wipes and reseeds these. Plus a `meta` store
+  // keyed by name for diagnostics like `last_synced_at`. Adding new
+  // cache_* stores in later L4.1.x slices is a fresh migration step,
+  // not a v2 amendment.
+  (db) => {
+    db.createObjectStore('cache_villages', { keyPath: 'id' });
+    const students = db.createObjectStore('cache_students', { keyPath: 'id' });
+    // Index for the AchievementForm picker — "students for this
+    // village_id". Without it we'd `getAll().filter()` per render.
+    students.createIndex('by_village_id', 'village_id', { unique: false });
+    db.createObjectStore('meta', { keyPath: 'key' });
   },
 ];
 
@@ -137,7 +150,11 @@ function wrap<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-export type IdbStoreName = 'outbox';
+export type IdbStoreName =
+  | 'outbox'
+  | 'cache_villages'
+  | 'cache_students'
+  | 'meta';
 
 export async function tx<T>(
   storeNames: IdbStoreName | IdbStoreName[],
@@ -202,6 +219,38 @@ export async function dbCount(
   return tx(store, 'readonly', (t) =>
     wrap<number>(t.objectStore(store).count(query)),
   );
+}
+
+// Clear every row from one or more stores in a single transaction.
+// Used by the manifest pull (replace-snapshot) and by logout cleanup.
+export async function dbClear(
+  stores: IdbStoreName | IdbStoreName[],
+): Promise<void> {
+  const names = Array.isArray(stores) ? stores : [stores];
+  await tx(names, 'readwrite', (t) => {
+    return Promise.all(
+      names.map((s) => wrap(t.objectStore(s).clear())),
+    ).then(() => undefined);
+  });
+}
+
+// Read every row whose indexed value matches `key`. Used by the
+// AchievementForm picker — students filtered by village_id.
+export async function dbGetAllByIndex<T>(
+  store: IdbStoreName,
+  indexName: string,
+  key: IDBValidKey,
+): Promise<T[]> {
+  return tx(store, 'readonly', (t) => {
+    return new Promise<T[]>((resolve, reject) => {
+      const req = t
+        .objectStore(store)
+        .index(indexName)
+        .getAll(key);
+      req.onsuccess = () => resolve(req.result as T[]);
+      req.onerror = () => reject(req.error ?? new Error('idb getAll failed'));
+    });
+  });
 }
 
 // Cursor walk — invokes `visit` for each row in key order until it

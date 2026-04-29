@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ulid } from '@navsahyog/shared';
+import type { ManifestStudent, ManifestVillage } from '@navsahyog/shared';
 import {
   api,
   can,
   type AchievementType,
   type AchievementWithStudent,
-  type Child,
-  type Village as VillageT,
 } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
+import { listCachedStudents, listCachedVillages } from '../lib/cache';
+import { drain } from '../lib/drain';
+import { enqueue, OUTBOX_CHANGED_EVENT } from '../lib/outbox';
 
 function todayIstDate(): string {
   const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
@@ -32,7 +35,12 @@ export function Achievements() {
   const { user } = useAuth();
   const canWrite = can(user, 'achievement.write');
 
-  const [villages, setVillages] = useState<VillageT[]>([]);
+  // Picker source: the read cache populated by the manifest pull
+  // (lib/manifest.ts, L4.1a). Reads are scoped to the user's
+  // authority server-side, then mirrored client-side. On a fresh
+  // install the cache is empty until the first online sync; the
+  // form falls back to a hint string in that state.
+  const [villages, setVillages] = useState<ManifestVillage[]>([]);
   const [villageId, setVillageId] = useState<number | null>(null);
   const [from, setFrom] = useState(firstOfMonthIst());
   const [to, setTo] = useState(todayIstDate());
@@ -42,12 +50,21 @@ export function Achievements() {
   const [panel, setPanel] = useState<Panel>({ kind: 'none' });
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
-  useEffect(() => {
-    api
-      .villages()
-      .then((r) => setVillages(r.villages))
-      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
+  // Re-read the village cache whenever the outbox changes — covers
+  // the case where a successful drain drove a manifest refresh and
+  // the cache shape moved.
+  const refreshVillages = useCallback(() => {
+    listCachedVillages()
+      .then(setVillages)
+      .catch(() => setVillages([]));
   }, []);
+
+  useEffect(() => {
+    refreshVillages();
+    const handler = () => refreshVillages();
+    window.addEventListener(OUTBOX_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(OUTBOX_CHANGED_EVENT, handler);
+  }, [refreshVillages]);
 
   const load = useCallback(() => {
     setRows(null);
@@ -209,7 +226,7 @@ function FilterBar({
   typeFilter,
   onType,
 }: {
-  villages: VillageT[];
+  villages: ManifestVillage[];
   villageId: number | null;
   onVillage: (v: number | null) => void;
   from: string;
@@ -321,7 +338,7 @@ type FormProps =
   | {
       mode: 'add';
       defaultVillageId: number | null;
-      villages: VillageT[];
+      villages: ManifestVillage[];
       onSaved: () => void;
       onCancel: () => void;
       existing?: undefined;
@@ -329,7 +346,7 @@ type FormProps =
   | {
       mode: 'edit';
       existing: AchievementWithStudent;
-      villages: VillageT[];
+      villages: ManifestVillage[];
       onSaved: () => void;
       onCancel: () => void;
     };
@@ -356,25 +373,23 @@ function AchievementForm(props: FormProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Children for the picker are fetched lazily for the current
-  // form's villageId — only when the form is open and a village is
-  // chosen. Replaces a former page-level fan-out across all villages
-  // (one fetch per village, in parallel), which produced N parallel
-  // failures offline and was wasteful even online.
-  const [childrenInVillage, setChildrenInVillage] = useState<Child[]>([]);
+  // Students for the picker come from `cache_students` (L4.1a — D32
+  // replace-snapshot). Only loaded when the form is open and a
+  // village is chosen; edit-mode disables the picker entirely so we
+  // skip the load there.
+  const [childrenInVillage, setChildrenInVillage] = useState<ManifestStudent[]>(
+    [],
+  );
   useEffect(() => {
-    // Edit mode disables the student dropdown entirely, so there's
-    // no need to fetch the picker source.
     if (isEdit) return;
     if (!villageId) {
       setChildrenInVillage([]);
       return;
     }
     let cancelled = false;
-    api
-      .children(villageId)
+    listCachedStudents(villageId)
       .then((r) => {
-        if (!cancelled) setChildrenInVillage(r.children);
+        if (!cancelled) setChildrenInVillage(r);
       })
       .catch(() => {
         if (!cancelled) setChildrenInVillage([]);
@@ -407,15 +422,38 @@ function AchievementForm(props: FormProps) {
     setBusy(true);
     try {
       if (mode === 'add') {
-        await api.addAchievement({
-          student_id: studentId,
-          description: description.trim(),
-          date,
-          type,
-          ...(type === 'gold' ? { gold_count: medalCount } : {}),
-          ...(type === 'silver' ? { silver_count: medalCount } : {}),
+        // Add path goes through the outbox (L4.1a — `POST
+        // /api/achievements` is `offline-required` per
+        // offline-scope.md §3.4). Online: drain runs immediately and
+        // the parent's `load()` shows the new row. Offline: enqueue
+        // returns, drain is a no-op, and the chip shows "1 queued"
+        // until the next online window.
+        await enqueue({
+          method: 'POST',
+          path: '/api/achievements',
+          body: {
+            student_id: studentId,
+            description: description.trim(),
+            date,
+            type,
+            ...(type === 'gold' ? { gold_count: medalCount } : {}),
+            ...(type === 'silver' ? { silver_count: medalCount } : {}),
+          },
+          schema_version: 1,
+          idempotency_key: ulid(),
         });
+        // Best-effort drain so online users see the new row in the
+        // refreshed list without a perceptible delay. Offline: the
+        // drain helper short-circuits and the row sits as `pending`.
+        try {
+          await drain();
+        } catch {
+          // Drain failures are surfaced via the chip + outbox UI;
+          // the form keeps the queued row regardless.
+        }
       } else {
+        // Edit (PATCH) is `online-only` — `offline-scope.md` only
+        // flips POST. Direct fetch matches the prior behaviour.
         await api.updateAchievement(existing!.id, {
           description: description.trim(),
           date,
@@ -439,6 +477,18 @@ function AchievementForm(props: FormProps) {
       <h3 className="text-sm font-semibold">
         {isEdit ? t('achievements.edit.title') : t('achievements.add.title')}
       </h3>
+      {/* Empty-cache hint — `cache_villages` is empty until the
+          first online manifest pull (lib/manifest.ts). On a fresh
+          install offline, the user can't pick anything; the hint
+          tells them to come online to sync. */}
+      {!isEdit && villages.length === 0 && (
+        <p
+          role="status"
+          className="text-xs text-muted-fg bg-card-hover border border-border rounded px-2 py-1.5"
+        >
+          {t('achievements.form.cache_empty')}
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm">{t('achievements.form.village')}</span>
@@ -471,6 +521,11 @@ function AchievementForm(props: FormProps) {
               </option>
             ))}
           </select>
+          {!isEdit && villageId !== null && childrenInVillage.length === 0 && (
+            <p className="text-xs text-muted-fg mt-1">
+              {t('achievements.form.no_students_cached')}
+            </p>
+          )}
         </label>
         <label className="block">
           <span className="text-sm">{t('achievements.form.type')}</span>
