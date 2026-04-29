@@ -9,10 +9,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api, type TrainingManual } from '../api';
+import { OfflineUnavailable } from '../components/OfflineUnavailable';
 import { useI18n } from '../i18n';
+import { useSyncState } from '../lib/sync-state';
 
 export function TrainingManuals() {
   const { t, lang } = useI18n();
+  const { network } = useSyncState();
   const [rows, setRows] = useState<TrainingManual[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -52,15 +55,19 @@ export function TrainingManuals() {
         <p className="text-sm text-muted-fg">{t('manuals.description')}</p>
       </div>
 
-      {err && <div className="text-sm text-danger">{err}</div>}
-
-      {rows === null && !err && (
-        <div className="text-sm text-muted-fg">{t('common.loading')}</div>
-      )}
-
-      {rows !== null && rows.length === 0 && !err && (
-        <div className="text-sm text-muted-fg">{t('manuals.empty')}</div>
-      )}
+      {(() => {
+        // §3.8.8 manuals are `online-only` (the catalogue is authored
+        // server-side; manuals open in a new tab and need network
+        // anyway). Match L4.0f Home / Dashboard pattern when offline.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || rows === null) && isOffline) return <OfflineUnavailable />;
+        if (err) return <div className="text-sm text-danger">{err}</div>;
+        if (rows === null) return <div className="text-sm text-muted-fg">{t('common.loading')}</div>;
+        if (rows.length === 0) return <div className="text-sm text-muted-fg">{t('manuals.empty')}</div>;
+        return null;
+      })()}
 
       {groups.map(([category, manuals]) => (
         <section key={category} className="space-y-2">

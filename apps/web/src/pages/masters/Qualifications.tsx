@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Qualification } from '../../api';
+import { OfflineUnavailable } from '../../components/OfflineUnavailable';
 import { useI18n } from '../../i18n';
+import { useSyncState } from '../../lib/sync-state';
 import {
   Field,
   FIELD,
@@ -14,6 +16,7 @@ import {
 
 export function Qualifications() {
   const { t } = useI18n();
+  const { network } = useSyncState();
   const [rows, setRows] = useState<Qualification[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<Qualification | null>(null);
@@ -57,17 +60,31 @@ export function Qualifications() {
           }}
         />
       )}
-      {err && <div className="text-sm text-danger">{err}</div>}
-      <Table
-        head={[t('master.col.name'), t('master.col.description'), '']}
-        rows={(rows ?? []).map((q) => ({
-          key: q.id,
-          cells: [q.name, q.description ?? ''],
-          onEdit: () => setEditing(q),
-        }))}
-        loading={rows === null}
-        empty={t('master.qualifications.empty')}
-      />
+      {(() => {
+        // §3.8.7 master CRUD reads are `online-only`. Match L4.0f
+        // Home / Dashboard pattern when offline.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || rows === null) && isOffline) {
+          return <OfflineUnavailable />;
+        }
+        return (
+          <>
+            {err && <div className="text-sm text-danger">{err}</div>}
+            <Table
+              head={[t('master.col.name'), t('master.col.description'), '']}
+              rows={(rows ?? []).map((q) => ({
+                key: q.id,
+                cells: [q.name, q.description ?? ''],
+                onEdit: () => setEditing(q),
+              }))}
+              loading={rows === null}
+              empty={t('master.qualifications.empty')}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }
