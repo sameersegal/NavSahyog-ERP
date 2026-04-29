@@ -22,4 +22,7 @@ jobs:
       - run: pnpm matrix:check
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
+      - name: Build (with Clerk publishable key inlined for Vite)
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+        run: pnpm build
