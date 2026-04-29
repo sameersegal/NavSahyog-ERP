@@ -45,6 +45,8 @@ function isCarveOut(path: string): boolean {
   if (path.startsWith('/api/programs/')) return true;
   if (path.startsWith('/api/media/upload/')) return true;
   if (path.startsWith('/api/ponds/agreements/upload/')) return true;
+  // Clerk webhook caller can't carry X-App-Build (D36 step 3).
+  if (path.startsWith('/webhooks/')) return true;
   return false;
 }
 

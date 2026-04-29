@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import auth from './routes/auth';
+import webhooksClerk from './routes/webhooks_clerk';
 import villages from './routes/villages';
 import schools from './routes/schools';
 import children from './routes/children';
@@ -51,6 +52,9 @@ app.use('*', async (c, next) => {
   // are designed to be called cross-origin from third-party sites,
   // so they cannot live behind the staging basic-auth gate.
   if (path.startsWith('/api/programs/')) return next();
+  // Clerk webhook caller cannot carry basic-auth (D36 step 3). The
+  // route runs its own Svix HMAC verification — no app credentials.
+  if (path.startsWith('/webhooks/')) return next();
 
   const header = c.req.header('authorization') ?? '';
   const match = /^Basic (.+)$/i.exec(header);
@@ -133,6 +137,7 @@ app.use('*', buildCompat);
 app.get('/health', (c) => c.json({ ok: true, service: 'navsahyog-api' }));
 
 app.route('/auth', auth);
+app.route('/webhooks', webhooksClerk);
 app.route('/api/villages', villages);
 app.route('/api/schools', schools);
 app.route('/api/children', children);
