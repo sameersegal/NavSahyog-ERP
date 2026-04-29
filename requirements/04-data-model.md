@@ -4,46 +4,55 @@
 
 ## 4. Data model
 
-Target: **D1 (SQLite)**. The vendor schema has 35 tables; the
-bespoke schema collapses to **22 tables** by dropping multi-tenancy,
-the generic permission matrix, duplicated "offline" tables, vendor
-dedup artefacts, and unpopulated geo levels.
+Target: **D1 (SQLite)**. The vendor schema had 35 tables; the
+bespoke schema is **21 tables** by dropping multi-tenancy, the
+generic permission matrix, the duplicated "offline" twin tables,
+vendor dedup artefacts, and unpopulated geo levels.
 
-Full DDL is in `schema.sql` (to be added with Part 5). This section
-is the canonical reference.
+The authoritative DDL lives in `db/migrations/*.sql` — every
+column, index, CHECK constraint, and FK is in code. `db/README.md`
+indexes the migrations; the seed catalogue is `db/seed.sql`.
+
+What follows is the narrative code can't carry: project-wide
+conventions, and the vendor-to-bespoke drop / merge map that §10
+cuts over against.
 
 ### 4.1 Conventions
 
 - **IDs**: `INTEGER PRIMARY KEY` (SQLite rowid). External-facing
   resources also carry a `uuid TEXT UNIQUE NOT NULL` (generated in
-  the Worker) for stable cross-environment references and for
-  outbox idempotency (§6).
+  the Worker) for stable cross-environment references and outbox
+  idempotency (§6).
 - **Audit columns** on every write-heavy table:
-  `created_at INTEGER NOT NULL`,
-  `created_by INTEGER NOT NULL REFERENCES user(id)`,
-  `updated_at INTEGER NOT NULL`,
-  `updated_by INTEGER NOT NULL REFERENCES user(id)`,
-  `deleted_at INTEGER`,
-  `deleted_by INTEGER REFERENCES user(id)`.
-  Timestamps are Unix epoch seconds.
+  `created_at`, `created_by`, `updated_at`, `updated_by`,
+  `deleted_at`, `deleted_by`. Timestamps are Unix epoch seconds.
 - **Soft delete**: a non-null `deleted_at` hides the row from
   normal queries. Hard delete is reserved for GDPR-style erasure
   (Super Admin path). Retention deletes happen out-of-system
-  (see §9.3, decisions.md D1/D4).
+  (decisions.md D1, D4).
 - **Scope columns**: tables that need scope filtering carry the
   lowest-applicable geo FK (`village_id`, `cluster_id`, …). Higher
   levels are derived by join.
 - **Enums**: stored as short TEXT with a `CHECK` constraint, not a
-  lookup table. (Lookup tables only where the set is editable by
-  admins at runtime.)
+  lookup table. Lookup tables only where the set is editable by
+  admins at runtime.
 - **No `CorpId`.** Single tenant (§1.3).
+- **Aadhaar.** `student.aadhaar` is intentionally absent (§9.1).
+  Parent Aadhaar, when collected at all, is stored only in the
+  masked form (`XXXX-XXXX-####`) — the raw value is never
+  persisted.
+- **`scope_id` invariant.** `user.scope_id` is enforced in
+  application code, not DB-level FK (the target table varies by
+  `scope_level`). Tracked as U4 in review-findings-v1.
 
 ### 4.2 Drop / merge map (vendor → bespoke)
+
+The migration target. §10 cuts over against this map.
 
 | Vendor table(s) | Bespoke decision |
 |---|---|
 | `ngo_features` | **Drop.** Single-tenant; feature set hardcoded. |
-| `role_permission` | **Drop.** Capabilities hardcoded in Workers (§2.3). |
+| `role_permission` | **Drop.** Capabilities hardcoded in `packages/shared/src/capabilities.ts`. |
 | `teacher_roles`, `teacher_roles_assign` | **Merge** into `user.role` (enum) + `user.scope_*`. |
 | `login_user_data`, `teacher`, `teacher_pgm_status` | **Merge** into `user`. |
 | `country` | **Drop.** Fixed = India. |
@@ -58,290 +67,29 @@ is the canonical reference.
 | `attendance`, `attendanceOffline` | **Merge** into `attendance_session` + `attendance_mark`. Offline state lives in the client outbox, not a server table. |
 | `achievement` | **Keep.** |
 | `event_image`, `event_image_offline`, `event_video`, `event_video_offline` | **Merge** into a single `media` table (kind = `image` / `video` / `audio`). |
-| `aboutus` | **Drop** — decisions.md D15. §3.8.3 cancelled. |
-| `notification` | **Drop** — decisions.md D15. §3.8.2 cancelled; broadcasts go out-of-band. |
-| `referencelink` | **Drop** — decisions.md D15. §3.8.4 cancelled. |
-| `quickPhoneLinks`, `quickVideoLinks` | **Drop** — decisions.md D15. §3.8.5 cancelled; quick actions go out-of-band. |
-| `legacy_settings` | **Drop.** Retention out-of-system; other knobs are Worker env vars (decisions.md D1). |
+| `aboutus` | **Drop** — D15. §3.8.3 cancelled. |
+| `notification` | **Drop** — D15. §3.8.2 cancelled; broadcasts go out-of-band. |
+| `referencelink` | **Drop** — D15. §3.8.4 cancelled. |
+| `quickPhoneLinks`, `quickVideoLinks` | **Drop** — D15. §3.8.5 cancelled; quick actions go out-of-band. |
+| `legacy_settings` | **Drop.** Retention out-of-system; other knobs are Worker env vars (D1). |
 | *(new)* | `audit_log` — append-only (§9.4). |
+| *(new)* | `training_manual` — §3.8.8, L3.1.1. |
+| *(new)* | `farmer`, `pond`, `pond_agreement_version` — §3.10 Jal Vriddhi (D25–D28). |
 
-### 4.3 Table catalogue
+### 4.3 Tables
 
-#### 4.3.1 Identity & access
-
-**`user`** — field staff and admins.
-- `id`, `uuid`
-- `user_id TEXT UNIQUE NOT NULL` — the login ID (e.g. `VC-BID01-007`).
-- `full_name TEXT NOT NULL`
-- `email TEXT`, `phone TEXT`
-- `password_hash TEXT NOT NULL` (Argon2id)
-- `password_is_default INTEGER NOT NULL DEFAULT 1`
-- `failed_login_count INTEGER NOT NULL DEFAULT 0`
-- `locked_at INTEGER`
-- `role TEXT NOT NULL CHECK (role IN
-   ('vc','af','cluster_admin','district_admin','region_admin',
-    'state_admin','zone_admin','super_admin'))`
-- `scope_level TEXT NOT NULL CHECK (scope_level IN
-   ('village','cluster','district','region','state','zone','global'))`
-- `scope_id INTEGER` — FK to the matching geo table by `scope_level`
-  (nullable for `global`). Enforced in application code.
-- `qualification_id INTEGER REFERENCES qualification(id)`
-- `joined_at INTEGER NOT NULL`, `left_at INTEGER`
-- *audit columns*
-
-Indexes: `user_id`, `(scope_level, scope_id)`, `role`.
-
-**`qualification`** — picklist for `user.qualification_id`.
-- `id`, `uuid`, `name TEXT NOT NULL UNIQUE`
-- *audit columns*
-
-#### 4.3.2 Geography
-
-All seven levels carry the same shape: `id`, `uuid`, `name`,
-`code TEXT UNIQUE`, parent FK (except `zone`), audit columns.
-
-- **`zone`** — no parent.
-- **`state`** — `zone_id` FK.
-- **`region`** — `state_id` FK.
-- **`district`** — `region_id` FK.
-- **`cluster`** — `district_id` FK.
-- **`village`** — `cluster_id` FK, plus:
-  - `latitude REAL`, `longitude REAL`, `altitude REAL`,
-    `radius_m INTEGER` — geofence and media-GPS validation.
-  - `pincode TEXT`
-  - `program_start_date INTEGER`, `program_end_date INTEGER`
-    (replaces `village_pgm_status`).
-
-Indexes on every parent FK and on `code`.
-
-#### 4.3.3 Education
-
-**`school`**
-- `id`, `uuid`, `name`, `village_id` FK, `type TEXT`
-  (`government` / `private` / `anganwadi` / `other`), *audit*.
-
-**`student`**
-- `id`, `uuid`
-- `first_name`, `last_name`, `gender TEXT CHECK (gender IN
-   ('m','f','o'))`, `dob INTEGER NOT NULL` (date as epoch-seconds
-  midnight UTC).
-- `photo_media_id INTEGER REFERENCES media(id)`
-- `village_id` FK, `school_id` FK
-- **`aadhaar` column is intentionally absent (§9.1).**
-- Parent fields (denormalised — there's no "parent" entity):
-  - `father_name`, `father_aadhaar_masked TEXT`,
-    `father_phone TEXT`, `father_has_smartphone INTEGER`.
-  - `mother_name`, `mother_aadhaar_masked TEXT`,
-    `mother_phone TEXT`, `mother_has_smartphone INTEGER`.
-  - `alt_contact_name`, `alt_contact_phone`,
-    `alt_contact_relationship`.
-- `joined_at INTEGER NOT NULL` (program join date)
-- `graduated_at INTEGER`, `graduation_reason TEXT`
-  (enum: `pass_out` … extensible).
-- *audit columns*
-
-Storage rule for parent Aadhaar: **store only the masked form
-(last 4 digits prefixed by `XXXX-XXXX-`)**; the raw value is never
-persisted. Parts 4/7 spec the one-time-use encrypted capture path
-if full Aadhaar is ever legally required (default: not captured).
-
-Indexes: `village_id`, `school_id`, `(village_id, graduated_at)`.
-
-#### 4.3.4 Events & activities
-
-**`event`** — program events (AC, Special, …) with a `kind` flag
-so "Tag Event" vs "Tag Activity" in §3.4 can both come from one
-table.
-- `id`, `uuid`, `name`, `kind TEXT NOT NULL CHECK (kind IN
-   ('event','activity'))`, `description`, *audit*.
-- `event.kind = 'event'` for AC / Special Event.
-- `event.kind = 'activity'` for Board Games, Running Race, Kho-Kho,
-  Kabaddi, Prakriti Prem, Dhan Kaushal, Jal Vriddhi,
-  No Activity — Raining, No Activity — Training, …
-
-Rationale for merging `event` + `activity`: the only UI difference
-is the picker label; the data shape is identical. Keeps media and
-attendance FKs uniform.
-
-#### 4.3.5 Attendance
-
-**`attendance_session`** — one row per (village, date, event).
-- `id`, `uuid`
-- `village_id` FK, `event_id` FK, `date INTEGER NOT NULL`
-  (epoch-seconds midnight UTC).
-- `start_time INTEGER NOT NULL`, `end_time INTEGER NOT NULL`.
-- `voice_note_media_id INTEGER REFERENCES media(id)`
-- *audit columns*
-- `UNIQUE (village_id, date, event_id)` so re-submissions replace.
-
-**`attendance_mark`** — one row per student per session.
-- `id`
-- `session_id` FK, `student_id` FK,
-  `present INTEGER NOT NULL CHECK (present IN (0,1))`
-- `UNIQUE (session_id, student_id)`
-- `created_at`, `created_by` only (no update-in-place; a
-  re-submission replaces the whole session's marks transactionally).
-
-#### 4.3.6 Achievements
-
-**`achievement`**
-- `id`, `uuid`
-- `student_id` FK, `description TEXT NOT NULL` (≤ 500 chars),
-  `date INTEGER NOT NULL`.
-- `type TEXT NOT NULL CHECK (type IN ('som','gold','silver'))`.
-- `gold_count INTEGER`, `silver_count INTEGER` (only set when
-  `type = 'gold'` or `type = 'silver'`; enforced by CHECK).
-- *audit columns*
-- Partial unique index to enforce "one SoM per student per month":
-  `CREATE UNIQUE INDEX uq_som_per_month ON achievement
-   (student_id, strftime('%Y-%m', date, 'unixepoch'))
-   WHERE type = 'som' AND deleted_at IS NULL;`
-
-#### 4.3.7 Media
-
-**`media`** — single table for images, videos, and audio voice
-notes. Replaces four vendor tables.
-- `id`, `uuid`
-- `kind TEXT NOT NULL CHECK (kind IN ('image','video','audio'))`
-- `r2_key TEXT NOT NULL UNIQUE` — R2 object key; media payload
-  lives in R2, never in D1.
-- `mime TEXT NOT NULL`, `bytes INTEGER NOT NULL`
-- `captured_at INTEGER NOT NULL`,
-  `received_at INTEGER NOT NULL`
-- `latitude REAL`, `longitude REAL` — from EXIF / geolocation
-- `village_id INTEGER REFERENCES village(id)` — attributed
-  village (AF picks at upload time per §3.4).
-- `tag_event_id INTEGER REFERENCES event(id)` — nullable for
-  pure voice-note media attached to attendance.
-- *audit columns* (creator is the uploader)
-
-Indexes: `(village_id, captured_at)`, `tag_event_id`,
-`(kind, deleted_at)`.
-
-#### 4.3.8 Content
-
-**Cancelled — decisions.md D15.** The four content-hub tables
-(`notice`, `reference_link`, `quick_link`, `about_us`) were
-dropped together with §3.8.2–§3.8.6. Section number retained so
-existing cross-references (§5.12, §8.4, etc.) still resolve.
-
-**No `app_settings` table.** The vendor's `legacy_settings` has no
-bespoke equivalent. Runtime tunables (session TTL, OTP TTL, default
-language) live in Worker env vars; retention timelines are
-handled out-of-system (see §9.3, decisions.md D1/D4).
-
-##### 4.3.8.1 Training manuals (§3.8.8)
-
-**`training_manual`** — read-only catalogue surfaced at
-`/training-manuals` for every authenticated role; authored by
-Super Admin from Master Creations.
-
-- `id INTEGER PRIMARY KEY`
-- `category TEXT NOT NULL` — free-form label used for grouping
-  on the read page (e.g. `Onboarding`, `Attendance`).
-- `name TEXT NOT NULL` — display label, also the link text.
-- `link TEXT NOT NULL` — absolute `http(s)` URL; validated at
-  the route layer. The asset itself is not hosted by the ERP.
-- `created_at INTEGER NOT NULL`,
-  `created_by INTEGER NOT NULL REFERENCES user(id)`,
-  `updated_at INTEGER NOT NULL`,
-  `updated_by INTEGER NOT NULL REFERENCES user(id)` —
-  `updated_at` is surfaced on the read page so users can see
-  when a manual last changed.
-- `UNIQUE (category, name)` — same name is allowed across
-  different categories.
-- Index: `(category COLLATE NOCASE, name COLLATE NOCASE)` for
-  the grouped sort on the read page.
-
-Soft-delete is deferred (parity with the other L3.1 masters);
-removing a row is a hard `DELETE`-from-admin operation when the
-post-MVP slice lands.
-
-#### 4.3.10 Jal Vriddhi (pond + agreement)
-
-Numbered out of source-order so Audit (§4.3.9) keeps its existing
-cross-references. Added by migration `0010_pond_agreement.sql` for
-§3.10. Three tables, separate from the child-development surface.
-
-**`farmer`** — the partner on whose plot a pond is created.
-- `id INTEGER PRIMARY KEY`
-- `village_id INTEGER NOT NULL REFERENCES village(id)` — scope
-  anchor; a farmer is village-bound today (one VC owns).
-- `full_name TEXT NOT NULL`
-- `phone TEXT` — canonical `+91XXXXXXXXXX`, NULL if not collected.
-- `plot_identifier TEXT` — free text (e.g. "Survey No. 42/3").
-- *audit columns* + `deleted_at`, `deleted_by` for soft delete.
-
-**`pond`** — the physical asset.
-- `id`, `farmer_id REFERENCES farmer(id)`
-- `village_id INTEGER NOT NULL REFERENCES village(id)` —
-  denormalised from `farmer.village_id` for cheap scope filters;
-  app keeps the two in sync.
-- `latitude REAL NOT NULL`, `longitude REAL NOT NULL`
-- `status TEXT NOT NULL CHECK (status IN
-  ('planned','dug','active','inactive')) DEFAULT 'planned'`
-- `notes TEXT` — free text, max 500 chars (app-enforced).
-- *audit columns* + soft-delete pair.
-
-**`pond_agreement_version`** — append-only audit trail.
-- `id`, `pond_id REFERENCES pond(id)`
-- `version INTEGER NOT NULL` — monotonic per pond, starting at 1;
-  unique with `pond_id`.
-- `uuid TEXT NOT NULL UNIQUE` — UUIDv4, also tail of R2 key.
-- `r2_key TEXT NOT NULL UNIQUE` — bytes live in R2 at
-  `agreement/{yyyy}/{mm}/{village_id}/{uuid}.{ext}`.
-- `mime TEXT NOT NULL` — one of `application/pdf`, `image/jpeg`,
-  `image/png`. App-enforced; not a CHECK constraint so the
-  allow-list can evolve without a migration.
-- `bytes INTEGER NOT NULL CHECK (bytes > 0)` — 25 MiB cap
-  app-enforced.
-- `original_filename TEXT` — as supplied by the client.
-- `notes TEXT` — "what changed" note, max 200 chars
-  (app-enforced).
-- `uploaded_at INTEGER NOT NULL`,
-  `uploaded_by INTEGER NOT NULL REFERENCES user(id)`.
-- No update, no delete. The "current" agreement is
-  `MAX(version) WHERE pond_id = ?`.
-
-Indexes: `farmer(village_id, deleted_at)`, `pond(farmer_id)`,
-`pond(village_id, deleted_at)`, `pond(created_at)`,
-`pond_agreement_version(pond_id, version)`.
-
-#### 4.3.9 Audit
-
-**`audit_log`** — append-only (§9.4).
-- `id`, `uuid`
-- `occurred_at INTEGER NOT NULL`
-- `actor_user_id INTEGER REFERENCES user(id)` — nullable for
-  failed-login attempts where identity is unverified.
-- `action TEXT NOT NULL` — e.g. `login.success`, `login.fail`,
-  `login.locked`, `password.change`, `otp.request`, `otp.verify`,
-  `user.create`, `user.role_change`, `export.dashboard`.
-- `target_type TEXT`, `target_id INTEGER` — nullable; the affected
-  row when applicable.
-- `metadata_json TEXT` — small JSON blob for action-specific
-  context (IP, user-agent hash, prior/new values for role change).
-- No update, no delete. Partitioned by year at query time via
-  `occurred_at`.
+Per-table column lists previously inlined here moved to
+`db/migrations/*.sql` (the authoritative source). Sub-section
+numbers (§4.3.1 user, §4.3.2 geo, §4.3.5 attendance,
+§4.3.6 achievement, §4.3.7 media, §4.3.8 audit_log,
+§4.3.10 farmer/pond/pond_agreement_version) are retained as
+stable anchors for cross-references in `decisions.md` and
+`review-findings-v1.md`. Look up the corresponding
+`*.sql` file for column-level detail.
 
 ### 4.4 Summary
 
-- **21 tables** in the bespoke schema (vendor had 35) — one
-  added in §4.3.8.1 (`training_manual`) and three added in
-  §4.3.10 for Jal Vriddhi (`farmer`, `pond`,
-  `pond_agreement_version`).
-- Removed: `ngo_features`, `role_permission`, `teacher_roles`,
-  `teacher_roles_assign`, `country`, `territory`, `taluk`,
-  `MembershipType`, `village_pgm_status`, `student_pgm_status`,
-  `teacher_pgm_status`, `eventsNew`, `attendanceOffline`,
-  `event_image_offline`, `event_video_offline`, `legacy_settings`
-  (no bespoke equivalent — decisions.md D1), and the four
-  content-hub tables `notification`, `aboutus`, `referencelink`,
-  `quickPhoneLinks` + `quickVideoLinks` (§3.8.2–§3.8.5 cancelled —
-  decisions.md D15).
-- Merged: `teacher` + `login_user_data` → `user`;
-  `event_image` + `event_video` (+ offline pairs) → `media`.
-- Added: `audit_log`, `training_manual` (§4.3.8.1).
+Removed; the table count and rationale moved to the section intro.
 
 ### 4.5 Open items
 
@@ -353,4 +101,3 @@ Indexes: `farmer(village_id, deleted_at)`, `pond(farmer_id)`,
       lookup table (depends on how often admins add new types).
 - [ ] Confirm Aadhaar masking policy with legal: last 4 only, or
       encrypted-at-rest with BYOK?
-
