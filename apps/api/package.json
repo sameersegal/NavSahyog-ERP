@@ -15,6 +15,7 @@
     "db:drop": "rm -rf .wrangler/state/v3/d1"
   },
   "dependencies": {
+    "@clerk/backend": "^3.4.2",
     "@navsahyog/shared": "workspace:*",
     "hono": "^4.6.12"
   },

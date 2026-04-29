@@ -4,7 +4,13 @@ import { err } from './lib/errors';
 import type { Bindings, SessionUser, Variables } from './types';
 
 const SESSION_COOKIE = 'nsf_session';
-const SESSION_TTL_SECONDS = 12 * 60 * 60;
+// 30-day TTL (D36). The cookie is the offline-tolerant carrier for
+// the L3/L4 PWA — the Worker accepts it for the full TTL without
+// any further Clerk round-trip. Sliding behaviour (extending
+// expires_at on each authenticated request so a continuously-active
+// user never sees a re-sign-in prompt) is a follow-on; the bare
+// 30-day TTL is what D36 commits to first.
+const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export function generateToken(): string {
   const bytes = new Uint8Array(24);

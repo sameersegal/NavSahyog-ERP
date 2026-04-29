@@ -44,6 +44,18 @@ export type Bindings = {
   // to force-upgrade the fleet (security-fix scenario). When unset,
   // no floor applies and any well-formed client build is accepted.
   MIN_SUPPORTED_BUILD?: string;
+  // Clerk Backend API secret (D36 layer-1 → layer-2 bridge). Used by
+  // POST /auth/exchange to verify the inbound Clerk session JWT and
+  // by /webhooks/clerk to fetch user records on self-heal. Set via
+  // `wrangler secret put CLERK_SECRET_KEY` in non-dev environments;
+  // dev overrides go in apps/api/.dev.vars (gitignored). Missing →
+  // /auth/exchange returns 500 (fail-closed); this is deliberate.
+  CLERK_SECRET_KEY?: string;
+  // Svix signing secret for the /webhooks/clerk endpoint (D36 step
+  // 3). Clerk sends webhook payloads signed by Svix; the handler
+  // rejects on signature mismatch. Set via `wrangler secret put
+  // CLERK_WEBHOOK_SECRET`. Missing → webhook returns 500.
+  CLERK_WEBHOOK_SECRET?: string;
 };
 
 // The session-bound user — DB row shape, no computed capabilities.
