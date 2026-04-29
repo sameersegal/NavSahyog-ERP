@@ -3,7 +3,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, type AdminEvent } from '../../api';
+import { OfflineUnavailable } from '../../components/OfflineUnavailable';
 import { useI18n } from '../../i18n';
+import { useSyncState } from '../../lib/sync-state';
 import {
   Field,
   FIELD,
@@ -16,6 +18,7 @@ import {
 
 export function Events() {
   const { t } = useI18n();
+  const { network } = useSyncState();
   const [rows, setRows] = useState<AdminEvent[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<AdminEvent | null>(null);
@@ -59,25 +62,39 @@ export function Events() {
           }}
         />
       )}
-      {err && <div className="text-sm text-danger">{err}</div>}
-      <Table
-        head={[
-          t('master.col.name'),
-          t('master.col.kind'),
-          t('master.col.references'),
-          '',
-        ]}
-        rows={(rows ?? []).map((ev) => ({
-          key: ev.id,
-          cells: [
-            ev.name,
-            t(`master.kind.${ev.kind}`),
-            String(ev.reference_count),
-          ],
-          onEdit: () => setEditing(ev),
-        }))}
-        loading={rows === null}
-      />
+      {(() => {
+        // §3.8.7 master CRUD reads are `online-only`. Match L4.0f
+        // Home / Dashboard pattern when offline.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || rows === null) && isOffline) {
+          return <OfflineUnavailable />;
+        }
+        return (
+          <>
+            {err && <div className="text-sm text-danger">{err}</div>}
+            <Table
+              head={[
+                t('master.col.name'),
+                t('master.col.kind'),
+                t('master.col.references'),
+                '',
+              ]}
+              rows={(rows ?? []).map((ev) => ({
+                key: ev.id,
+                cells: [
+                  ev.name,
+                  t(`master.kind.${ev.kind}`),
+                  String(ev.reference_count),
+                ],
+                onEdit: () => setEditing(ev),
+              }))}
+              loading={rows === null}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }

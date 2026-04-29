@@ -31,9 +31,19 @@ single account with per-environment resource names.
   - `app.navsahyog.org/*` (prod) — SPA. A custom domain with
     Cloudflare for Cloudflare Pages handles it.
   - `/` returns the shell; every other path is a client-side route.
-- **PWA**: Workbox-generated Service Worker; `manifest.webmanifest`
-  with icons from 48px to 512px. Install prompt guarded behind
-  first-login success.
+- **PWA**: Hand-rolled shell-only Service Worker (D34, L4.0f) at
+  `apps/web/public/sw.js`; cache key embeds `APP_BUILD` from the
+  registration query string so each deploy registers as a distinct
+  SW and the activate step purges old-build caches. **`/api/*`,
+  `/auth/*`, `/health` bypass the SW** so offline-eligible
+  workflows still fail fast and the spec'd "data unavailable" UX
+  surfaces. `manifest.webmanifest` lives alongside it. Workbox was
+  the original plan; D34 picked hand-rolled to avoid a new
+  build-time dependency for the modest scope (shell-cache only,
+  no precache list discovery, no runtime-cache-with-strategies
+  surface). Icons from 48px to 512px land as a follow-up — D34's
+  open-items list calls out the current 281×321 `logo.png` as a
+  short-term placeholder.
 - **Headers** (`_headers`): `Strict-Transport-Security`,
   `Content-Security-Policy` (no third-party origins except
   Cloudflare Images and R2 signed hostnames), `X-Frame-Options:

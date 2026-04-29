@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ROLES, type Role } from '@navsahyog/shared';
 import { api, type AdminUser, type GeoLevels } from '../../api';
+import { OfflineUnavailable } from '../../components/OfflineUnavailable';
 import { useI18n } from '../../i18n';
+import { useSyncState } from '../../lib/sync-state';
 import {
   Field,
   FIELD,
@@ -30,6 +32,7 @@ const SCOPE_FOR_ROLE_UI: Record<Role, keyof GeoLevels | null> = {
 
 export function Users() {
   const { t } = useI18n();
+  const { network } = useSyncState();
   const [geo, setGeo] = useState<GeoLevels | null>(null);
   const [geoErr, setGeoErr] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminUser[] | null>(null);
@@ -85,28 +88,42 @@ export function Users() {
           }}
         />
       )}
-      {geoErr && <div className="text-sm text-danger">{geoErr}</div>}
-      {err && <div className="text-sm text-danger">{err}</div>}
-      <Table
-        head={[
-          t('master.col.user_id'),
-          t('master.col.full_name'),
-          t('master.col.role'),
-          t('master.col.scope'),
-          '',
-        ]}
-        rows={(rows ?? []).map((u) => ({
-          key: u.id,
-          cells: [
-            u.user_id,
-            u.full_name,
-            t(`role.${u.role}`),
-            u.scope_name ?? t(`master.scope.${u.scope_level}`),
-          ],
-          onEdit: () => setEditing(u),
-        }))}
-        loading={rows === null}
-      />
+      {(() => {
+        // §3.8.7 master CRUD reads are `online-only`. Match L4.0f
+        // Home / Dashboard pattern when offline.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || geoErr || rows === null) && isOffline) {
+          return <OfflineUnavailable />;
+        }
+        return (
+          <>
+            {geoErr && <div className="text-sm text-danger">{geoErr}</div>}
+            {err && <div className="text-sm text-danger">{err}</div>}
+            <Table
+              head={[
+                t('master.col.user_id'),
+                t('master.col.full_name'),
+                t('master.col.role'),
+                t('master.col.scope'),
+                '',
+              ]}
+              rows={(rows ?? []).map((u) => ({
+                key: u.id,
+                cells: [
+                  u.user_id,
+                  u.full_name,
+                  t(`role.${u.role}`),
+                  u.scope_name ?? t(`master.scope.${u.scope_level}`),
+                ],
+                onEdit: () => setEditing(u),
+              }))}
+              loading={rows === null}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }

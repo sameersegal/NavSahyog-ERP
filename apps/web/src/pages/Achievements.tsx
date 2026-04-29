@@ -8,11 +8,13 @@ import {
   type AchievementWithStudent,
 } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OfflineUnavailable } from '../components/OfflineUnavailable';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { listCachedStudents, listCachedVillages } from '../lib/cache';
 import { drain } from '../lib/drain';
 import { enqueue, OUTBOX_CHANGED_EVENT } from '../lib/outbox';
+import { useSyncState } from '../lib/sync-state';
 
 function todayIstDate(): string {
   const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
@@ -33,6 +35,7 @@ type Panel =
 export function Achievements() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { network } = useSyncState();
   const canWrite = can(user, 'achievement.write');
 
   // Picker source: the read cache populated by the manifest pull
@@ -91,6 +94,17 @@ export function Achievements() {
   const hasActiveFilters =
     villageId !== null || from !== '' || to !== '' || typeFilter !== '';
 
+  // §3.4 list itself is `online-only` per offline-scope.md (only the
+  // POST is offline-eligible). Match the L4.0f Home / Dashboard
+  // pattern: when the load fails AND the network reads as offline,
+  // surface OfflineUnavailable in place of the rows + raw error;
+  // keep the header + filters + form mounted so writes still work
+  // through the outbox.
+  const browserOffline =
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+  const isOffline = network === 'offline' || browserOffline;
+  const offlineFallback = (err || !rows) && isOffline;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -119,7 +133,7 @@ export function Achievements() {
         onType={setTypeFilter}
       />
 
-      {err && <p className="text-sm text-danger">{err}</p>}
+      {err && !offlineFallback && <p className="text-sm text-danger">{err}</p>}
 
       {canWrite && panel.kind === 'add' && (
         <AchievementForm
@@ -147,7 +161,9 @@ export function Achievements() {
         />
       )}
 
-      {!rows ? (
+      {offlineFallback ? (
+        <OfflineUnavailable />
+      ) : !rows ? (
         <p className="text-muted-fg">{t('common.loading')}</p>
       ) : rows.length === 0 ? (
         <div className="text-muted-fg">

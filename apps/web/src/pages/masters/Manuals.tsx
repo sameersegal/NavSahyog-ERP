@@ -3,7 +3,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type TrainingManual } from '../../api';
+import { OfflineUnavailable } from '../../components/OfflineUnavailable';
 import { useI18n } from '../../i18n';
+import { useSyncState } from '../../lib/sync-state';
 import {
   Field,
   FIELD,
@@ -16,6 +18,7 @@ import {
 
 export function Manuals() {
   const { t, lang } = useI18n();
+  const { network } = useSyncState();
   const [rows, setRows] = useState<TrainingManual[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<TrainingManual | null>(null);
@@ -69,28 +72,42 @@ export function Manuals() {
           }}
         />
       )}
-      {err && <div className="text-sm text-danger">{err}</div>}
-      <Table
-        head={[
-          t('master.col.category'),
-          t('master.col.name'),
-          t('master.col.link'),
-          t('master.col.updated_at'),
-          '',
-        ]}
-        rows={(rows ?? []).map((m) => ({
-          key: m.id,
-          cells: [
-            m.category,
-            m.name,
-            m.link,
-            fmt.format(new Date(m.updated_at * 1000)),
-          ],
-          onEdit: () => setEditing(m),
-        }))}
-        loading={rows === null}
-        empty={t('master.manuals.empty')}
-      />
+      {(() => {
+        // §3.8.7 master CRUD reads are `online-only`. Match L4.0f
+        // Home / Dashboard pattern when offline.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || rows === null) && isOffline) {
+          return <OfflineUnavailable />;
+        }
+        return (
+          <>
+            {err && <div className="text-sm text-danger">{err}</div>}
+            <Table
+              head={[
+                t('master.col.category'),
+                t('master.col.name'),
+                t('master.col.link'),
+                t('master.col.updated_at'),
+                '',
+              ]}
+              rows={(rows ?? []).map((m) => ({
+                key: m.id,
+                cells: [
+                  m.category,
+                  m.name,
+                  m.link,
+                  fmt.format(new Date(m.updated_at * 1000)),
+                ],
+                onEdit: () => setEditing(m),
+              }))}
+              loading={rows === null}
+              empty={t('master.manuals.empty')}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }

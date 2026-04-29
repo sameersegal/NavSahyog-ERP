@@ -9,13 +9,16 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, can, type PondListItem } from '../api';
+import { OfflineUnavailable } from '../components/OfflineUnavailable';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { absoluteTime } from '../lib/date';
+import { useSyncState } from '../lib/sync-state';
 
 export function Ponds() {
   const { t, lang } = useI18n();
   const { user } = useAuth();
+  const { network } = useSyncState();
   const [ponds, setPonds] = useState<PondListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +30,14 @@ export function Ponds() {
 
   const canWrite = can(user, 'pond.write');
 
+  // §3.10 ponds list is `online-only` (D25). Match the L4.0f Home /
+  // Dashboard pattern: when the load fails AND the network reads as
+  // offline, render OfflineUnavailable instead of a raw error /
+  // forever-loading.
+  const browserOffline =
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+  const isOffline = network === 'offline' || browserOffline;
+  if ((error || ponds === null) && isOffline) return <OfflineUnavailable />;
   if (error) return <p className="text-danger">{error}</p>;
   if (ponds === null) return <p className="text-muted-fg">{t('common.loading')}</p>;
 

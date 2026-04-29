@@ -11,9 +11,11 @@ import {
   AGREEMENT_MAX_BYTES,
   uploadAgreement,
 } from '../lib/agreement';
+import { OfflineUnavailable } from '../components/OfflineUnavailable';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { absoluteTime } from '../lib/date';
+import { useSyncState } from '../lib/sync-state';
 
 const FIELD =
   'mt-1 w-full bg-card text-fg border border-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-focus';
@@ -21,6 +23,7 @@ const FIELD =
 export function PondDetail() {
   const { t, lang } = useI18n();
   const { user } = useAuth();
+  const { network } = useSyncState();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const pondId = Number(id);
@@ -71,6 +74,12 @@ export function PondDetail() {
     }
   }
 
+  // §3.10 pond detail is `online-only` (D25). Match L4.0f Home /
+  // Dashboard pattern when the load fails offline.
+  const browserOffline =
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+  const isOffline = network === 'offline' || browserOffline;
+  if ((error || !data) && isOffline) return <OfflineUnavailable />;
   if (error) return <p className="text-danger">{error}</p>;
   if (!data) return <p className="text-muted-fg">{t('common.loading')}</p>;
 

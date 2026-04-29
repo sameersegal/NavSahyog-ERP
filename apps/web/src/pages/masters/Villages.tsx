@@ -4,7 +4,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type AdminVillage, type GeoLevels } from '../../api';
+import { OfflineUnavailable } from '../../components/OfflineUnavailable';
 import { useI18n } from '../../i18n';
+import { useSyncState } from '../../lib/sync-state';
 import {
   Field,
   FIELD,
@@ -16,6 +18,7 @@ import {
 
 export function Villages() {
   const { t } = useI18n();
+  const { network } = useSyncState();
   const [geo, setGeo] = useState<GeoLevels | null>(null);
   const [geoErr, setGeoErr] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminVillage[] | null>(null);
@@ -76,17 +79,31 @@ export function Villages() {
           }}
         />
       )}
-      {geoErr && <div className="text-sm text-danger">{geoErr}</div>}
-      {err && <div className="text-sm text-danger">{err}</div>}
-      <Table
-        head={[t('master.col.name'), t('master.col.code'), t('master.col.cluster'), '']}
-        rows={(rows ?? []).map((v) => ({
-          key: v.id,
-          cells: [v.name, v.code, clusterName(v.cluster_id)],
-          onEdit: () => setEditing(v),
-        }))}
-        loading={rows === null}
-      />
+      {(() => {
+        // §3.8.7 master CRUD reads are `online-only`. Match L4.0f
+        // Home / Dashboard pattern when offline.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || geoErr || rows === null) && isOffline) {
+          return <OfflineUnavailable />;
+        }
+        return (
+          <>
+            {geoErr && <div className="text-sm text-danger">{geoErr}</div>}
+            {err && <div className="text-sm text-danger">{err}</div>}
+            <Table
+              head={[t('master.col.name'), t('master.col.code'), t('master.col.cluster'), '']}
+              rows={(rows ?? []).map((v) => ({
+                key: v.id,
+                cells: [v.name, v.code, clusterName(v.cluster_id)],
+                onEdit: () => setEditing(v),
+              }))}
+              loading={rows === null}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }

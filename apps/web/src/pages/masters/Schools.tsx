@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, type AdminSchool, type GeoLevels } from '../../api';
+import { OfflineUnavailable } from '../../components/OfflineUnavailable';
 import { useI18n } from '../../i18n';
+import { useSyncState } from '../../lib/sync-state';
 import {
   Field,
   FIELD,
@@ -14,6 +16,7 @@ import {
 
 export function Schools() {
   const { t } = useI18n();
+  const { network } = useSyncState();
   const [geo, setGeo] = useState<GeoLevels | null>(null);
   const [geoErr, setGeoErr] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminSchool[] | null>(null);
@@ -68,17 +71,32 @@ export function Schools() {
           }}
         />
       )}
-      {geoErr && <div className="text-sm text-danger">{geoErr}</div>}
-      {err && <div className="text-sm text-danger">{err}</div>}
-      <Table
-        head={[t('master.col.name'), t('master.col.village'), '']}
-        rows={(rows ?? []).map((s) => ({
-          key: s.id,
-          cells: [s.name, s.village_name],
-          onEdit: () => setEditing(s),
-        }))}
-        loading={rows === null}
-      />
+      {(() => {
+        // §3.8.7 master CRUD reads are `online-only`. Match L4.0f
+        // Home / Dashboard pattern when offline. Header + Toolbar +
+        // forms stay visible above; only the data table is replaced.
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        if ((err || geoErr || rows === null) && isOffline) {
+          return <OfflineUnavailable />;
+        }
+        return (
+          <>
+            {geoErr && <div className="text-sm text-danger">{geoErr}</div>}
+            {err && <div className="text-sm text-danger">{err}</div>}
+            <Table
+              head={[t('master.col.name'), t('master.col.village'), '']}
+              rows={(rows ?? []).map((s) => ({
+                key: s.id,
+                cells: [s.name, s.village_name],
+                onEdit: () => setEditing(s),
+              }))}
+              loading={rows === null}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }
