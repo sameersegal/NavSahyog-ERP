@@ -25,6 +25,8 @@ export function Login() {
         <div className="flex justify-center">
           <SignIn
             routing="hash"
+            forceRedirectUrl="/"
+            fallbackRedirectUrl="/"
             signUpUrl={undefined}
             appearance={{ elements: { footer: { display: 'none' } } }}
           />
