@@ -206,10 +206,10 @@ jobs:
       - name: Set CLERK_SECRET_KEY secret on the Worker
         working-directory: apps/api
         env:
-          SECRET: ${{ secrets.CF_STAGING_CLERK_SECRET_KEY }}
+          SECRET: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           if [ -z "$SECRET" ]; then
-            echo "CF_STAGING_CLERK_SECRET_KEY not configured — skipping. Set it in GitHub repo secrets when ready (sk_test_… from dashboard.clerk.com)."
+            echo "CLERK_SECRET_KEY not configured — skipping. Set it in GitHub repo secrets when ready (sk_test_… from dashboard.clerk.com)."
             exit 0
           fi
           printf '%s' "$SECRET" \
@@ -224,10 +224,10 @@ jobs:
       - name: Set CLERK_WEBHOOK_SECRET secret on the Worker
         working-directory: apps/api
         env:
-          SECRET: ${{ secrets.CF_STAGING_CLERK_WEBHOOK_SECRET }}
+          SECRET: ${{ secrets.CLERK_WEBHOOK_SECRET }}
         run: |
           if [ -z "$SECRET" ]; then
-            echo "CF_STAGING_CLERK_WEBHOOK_SECRET not configured — skipping. Set it once the webhook endpoint is wired in Clerk dashboard."
+            echo "CLERK_WEBHOOK_SECRET not configured — skipping. Set it once the webhook endpoint is wired in Clerk dashboard."
             exit 0
           fi
           printf '%s' "$SECRET" \
