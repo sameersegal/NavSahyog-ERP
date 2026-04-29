@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
+import { withIdempotency } from '../lib/idempotency';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
@@ -293,6 +294,10 @@ children.get('/:id', requireCap('child.read'), async (c) => {
 });
 
 children.post('/', requireCap('child.write'), async (c) => {
+  // Pre-validate outside the idempotency wrapper. Validation errors
+  // are deterministic and cheap to recompute; caching them would
+  // pollute the table with bad_request bodies a replay would just
+  // hit again.
   const user = c.get('user');
   const body = await c.req.json<AddBody>().catch(() => ({}) as AddBody);
   const { village_id, school_id, first_name, last_name, gender, dob } = body;
@@ -325,48 +330,56 @@ children.post('/', requireCap('child.write'), async (c) => {
   const photo = await resolvePhotoMediaId(c.env.DB, body.photo_media_id, village_id);
   if ('error' in photo) return err(c, 'bad_request', 400, photo.error);
 
-  const now = nowEpochSeconds();
-  const rs = await c.env.DB.prepare(
-    `INSERT INTO student
-       (village_id, school_id, first_name, last_name, gender, dob, joined_at,
-        father_name, father_phone, father_has_smartphone,
-        mother_name, mother_phone, mother_has_smartphone,
-        alt_contact_name, alt_contact_phone, alt_contact_relationship,
-        photo_media_id,
-        created_at, created_by, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?,
-             ?, ?, ?,
-             ?, ?, ?,
-             ?, ?, ?,
-             ?,
-             ?, ?, ?, ?)
-     RETURNING id`,
-  )
-    .bind(
-      village_id,
-      school_id,
-      first_name.trim(),
-      last_name.trim(),
-      gender,
-      dob,
-      joinedAt,
-      profile.father_name,
-      profile.father_phone,
-      profile.father_has_smartphone,
-      profile.mother_name,
-      profile.mother_phone,
-      profile.mother_has_smartphone,
-      profile.alt_contact_name,
-      profile.alt_contact_phone,
-      profile.alt_contact_relationship,
-      photo.value,
-      now,
-      user.id,
-      now,
-      user.id,
+  // L4.1b — D35 says POST /api/children is `offline-eligible`. The
+  // outbox runner sends an Idempotency-Key on every replay; we
+  // dedupe via the L4.1a helper so a retry doesn't create a
+  // duplicate child. D35's visibility-after-sync rule lives on the
+  // client (cache_students only includes server-confirmed rows);
+  // server-side this is just normal idempotency.
+  return withIdempotency(c, async () => {
+    const now = nowEpochSeconds();
+    const rs = await c.env.DB.prepare(
+      `INSERT INTO student
+         (village_id, school_id, first_name, last_name, gender, dob, joined_at,
+          father_name, father_phone, father_has_smartphone,
+          mother_name, mother_phone, mother_has_smartphone,
+          alt_contact_name, alt_contact_phone, alt_contact_relationship,
+          photo_media_id,
+          created_at, created_by, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?,
+               ?,
+               ?, ?, ?, ?)
+       RETURNING id`,
     )
-    .first<{ id: number }>();
-  return c.json({ id: rs?.id }, 201);
+      .bind(
+        village_id,
+        school_id,
+        first_name.trim(),
+        last_name.trim(),
+        gender,
+        dob,
+        joinedAt,
+        profile.father_name,
+        profile.father_phone,
+        profile.father_has_smartphone,
+        profile.mother_name,
+        profile.mother_phone,
+        profile.mother_has_smartphone,
+        profile.alt_contact_name,
+        profile.alt_contact_phone,
+        profile.alt_contact_relationship,
+        photo.value,
+        now,
+        user.id,
+        now,
+        user.id,
+      )
+      .first<{ id: number }>();
+    return { status: 201, body: { id: rs?.id } };
+  });
 });
 
 children.patch('/:id', requireCap('child.write'), async (c) => {

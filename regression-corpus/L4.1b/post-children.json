@@ -1,0 +1,42 @@
+{
+  "release": "L4.1b",
+  "endpoint": "POST /api/children",
+  "schema_version": 1,
+  "payloads": [
+    {
+      "name": "minimal — required core + one parent with smartphone (D35 baseline)",
+      "body": {
+        "village_id": 1,
+        "school_id": 1,
+        "first_name": "Corpus",
+        "last_name": "Minimal",
+        "gender": "f",
+        "dob": "2018-05-12",
+        "father_name": "Ramesh Patil",
+        "father_phone": "9988776655",
+        "father_has_smartphone": 1
+      }
+    },
+    {
+      "name": "with full profile — both parents + alt contact (smartphone flags)",
+      "body": {
+        "village_id": 1,
+        "school_id": 1,
+        "first_name": "Corpus",
+        "last_name": "FullProfile",
+        "gender": "m",
+        "dob": "2017-03-22",
+        "joined_at": "2024-06-01",
+        "father_name": "Ramesh Patil",
+        "father_phone": "9988776655",
+        "father_has_smartphone": 1,
+        "mother_name": "Sita Patil",
+        "mother_phone": "9988776656",
+        "mother_has_smartphone": 0,
+        "alt_contact_name": "Suresh Patil",
+        "alt_contact_phone": "9988776657",
+        "alt_contact_relationship": "uncle"
+      }
+    }
+  ]
+}
