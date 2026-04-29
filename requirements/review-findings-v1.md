@@ -342,6 +342,27 @@ files link to it.
   `captured_at` to an IST calendar date. Sweep these in a later
   fix — not a regression, but newly user-visible wherever the
   numbers feed a KPI. Flagged by PR #31 review #5.
+- **L8.** **Clerk added to apps/web ahead of L5.** Per user
+  request the Clerk React SDK (`@clerk/clerk-react`) is wired
+  into `apps/web/src/main.tsx` via `ClerkProvider`, with a
+  preview `SignInButton` / `UserButton` row on the Login page.
+  The existing `AuthProvider` (dummy-data `api.me/login/logout`
+  + manifest pull + cache wipe) is intentionally left in place —
+  Clerk is initialised but **not** the source of truth for the
+  app session. Three reconciliations are pending and belong in
+  L5 (§9 Compliance + §5 endpoint gates):
+  1. Replace or bridge the homegrown session against Clerk
+     (currently both flows coexist; only the dummy one drives
+     `useAuth()` and route gating).
+  2. Decide the data-residency story. Clerk is US-based; this
+     project is single-tenant India-only, and §9 has not yet
+     ruled on whether user-identity data may leave India. If
+     not, Clerk is unsuitable and we revert.
+  3. Worker-side verification of Clerk JWTs in `apps/api`,
+     mapping Clerk users → the existing roles / capability
+     matrix (§2.3) so server gates (§5) keep working.
+  Until those three land, the Clerk integration is preview-only
+  and must not be relied on for L3/L4 demos.
 
 ---
 

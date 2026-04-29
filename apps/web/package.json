@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.3",
     "@navsahyog/shared": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

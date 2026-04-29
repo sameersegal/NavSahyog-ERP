@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import {
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from '@clerk/clerk-react';
 import { useAuth } from '../auth';
 import { LANGS, useI18n } from '../i18n';
 import { THEME_ORDER, useTheme } from '../theme';
@@ -88,6 +95,34 @@ export function Login() {
         >
           {busy ? t('auth.login.submitting') : t('auth.login.submit')}
         </button>
+        <div className="pt-2 border-t border-border space-y-2">
+          <div className="text-xs font-medium text-muted-fg">
+            Clerk (preview — not yet wired to API session)
+          </div>
+          <div className="flex items-center gap-2">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button
+                  type="button"
+                  className="rounded border border-border bg-card text-fg hover:bg-card-hover px-3 py-1.5 text-xs"
+                >
+                  Sign in
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button
+                  type="button"
+                  className="rounded border border-border bg-card text-fg hover:bg-card-hover px-3 py-1.5 text-xs"
+                >
+                  Sign up
+                </button>
+              </SignUpButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+          </div>
+        </div>
         <div className="pt-2 border-t border-border space-y-3">
           <div>
             <div className="text-xs font-medium text-muted-fg mb-2">
