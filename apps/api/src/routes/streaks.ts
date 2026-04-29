@@ -16,6 +16,18 @@ import { villageIdsInScope } from '../scope';
 import { todayIstDate } from '../lib/time';
 import type { StreakResponse } from '@navsahyog/shared';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
+
+// Walked by scripts/gen-matrix.mjs. Lives in the dashboard context
+// — drives the home strip and post-save toast, not the program
+// workflow itself.
+export const meta: RouteMeta = {
+  context: 'dashboard',
+  resource: 'streaks',
+  cra: 'read-only',
+  offline: { read: 'online-only' },
+  refs: ['§3.6.4'],
+};
 
 const streaks = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

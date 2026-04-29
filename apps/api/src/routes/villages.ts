@@ -4,6 +4,7 @@ import { requireCap } from '../policy';
 import { villageIdsInScope } from '../scope';
 import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 type VillageRow = {
   id: number;
@@ -25,6 +26,18 @@ type AdminBody = {
   name?: string;
   code?: string;
   cluster_id?: number;
+};
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'masters',
+  resource: 'villages',
+  cra: 'create-only',
+  // Reads served from the offline manifest cache (sync.ts ships
+  // villages); writes are super_admin-only and online-only per
+  // offline-scope.md §3.8.7.
+  offline: { write: 'online-only', read: 'cached' },
+  refs: ['§3.8.7'],
 };
 
 const villages = new Hono<{ Bindings: Bindings; Variables: Variables }>();

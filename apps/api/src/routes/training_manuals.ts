@@ -4,6 +4,7 @@ import { requireCap } from '../policy';
 import { err } from '../lib/errors';
 import { nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 // Cap lengths to keep the picker rows readable. The link cap is
 // generous enough to cover Drive + Notion URL shapes without
@@ -24,6 +25,15 @@ type AdminBody = {
   category?: string;
   name?: string;
   link?: string;
+};
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'masters',
+  resource: 'training_manuals',
+  cra: 'create-only',
+  offline: { write: 'online-only', read: 'online-only' },
+  refs: ['§3.8.8'],
 };
 
 const trainingManuals = new Hono<{ Bindings: Bindings; Variables: Variables }>();

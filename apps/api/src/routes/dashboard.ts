@@ -24,6 +24,7 @@ import {
   type DashboardMetric as Metric,
 } from '@navsahyog/shared';
 import type { Bindings, SessionUser, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 type DrillResult = {
   metric: Metric;
@@ -65,6 +66,16 @@ export type ConsolidatedPayload = {
   chart: {
     bars: Array<{ month: string; pct: number | null }>;
   };
+};
+
+// Walked by scripts/gen-matrix.mjs. Dashboards are online-only by
+// design (offline-scope.md §3.6) — the cached snapshot is not kept.
+export const meta: RouteMeta = {
+  context: 'dashboard',
+  resource: 'dashboard',
+  cra: 'read-only',
+  offline: { read: 'online-only' },
+  refs: ['§3.6'],
 };
 
 const dashboard = new Hono<{ Bindings: Bindings; Variables: Variables }>();

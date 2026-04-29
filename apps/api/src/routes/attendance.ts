@@ -18,7 +18,10 @@ export const meta: RouteMeta = {
   context: 'programs',
   resource: 'attendance',
   cra: 'create-only',
-  offline: { write: 'required', read: 'cached' },
+  // Manifest caches villages/students/events for the AttendanceForm
+  // to render offline; past attendance sessions themselves are not
+  // cached, so GETs here are online-only.
+  offline: { write: 'required', read: 'online-only' },
   refs: ['§3.3.1', '§3.3.3', 'L4.1c'],
 };
 

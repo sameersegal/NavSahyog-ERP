@@ -5,6 +5,7 @@ import { requireCap } from '../policy';
 import { err } from '../lib/errors';
 import { nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 const EVENT_KINDS: readonly EventKind[] = ['event', 'activity'];
 const MAX_DESCRIPTION_LEN = 500;
@@ -16,6 +17,17 @@ type AdminBody = {
 };
 
 type AdminRow = Event & { reference_count: number; kind_locked: 0 | 1 };
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'masters',
+  resource: 'events',
+  cra: 'create-only',
+  // Events are global master data, included in the offline manifest
+  // (sync.ts) so the AttendanceForm picker reads them offline.
+  offline: { write: 'online-only', read: 'cached' },
+  refs: ['§3.8.7'],
+};
 
 const events = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

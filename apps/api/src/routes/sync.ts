@@ -21,6 +21,7 @@ import { requireAuth } from '../auth';
 import { villageIdsInScope } from '../scope';
 import { nowEpochSeconds } from '../lib/time';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 type ManifestVillage = {
   id: number;
@@ -64,6 +65,18 @@ type ManifestResponse = {
   villages: ManifestVillage[];
   students: ManifestStudent[];
   events: ManifestEvent[];
+};
+
+// Walked by scripts/gen-matrix.mjs. Sync drives the cached read
+// stores on other resources (villages, children, events) — those
+// resources mark their reads as `cached`; this endpoint is the
+// pull mechanism and is itself online-only.
+export const meta: RouteMeta = {
+  context: 'sync',
+  resource: 'sync',
+  cra: 'read-only',
+  offline: { read: 'online-only' },
+  refs: ['§6.9', 'D32'],
 };
 
 const sync = new Hono<{ Bindings: Bindings; Variables: Variables }>();

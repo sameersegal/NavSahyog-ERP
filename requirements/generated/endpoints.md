@@ -5,66 +5,33 @@
 Source of truth: route files in `apps/api/src/routes/` and `packages/shared/src/capabilities.ts`.
 Run `pnpm matrix` to regenerate.
 
-## programs
-
-### attendance — `apps/api/src/routes/attendance.ts`
-
-Refs: §3.3.1, §3.3.3, L4.1c · CRA: create-only · Offline: write=required, read=cached
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `attendance.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| POST | `/` | `attendance.write` | vc, af, cluster_admin, super_admin | yes |
-
-## (unannotated)
-
-### achievements — `apps/api/src/routes/achievements.ts`
-
-_no `meta` export — annotate this file_
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `achievement.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/:id` | `achievement.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| POST | `/` | `achievement.write` | vc, af, cluster_admin, super_admin | yes |
-| PATCH | `/:id` | `achievement.write` | vc, af, cluster_admin, super_admin | — |
-| DELETE | `/:id` | `achievement.write` | vc, af, cluster_admin, super_admin | — |
+## identity
 
 ### auth — `apps/api/src/routes/auth.ts`
 
-_no `meta` export — annotate this file_
+Refs: §3.1 · CRA: create-only · Offline: write=online-only, read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
 | POST | `/login` | public | — | — |
 | POST | `/logout` | public | — | — |
-| GET | `/me` | public | — | — |
+| GET | `/me` | auth | any authenticated | — |
 
-### children — `apps/api/src/routes/children.ts`
+### users — `apps/api/src/routes/users.ts`
 
-_no `meta` export — annotate this file_
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `child.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/:id` | `child.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| POST | `/` | `child.write` | vc, af, cluster_admin, super_admin | yes |
-| PATCH | `/:id` | `child.write` | vc, af, cluster_admin, super_admin | — |
-| POST | `/:id/graduate` | `child.write` | vc, af, cluster_admin, super_admin | — |
-
-### dashboard — `apps/api/src/routes/dashboard.ts`
-
-_no `meta` export — annotate this file_
+Refs: §3.8.7 · CRA: create-only · Offline: write=online-only, read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
-| GET | `/home` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/drilldown` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/drilldown.csv` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/` | `user.write` | super_admin | — |
+| POST | `/` | `user.write` | super_admin | — |
+| PATCH | `/:id` | `user.write` | super_admin | — |
+
+## masters
 
 ### events — `apps/api/src/routes/events.ts`
 
-_no `meta` export — annotate this file_
+Refs: §3.8.7 · CRA: create-only · Offline: write=online-only, read=cached
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
@@ -75,7 +42,7 @@ _no `meta` export — annotate this file_
 
 ### geo — `apps/api/src/routes/geo.ts`
 
-_no `meta` export — annotate this file_
+Refs: §3.6.1, L2.5.2 · CRA: read-only · Offline: read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
@@ -83,31 +50,88 @@ _no `meta` export — annotate this file_
 | GET | `/siblings` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
 | GET | `/all` | `user.write` | super_admin | — |
 
-### insights — `apps/api/src/routes/insights.ts`
+### qualifications — `apps/api/src/routes/qualifications.ts`
 
-_no `meta` export — annotate this file_
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-
-### media — `apps/api/src/routes/media.ts`
-
-_no `meta` export — annotate this file_
+Refs: §3.8.7 · CRA: create-only · Offline: write=online-only, read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
-| PUT | `/upload/:uuid` | public | — | — |
-| POST | `/presign` | `media.write` | vc, af, cluster_admin, super_admin | — |
-| POST | `/` | `media.write` | vc, af, cluster_admin, super_admin | — |
-| GET | `/` | `media.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/:id` | `media.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| DELETE | `/:id` | `media.write` | vc, af, cluster_admin, super_admin | — |
-| GET | `/raw/:uuid` | `media.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/` | `qualification.write` | super_admin | — |
+| POST | `/` | `qualification.write` | super_admin | — |
+| PATCH | `/:id` | `qualification.write` | super_admin | — |
+
+### schools — `apps/api/src/routes/schools.ts`
+
+Refs: §3.8.7 · CRA: create-only · Offline: write=online-only, read=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `school.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/admin` | `school.write` | super_admin | — |
+| POST | `/` | `school.write` | super_admin | — |
+| PATCH | `/:id` | `school.write` | super_admin | — |
+
+### training_manuals — `apps/api/src/routes/training_manuals.ts`
+
+Refs: §3.8.8 · CRA: create-only · Offline: write=online-only, read=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `training_manual.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| POST | `/` | `training_manual.write` | super_admin | — |
+| PATCH | `/:id` | `training_manual.write` | super_admin | — |
+
+### villages — `apps/api/src/routes/villages.ts`
+
+Refs: §3.8.7 · CRA: create-only · Offline: write=online-only, read=cached
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `village.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/admin` | `village.write` | super_admin | — |
+| POST | `/` | `village.write` | super_admin | — |
+| PATCH | `/:id` | `village.write` | super_admin | — |
+
+## beneficiaries
+
+### children — `apps/api/src/routes/children.ts`
+
+Refs: §3.2.2, D35 · CRA: create-only · Offline: write=eligible, read=cached
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `child.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/:id` | `child.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| POST | `/` | `child.write` | vc, af, cluster_admin, super_admin | yes |
+| PATCH | `/:id` | `child.write` | vc, af, cluster_admin, super_admin | — |
+| POST | `/:id/graduate` | `child.write` | vc, af, cluster_admin, super_admin | — |
+
+## programs
+
+### achievements — `apps/api/src/routes/achievements.ts`
+
+Refs: §3.4, L4.1a · CRA: create-only · Offline: write=required, read=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `achievement.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/:id` | `achievement.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| POST | `/` | `achievement.write` | vc, af, cluster_admin, super_admin | yes |
+| PATCH | `/:id` | `achievement.write` | vc, af, cluster_admin, super_admin | — |
+| DELETE | `/:id` | `achievement.write` | vc, af, cluster_admin, super_admin | — |
+
+### attendance — `apps/api/src/routes/attendance.ts`
+
+Refs: §3.3.1, §3.3.3, L4.1c · CRA: create-only · Offline: write=required, read=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `attendance.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| POST | `/` | `attendance.write` | vc, af, cluster_admin, super_admin | yes |
 
 ### ponds — `apps/api/src/routes/ponds.ts`
 
-_no `meta` export — annotate this file_
+Refs: §3.10, D25 · CRA: create-only · Offline: write=online-only, read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
@@ -121,77 +145,63 @@ _no `meta` export — annotate this file_
 
 ### programs — `apps/api/src/routes/programs.ts`
 
-_no `meta` export — annotate this file_
+Refs: §3.10 · CRA: read-only · Offline: read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
 | GET | `/jal-vriddhi` | public | — | — |
 
-### qualifications — `apps/api/src/routes/qualifications.ts`
+## media
 
-_no `meta` export — annotate this file_
+### media — `apps/api/src/routes/media.ts`
 
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `qualification.write` | super_admin | — |
-| POST | `/` | `qualification.write` | super_admin | — |
-| PATCH | `/:id` | `qualification.write` | super_admin | — |
-
-### schools — `apps/api/src/routes/schools.ts`
-
-_no `meta` export — annotate this file_
+Refs: §3.5, §5.8 · CRA: create-only · Offline: write=required, read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
-| GET | `/` | `school.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/admin` | `school.write` | super_admin | — |
-| POST | `/` | `school.write` | super_admin | — |
-| PATCH | `/:id` | `school.write` | super_admin | — |
+| PUT | `/upload/:uuid` | public | — | — |
+| POST | `/presign` | `media.write` | vc, af, cluster_admin, super_admin | — |
+| POST | `/` | `media.write` | vc, af, cluster_admin, super_admin | — |
+| GET | `/` | `media.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/:id` | `media.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| DELETE | `/:id` | `media.write` | vc, af, cluster_admin, super_admin | — |
+| GET | `/raw/:uuid` | `media.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+
+## dashboard
+
+### dashboard — `apps/api/src/routes/dashboard.ts`
+
+Refs: §3.6 · CRA: read-only · Offline: read=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/home` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/drilldown` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+| GET | `/drilldown.csv` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
+
+### insights — `apps/api/src/routes/insights.ts`
+
+Refs: §3.6 · CRA: read-only · Offline: read=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| GET | `/` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
 
 ### streaks — `apps/api/src/routes/streaks.ts`
 
-_no `meta` export — annotate this file_
+Refs: §3.6.4 · CRA: read-only · Offline: read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
 | GET | `/me` | `dashboard.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
 
+## sync
+
 ### sync — `apps/api/src/routes/sync.ts`
 
-_no `meta` export — annotate this file_
+Refs: §6.9, D32 · CRA: read-only · Offline: read=online-only
 
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
-| GET | `/manifest` | public | — | — |
-
-### training_manuals — `apps/api/src/routes/training_manuals.ts`
-
-_no `meta` export — annotate this file_
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `training_manual.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| POST | `/` | `training_manual.write` | super_admin | — |
-| PATCH | `/:id` | `training_manual.write` | super_admin | — |
-
-### users — `apps/api/src/routes/users.ts`
-
-_no `meta` export — annotate this file_
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `user.write` | super_admin | — |
-| POST | `/` | `user.write` | super_admin | — |
-| PATCH | `/:id` | `user.write` | super_admin | — |
-
-### villages — `apps/api/src/routes/villages.ts`
-
-_no `meta` export — annotate this file_
-
-| Method | Path | Capability | Roles | Idempotent |
-|---|---|---|---|---|
-| GET | `/` | `village.read` | vc, af, cluster_admin, district_admin, region_admin, state_admin, zone_admin, super_admin | — |
-| GET | `/admin` | `village.write` | super_admin | — |
-| POST | `/` | `village.write` | super_admin | — |
-| PATCH | `/:id` | `village.write` | super_admin | — |
+| GET | `/manifest` | auth | any authenticated | — |
 

@@ -223,6 +223,11 @@ function extractRouteFile(file) {
 
   if (!routerName) return { meta, handlers };
 
+  // Whether `<router>.use('*', requireAuth)` has been called at the
+  // top level. If so, every route registered after it inherits auth.
+  // Tracked as a flag we flip when we see the call during the walk.
+  let fileDefaultAuth = false;
+
   (function visit(node) {
     if (
       ts.isCallExpression(node) &&
@@ -232,11 +237,21 @@ function extractRouteFile(file) {
       ts.isIdentifier(node.expression.name)
     ) {
       const method = node.expression.name.text.toLowerCase();
+      if (
+        method === 'use' &&
+        node.arguments.length >= 2 &&
+        node.arguments.some(
+          (a) => ts.isIdentifier(a) && a.text === 'requireAuth',
+        )
+      ) {
+        fileDefaultAuth = true;
+      }
       if (HTTP_METHODS.has(method)) {
         const args = node.arguments;
         if (args.length >= 1 && isStringLike(args[0])) {
           const path = args[0].text;
           let cap = null;
+          let inlineAuth = false;
           let idempotent = false;
           for (const a of args.slice(1)) {
             if (
@@ -247,11 +262,21 @@ function extractRouteFile(file) {
               const a0 = a.arguments[0];
               if (a0 && isStringLike(a0)) cap = a0.text;
             }
+            if (ts.isIdentifier(a) && a.text === 'requireAuth') {
+              inlineAuth = true;
+            }
             if (ts.isArrowFunction(a) || ts.isFunctionExpression(a)) {
               if (containsIdent(a, 'withIdempotency')) idempotent = true;
             }
           }
-          handlers.push({ method: method.toUpperCase(), path, cap, idempotent });
+          const auth = Boolean(cap) || inlineAuth || fileDefaultAuth;
+          handlers.push({
+            method: method.toUpperCase(),
+            path,
+            cap,
+            auth,
+            idempotent,
+          });
         }
       }
     }
@@ -325,8 +350,14 @@ function renderMarkdown(routes, byRole) {
         for (const h of r.handlers) {
           const roles = h.cap
             ? (inv[h.cap] ?? []).join(', ') || '—'
-            : '—';
-          const capCell = h.cap ? '`' + h.cap + '`' : 'public';
+            : h.auth
+              ? 'any authenticated'
+              : '—';
+          const capCell = h.cap
+            ? '`' + h.cap + '`'
+            : h.auth
+              ? 'auth'
+              : 'public';
           const path = h.path || '/';
           lines.push(
             `| ${h.method} | \`${path}\` | ${capCell} | ${roles} | ${h.idempotent ? 'yes' : '—'} |`,

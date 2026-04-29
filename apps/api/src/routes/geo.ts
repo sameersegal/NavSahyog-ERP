@@ -9,6 +9,7 @@ import {
   type GeoLevel,
 } from '../lib/geo';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
 
 // L2.5.2 — typeahead + sibling lookups for the dashboard scope
 // picker (§3.6.1 navigation enhancements; mvp/level-2.5.md L2.5.2).
@@ -16,6 +17,15 @@ import type { Bindings, Variables } from '../types';
 // already scope-filtered — a District admin's /geo/search never
 // returns villages in another district, and a Cluster admin's
 // /geo/siblings at zone level returns [] rather than all zones.
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'masters',
+  resource: 'geo',
+  cra: 'read-only',
+  offline: { read: 'online-only' },
+  refs: ['§3.6.1', 'L2.5.2'],
+};
 
 const geo = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 geo.use('*', requireAuth);
