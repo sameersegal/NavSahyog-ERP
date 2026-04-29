@@ -56,6 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!clerkLoaded) return;
     let cancelled = false;
+    // Re-enter the loading state while we resolve the cookie session.
+    // Without this, App.tsx renders <Login /> (and Clerk's post-auth
+    // <SignIn /> completion screen) during the api.me / api.exchange
+    // round-trip — visible on slow networks (mobile) as a "I signed
+    // in but nothing happened" stall.
+    if (isSignedIn) setLoading(true);
     (async () => {
       if (!isSignedIn) {
         if (!cancelled) {

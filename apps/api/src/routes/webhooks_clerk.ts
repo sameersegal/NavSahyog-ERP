@@ -29,6 +29,16 @@
 import { Hono } from 'hono';
 import { err } from '../lib/errors';
 import type { Bindings, Variables } from '../types';
+import type { RouteMeta } from '../lib/route-meta';
+
+// Walked by scripts/gen-matrix.mjs.
+export const meta: RouteMeta = {
+  context: 'identity',
+  resource: 'webhooks/clerk',
+  cra: 'create-only',
+  offline: { write: 'online-only' },
+  refs: ['D36'],
+};
 
 type ClerkEmailAddress = {
   id: string;
