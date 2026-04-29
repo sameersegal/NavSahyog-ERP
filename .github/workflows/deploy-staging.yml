@@ -150,8 +150,13 @@ jobs:
         # [assets] block in apps/api/wrangler.toml. APP_BUILD is
         # baked into the bundle as the BUILD_ID stamped on every
         # X-App-Build request header (apps/web/src/lib/build.ts).
+        # VITE_CLERK_PUBLISHABLE_KEY is inlined by Vite at build
+        # time — it's a publishable identifier (not a secret) but
+        # we keep it as a repo secret to avoid accidental log
+        # exposure. main.tsx fail-closes if it's missing.
         env:
           APP_BUILD: ${{ steps.build_id.outputs.build_id }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
         run: pnpm --filter @navsahyog/web build
 
       # D1 migrations first — independent of the Worker service,
@@ -192,6 +197,41 @@ jobs:
         run: |
           printf '%s' "${{ secrets.CF_STAGING_MEDIA_PRESIGN_SECRET }}" \
             | pnpm exec wrangler secret put MEDIA_PRESIGN_SECRET --env staging
+
+      # D36 layer-1 → layer-2 bridge. CLERK_SECRET_KEY is consumed by
+      # POST /auth/exchange (verifies the Clerk JWT, fetches the user
+      # record from the Backend API on self-heal). Missing → exchange
+      # fail-closes with 500. Skip if not yet configured so the deploy
+      # doesn't fail the first time around.
+      - name: Set CLERK_SECRET_KEY secret on the Worker
+        working-directory: apps/api
+        env:
+          SECRET: ${{ secrets.CF_STAGING_CLERK_SECRET_KEY }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "CF_STAGING_CLERK_SECRET_KEY not configured — skipping. Set it in GitHub repo secrets when ready (sk_test_… from dashboard.clerk.com)."
+            exit 0
+          fi
+          printf '%s' "$SECRET" \
+            | pnpm exec wrangler secret put CLERK_SECRET_KEY --env staging
+
+      # D36 layer-1 → layer-2 webhook. CLERK_WEBHOOK_SECRET is the
+      # Svix signing secret for /webhooks/clerk. Chicken-and-egg with
+      # the deployed URL: configure the webhook in dashboard.clerk.com
+      # AFTER the first deploy goes live, capture the whsec_…, add it
+      # as CF_STAGING_CLERK_WEBHOOK_SECRET, redeploy. Until then the
+      # webhook handler 500s on signature verification (fail-closed).
+      - name: Set CLERK_WEBHOOK_SECRET secret on the Worker
+        working-directory: apps/api
+        env:
+          SECRET: ${{ secrets.CF_STAGING_CLERK_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "CF_STAGING_CLERK_WEBHOOK_SECRET not configured — skipping. Set it once the webhook endpoint is wired in Clerk dashboard."
+            exit 0
+          fi
+          printf '%s' "$SECRET" \
+            | pnpm exec wrangler secret put CLERK_WEBHOOK_SECRET --env staging
 
       # Fast sanity check that the deploy actually answers. `/health`
       # is the Worker's own endpoint (not behind basic auth, not
