@@ -9,6 +9,46 @@ justification.
 
 ---
 
+## 2026-04-29 — Authentication architecture: four-layer split (Clerk + cookie-session hybrid)
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D36 | **Auth is split into four layers, each with one job and a clean boundary so any layer can be swapped without touching the others. Layer 1 (online identity) is Clerk: `<SignIn />` widget for sign-in, no public sign-up, admin user provisioning via the Clerk dashboard, MFA / password reset / email verification handled by Clerk. Layer 2 (authorization + device/session policy) is the Worker: it owns the local `user` table, the role / scope / capability matrix from §2.3, the cookie-session lifecycle (30-day sliding, secure, httpOnly, SameSite=Lax), and revocation. Layer 3 (offline cache + mutation queue) is the PWA: IDB read-cache, outbox, manifest pull on session resume — all already built in L2.5/L4.0. Layer 4 (final authority at sync time) is the Worker again, re-validating each outbox replay against the *current* capability matrix, not the matrix that was active when the mutation was queued. Clerk's JWT only ever touches the request path **once**, at `POST /auth/exchange` — the Worker verifies it, looks up `user` by `clerk_user_id`, mints a long-lived signed session cookie, and Clerk is out of the loop until the cookie expires or the user signs out. Every subsequent request uses the cookie, exactly like today's flow. Three policy commitments ride with this: (a) **30-day sliding cookie + immediate revocation via Clerk webhooks** — the Worker accepts the cookie offline indefinitely within its TTL, but `user.deleted` / `user.updated` webhooks invalidate the local session row at next online check; (b) **dual-path Clerk → local user sync** — Svix-verified webhook keeps the local table fresh, and `/auth/exchange` self-heals if the local row is missing by looking up the user via Clerk JWT email claim and linking, so first-sign-in does not depend on webhook delivery timing; (c) **outbox carries auth context** — each queued mutation records the `user_id` and scope it was created under, but layer 4 re-validates against the live capability matrix at replay time, so a role change between offline-write and replay does the right thing (revoked permission rejects, granted permission accepts). The portability story is structural: dropping Clerk later changes one widget (`<SignIn />`) and one endpoint (`/auth/exchange` → `/auth/login`); layers 2-4 are provider-agnostic and stay. The §9 residency surface is also smaller than a Clerk-everywhere integration would be — Clerk only sees emails, sign-in events, and password-reset traffic; session activity, role data, audit trail, and all app reads/writes stay in D1. | The earlier review-findings §5 L8 entry that flagged the Clerk integration as preview-only with three open reconciliations (bridge sessions, decide residency, verify Clerk JWTs in apps/api). D36 resolves the architectural shape; the residency call (whether Clerk's US data plane is acceptable for India-only single-tenant identity) remains open under §9 and is not gated by D36 — if the answer is "no", layer 1 swaps for a self-hosted IdP and layers 2-4 are unchanged. |
+
+### What lands with this decision
+
+- **`requirements/decisions.md`** — this row.
+- **`requirements/review-findings-v1.md` §5 L8** — trimmed to a back-pointer to D36; the three open questions in the original entry are either resolved (architecture) or carried into D36's open follow-ups (residency).
+- No spec section is rewritten yet. §5 endpoint gates, §9 compliance, and §11 Cloudflare mapping all need updates when the L5 implementation slice lands; at that point the spec edits ride with the implementation PR.
+
+### What ships in implementation (next, on this branch)
+
+In order, each step independently committable:
+
+1. **D1 migration** — add `clerk_user_id TEXT UNIQUE` + `clerk_synced_at INTEGER` to `user`. Migration is purely additive; existing seed users keep working until the seed script (step 5) back-fills the column.
+2. **Worker `/auth/exchange`** — verifies Clerk JWT via `@clerk/backend` (cached JWKS), looks up `user` by `clerk_user_id`, self-heals via email lookup if missing, mints the session cookie. Reuses the existing cookie shape and `requireAuth` middleware unchanged.
+3. **Worker `/webhooks/clerk`** — Svix-verified, handles `user.created` / `user.updated` / `user.deleted`. The first two upsert the local row; the third invalidates any active session.
+4. **Client swap** — `Login.tsx` is replaced by Clerk's `<SignIn routing="path" path="/sign-in" />`. `AuthProvider` keeps the same `useAuth()` interface (so the 14 consumer files don't change), but its bootstrap now runs `api.exchange(clerkToken)` after Clerk sign-in. `api.login` is dropped; `api.me` and `api.logout` stay.
+5. **Seed bridge script** — `apps/api/scripts/seed-clerk.ts` creates Clerk users for the dummy seed accounts (`vc-anandpur`, `af-tehri`, `super-admin`, etc.) via Clerk's Backend API, captures the returned IDs, and back-fills `clerk_user_id` on the local rows. One-shot, idempotent, dev-only.
+6. **Outbox auth context audit** — confirm the existing outbox row shape carries `user_id` and scope (it should; it predates this decision), and add a layer-4 replay test that revokes a capability between queue and replay and asserts the replay rejects. If the row shape is missing context, this step adds the column.
+7. **Disable sign-up + email allowlist in Clerk dashboard** — operational, documented in §11.9 secrets / runtime-config notes when L5 lands.
+
+### Knock-on effects
+
+- **L5 unblocked partially.** L5 was originally framed as "auth + compliance"; D36 lands the auth half of L5 ahead of schedule on `claude/add-clerk-auth-xGMCK`. The compliance half (residency, audit-log retention, breach response) stays L5-future and is not gated by D36.
+- **L4 offline survives unchanged.** The PWA's offline behaviour is identical post-D36 — it talks to the Worker via the same cookie, the Worker doesn't talk to Clerk during normal operation, and the manifest pull / outbox replay loops are untouched. This was the load-bearing requirement; the four-layer framing is what makes it free.
+- **§10.5 vendor-data parity stays clean.** The local `user` table keeps its full shape (`id INTEGER`, `user_id TEXT`, `full_name`, `role`, `scope_level`, `scope_id`); the new column is additive. A future vendor-data import maps `LoginId` → `user_id` and creates a Clerk account per imported row via the Backend API at import time.
+- **§9 residency call is contained.** Clerk only sees identity events. Whatever §9 ultimately rules on identity-data residency, no other layer needs to move.
+
+### Open follow-ups
+
+- [ ] During implementation: confirm the existing `requireAuth` middleware reads the cookie shape `/auth/exchange` will mint. The shape should be unchanged from `/auth/login`'s output today; if there's any drift, exchange matches login and the diff is zero.
+- [ ] During implementation: decide whether `/auth/logout` calls Clerk's `signOut` server-side (so the Clerk session ends too) or only clears the local cookie (Clerk session ages out on its own). Default: only clear local; Clerk-side sign-out is best-effort from the client via `useClerk().signOut()` in the same hook.
+- [ ] L5 / §9: the residency decision. If "Clerk US data plane is acceptable for identity-only," D36 is the final shape. If not, layer 1 swaps for a self-hosted IdP (Ory Kratos, Keycloak, or roll-your-own) and the rest is unchanged. The four-layer framing is what makes this a contained migration rather than a rewrite.
+- [ ] L5 / §10.5: when vendor-data import lands, decide whether to import bcrypt password hashes into Clerk (Clerk's Backend API supports it) or force-reset all users at cutover. Force-reset is operationally simpler but worse UX; hash import is one-time complexity for better cutover. Decide closer to L5.
+
+---
+
 ## 2026-04-29 — Offline child creation under visibility-after-sync
 
 | # | Decision | Supersedes |
