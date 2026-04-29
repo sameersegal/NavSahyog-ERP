@@ -1,0 +1,33 @@
+{
+  "release": "L4.1c",
+  "endpoint": "POST /api/attendance",
+  "schema_version": 1,
+  "payloads": [
+    {
+      "name": "minimal — one student marked present (L4.1c baseline)",
+      "body": {
+        "village_id": 1,
+        "event_id": 1,
+        "date": "2026-04-29",
+        "start_time": "10:00",
+        "end_time": "11:00",
+        "marks": [{ "student_id": 1, "present": true }]
+      }
+    },
+    {
+      "name": "multiple marks — mixed present / absent",
+      "body": {
+        "village_id": 1,
+        "event_id": 1,
+        "date": "2026-04-29",
+        "start_time": "10:00",
+        "end_time": "11:00",
+        "marks": [
+          { "student_id": 1, "present": true },
+          { "student_id": 2, "present": false },
+          { "student_id": 3, "present": true }
+        ]
+      }
+    }
+  ]
+}

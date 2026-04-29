@@ -38,6 +38,16 @@ type ManifestStudent = {
   last_name: string;
 };
 
+// L4.1c — events are global (not scope-bound per village). Same
+// shape as the live `/api/events` GET; included in the manifest so
+// the AttendanceForm picker has a cache to read from offline.
+type ManifestEvent = {
+  id: number;
+  name: string;
+  kind: string;
+  description: string | null;
+};
+
 type ManifestResponse = {
   // Server epoch seconds. Stored on the client for "last synced at"
   // diagnostics; not used for delta calc (D32 — full snapshot).
@@ -53,6 +63,7 @@ type ManifestResponse = {
   };
   villages: ManifestVillage[];
   students: ManifestStudent[];
+  events: ManifestEvent[];
 };
 
 const sync = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -62,6 +73,16 @@ sync.use('*', requireAuth);
 sync.get('/manifest', async (c) => {
   const user = c.get('user');
   const villageIds = await villageIdsInScope(c.env.DB, user);
+
+  // Events are global, not scope-bound — every authenticated caller
+  // sees the same list. Pull once outside the village-scope branch
+  // so an empty-scope user (cluster-admin awaiting assignment)
+  // still gets the picklist in their cache.
+  const eventsRs = await c.env.DB.prepare(
+    `SELECT id, name, kind, description
+       FROM event
+      ORDER BY name`,
+  ).all<ManifestEvent>();
 
   // Empty scope is valid (e.g. a newly-created cluster admin with no
   // villages assigned yet). Return the empty arrays — the client
@@ -77,6 +98,7 @@ sync.get('/manifest', async (c) => {
       },
       villages: [],
       students: [],
+      events: eventsRs.results,
     };
     return c.json(body);
   }
@@ -115,6 +137,7 @@ sync.get('/manifest', async (c) => {
     },
     villages: villagesRs.results,
     students: studentsRs.results,
+    events: eventsRs.results,
   };
   return c.json(body);
 });

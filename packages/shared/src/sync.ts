@@ -308,6 +308,18 @@ export type ManifestStudent = {
   last_name: string;
 };
 
+// Picklist for the AttendanceForm — landed in L4.1c. Global table
+// (events are not per-village or per-scope), so every authenticated
+// user sees the same list. Kind values mirror the EventKind enum
+// in event.ts; declared inline here to keep sync.ts self-contained
+// (this module is shared between client + worker; no DOM deps).
+export type ManifestEvent = {
+  id: number;
+  name: string;
+  kind: 'event' | 'activity';
+  description: string | null;
+};
+
 export type ManifestResponse = {
   // Server epoch seconds. Stored as `last_synced_at` on the client
   // for diagnostics; not used for delta calc (D32).
@@ -319,6 +331,11 @@ export type ManifestResponse = {
   };
   villages: ManifestVillage[];
   students: ManifestStudent[];
+  // L4.1c addition. Optional in the type so L4.1a/b clients
+  // ignoring this field stay valid under the additive-only contract
+  // (D30) — older clients tolerate the field's presence in the
+  // response without using it.
+  events?: ManifestEvent[];
 };
 
 // `rng` returns a number in [0, 1) — exposed for deterministic tests.

@@ -255,11 +255,11 @@ village, dozens of students), so the delta protocol's complexity
     "village_ids": [1]               // expanded scope for sanity checks
   },
   "villages":  [ /* ManifestVillage[] */ ],
-  "students":  [ /* ManifestStudent[] — active only */ ]
-  // events + schools land with L4.1c (attendance) and L4.1b
-  // (offline child create) respectively. Adding nullable fields or
-  // new arrays is additive-only (D30) and doesn't break L4.1a
-  // clients.
+  "students":  [ /* ManifestStudent[] — active only */ ],
+  "events":    [ /* ManifestEvent[] — global picklist, L4.1c */ ]
+  // schools (for offline child create) ride with the L4.1b
+  // implementation. Adding nullable fields or new arrays is
+  // additive-only (D30) and doesn't break older clients.
 }
 ```
 

@@ -26,6 +26,7 @@ import { absoluteTime, relativeTime } from '../lib/date';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
+import { listCachedEvents, listCachedStudents } from '../lib/cache';
 import { drain } from '../lib/drain';
 import { enqueue } from '../lib/outbox';
 
@@ -986,18 +987,69 @@ function AttendanceTab({ villageId }: { villageId: number }) {
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // L4.1c — children + events come from the read cache populated by
+  // the manifest pull (lib/manifest.ts). Sessions stay online-only:
+  // §6.1 puts the attendance *read* (existing sessions for a date)
+  // outside the offline scope, so api.attendance is allowed to fail
+  // when offline; we tolerate that and render an empty list.
   const load = useCallback(() => {
-    Promise.all([
-      api.children(villageId),
-      api.events(),
-      api.attendance(villageId, date),
-    ])
-      .then(([c, e, a]) => {
-        setChildren(c.children);
-        setEvents(e.events);
+    setErr(null);
+    void (async () => {
+      try {
+        const [studentRows, eventRows] = await Promise.all([
+          listCachedStudents(villageId),
+          listCachedEvents(),
+        ]);
+        // Cache stores ManifestStudent / ManifestEvent — the form
+        // expects the wire shapes (Child, Event). For Child we
+        // fill missing fields with null/defaults so the SessionForm
+        // mark-state initialisation works (it only reads `.id`).
+        setChildren(
+          studentRows.map((s) => ({
+            id: s.id,
+            village_id: s.village_id,
+            school_id: s.school_id,
+            first_name: s.first_name,
+            last_name: s.last_name,
+            gender: 'o',
+            dob: '2000-01-01',
+            joined_at: '2000-01-01',
+            graduated_at: null,
+            graduation_reason: null,
+            father_name: null,
+            father_phone: null,
+            father_has_smartphone: null,
+            mother_name: null,
+            mother_phone: null,
+            mother_has_smartphone: null,
+            alt_contact_name: null,
+            alt_contact_phone: null,
+            alt_contact_relationship: null,
+            photo_media_id: null,
+          })),
+        );
+        setEvents(
+          eventRows.map((e) => ({
+            id: e.id,
+            name: e.name,
+            kind: e.kind,
+            description: e.description,
+          })),
+        );
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'failed');
+        return;
+      }
+      try {
+        const a = await api.attendance(villageId, date);
         setSessions(a.sessions);
-      })
-      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
+      } catch {
+        // Offline / network failure — render the page with an
+        // empty session list so the user can still queue a new
+        // session. The chip + outbox surface the offline state.
+        setSessions([]);
+      }
+    })();
   }, [villageId, date]);
 
   useEffect(() => {
@@ -1417,18 +1469,35 @@ function SessionForm({
     }
     setBusy(true);
     try {
-      await api.submitAttendance({
-        village_id: villageId,
-        event_id: eventId,
-        date,
-        start_time: startTime,
-        end_time: endTime,
-        voice_note_media_id: voiceNoteMediaId,
-        marks: children.map((c) => ({
-          student_id: c.id,
-          present: marks[c.id] ?? false,
-        })),
+      // L4.1c — POST /api/attendance is `offline-required` per
+      // offline-scope.md §3.3. Domain-idempotent on (village, date,
+      // event) at the server, plus the L4.1a Idempotency-Key
+      // wrapper so an outbox replay returns a byte-identical
+      // response. Online: drain runs, sessions list refreshes with
+      // the new row. Offline: drain no-op, chip shows "1 queued".
+      await enqueue({
+        method: 'POST',
+        path: '/api/attendance',
+        body: {
+          village_id: villageId,
+          event_id: eventId,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+          voice_note_media_id: voiceNoteMediaId,
+          marks: children.map((c) => ({
+            student_id: c.id,
+            present: marks[c.id] ?? false,
+          })),
+        },
+        schema_version: 1,
+        idempotency_key: ulid(),
       });
+      try {
+        await drain();
+      } catch {
+        // Drain failures surface in the chip + outbox UI.
+      }
       onSaved({ present: counts.present, total: counts.total });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'failed');
