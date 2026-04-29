@@ -52,25 +52,27 @@ resolution, §6.7 clock skew, §6.8 cache security) carry forward.
 
 ### 6.1 Scope (what works offline)
 
-Per §3.7, only three workflows run offline:
+The per-endpoint offline mode (`online-only` / `offline-eligible` /
+`offline-required`) is captured in two generated / authoritative
+sources:
 
-- Mark attendance (`POST /api/attendance`)
-- Add achievement (`POST /api/achievements`)
-- Capture image / video / voice note (media upload — §7)
+- [`offline-scope.md`](./offline-scope.md) — authoritative narrative,
+  workflow-level. Bound by the additive-only contract (D30) for any
+  endpoint flagged eligible or required.
+- [`generated/endpoints.md`](./generated/endpoints.md) — generated
+  per-endpoint matrix, drawn from each route file's `meta` block
+  and the manifest contents.
 
-Everything else (login, dashboards, master edits, graduation)
-requires online mode. Offline mode shows a banner and disables
-those menu items.
+Together they define what works offline. The historical narrative
+("only three workflows run offline") is intentionally not repeated
+here because it drifts — children create became `offline-eligible`
+at L4.1b (D35), and the L4.2 ladder may move ponds.
 
-Reads while offline are served from a **local cache** of the data
-needed by these three workflows:
-
-- Villages, schools, students (active only) in the user's scope.
-- Events and activities (full picklists).
-- The user's profile and role.
-
-Cache is seeded on first online login and refreshed by
-`/api/sync/manifest?since=…` on every subsequent online login.
+Reads while offline are served from the local cache. The current
+manifest (sync.ts at L4.1a/c) carries: scope-bound villages, active
+students in those villages, and the global events picklist. The
+cache is replaced on every successful manifest pull (D32 supersedes
+the original delta protocol described in §6.9).
 
 ### 6.2 Client storage layout (IndexedDB)
 

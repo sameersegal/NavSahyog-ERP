@@ -26,26 +26,30 @@ Every user is anchored to exactly one node in this tree. Their
 **effective scope** is that node and everything beneath it.
 
 ### 2.3 Capability matrix
-Hardcoded in Workers (no `role_permission` table). `✔` = permitted
-within the user's effective scope; `—` = denied.
+Hardcoded in Workers (no `role_permission` table). The per-endpoint
+capability → role mapping is generated from the code:
 
-| Capability | VC | AF | Cluster | District+ | Super |
+- **Source of truth:** `packages/shared/src/capabilities.ts`
+  (`CAPABILITIES_BY_ROLE`).
+- **Per-endpoint matrix (capability + roles + offline mode):**
+  [`generated/endpoints.md`](./generated/endpoints.md), produced by
+  `pnpm matrix` from the route metadata. CI runs `pnpm matrix:check`
+  to fail builds when the file is stale.
+
+What the generated matrix doesn't capture is **scope breadth** —
+how wide the data window is for a role that holds a capability.
+That stays in prose because it's enforced at runtime by
+`villageIdsInScope()` (apps/api/src/scope.ts), not by `requireCap`:
+
+| Surface | VC | AF | Cluster | District+ | Super |
 |---|---|---|---|---|---|
-| Login, view own profile | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Mark attendance | ✔ | ✔ | ✔ | — | ✔ |
-| Add / edit / graduate child | ✔ | ✔ | ✔ | — | ✔ |
-| Capture / upload media | ✔ | ✔ | ✔ | — | ✔ |
-| Add achievement | ✔ | ✔ | ✔ | — | ✔ |
-| Create pond + agreement (§3.10) | ✔ | ✔ | ✔ | — | ✔ |
-| View ponds + agreement history (§3.10) | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Drill-down dashboard | own village | cluster | cluster | own level | global |
 | Consolidated dashboard | — | cluster | cluster | own level | global |
 | CSV export | — | ✔ | ✔ | ✔ | ✔ |
-| Manage users | — | — | ✔ | ✔ | ✔ |
-| Master CRUD (villages, schools, events…) | — | — | ✔ | ✔ | ✔ |
-| Read training manuals (§3.8.8) | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Manage training manuals (§3.8.8) | — | — | — | — | ✔ |
-| Donor update (draft) — §3.9 | — | — | — | — | ✔ |
+
+The forward-looking "Donor update (draft) — §3.9" row in the
+previous version of this section refers to a feature that has not
+landed in code; it's tracked in §3.9 directly.
 
 **Acceptance:** every write endpoint enforces scope server-side from
 the session claim. A VC cannot mark attendance for another village by

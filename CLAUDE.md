@@ -125,10 +125,10 @@ dependent section in the same commit:
 
 | Change | Also check |
 |---|---|
-| Role / capability | §2.3 matrix · §5 endpoint gates · §3 workflow descriptions |
+| Role / capability | `packages/shared/src/capabilities.ts` (single source of truth) · §3 workflow descriptions · §2.3 scope rules. Run `pnpm matrix` to refresh the generated per-endpoint matrix. |
 | Schema column | §4 DDL · §5 request/response · §6 outbox body shape · §10 field mapping |
-| New endpoint | §5 · §6.4 (offline-enqueuable?) · §8.5 rate limits · §11.9 secrets if it calls an external service |
-| New workflow | §3 · capability matrix · scope rules · §6.1 offline scope |
+| New endpoint | Add `meta` block + `requireCap(...)` in the route file · §5 narrative spec · §6.4 (offline-enqueuable?) · §8.5 rate limits · §11.9 secrets if it calls an external service. Run `pnpm matrix`. |
+| New workflow | §3 · `offline-scope.md` (authoritative offline category) · §2.3 scope rules · the route file's `meta.offline`. Run `pnpm matrix`. |
 | Retention / runtime config | Out-of-system (decisions.md D1/D4). No `app_settings` table, no retention cron. §7.7 + §9.3 document the boundary; runtime tunables are Worker env vars. |
 | Non-functional target | §8.13 SLOs · §11.11 cost envelope |
 
