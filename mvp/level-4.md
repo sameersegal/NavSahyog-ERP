@@ -1,8 +1,9 @@
 # Level 4 — Offline mode
 
-**Status:** in flight. Re-scoped from "3-workflow lab demo" to
-"offline-as-platform" — see decisions.md D29–D32. L4.0f landed; L4.0a–d
-in review; L4.1a–c landed; L4.1d + L4.2+ not started.
+**Status:** L4.0 platform landed (L4.0a–d + L4.0f). L4.1a–c landed
+(achievements + child create + attendance vertical slices). L4.1d
+deferred. L4.2+ not started. See `decisions.md` D29–D35 for the
+spec amendments.
 
 ## Goal
 
@@ -17,17 +18,17 @@ ships first; workflows opt in incrementally.
 
 | Sub | Scope | Status |
 |---|---|---|
-| L4.0a | Foundation primitives — `X-App-Build` header, server compat middleware (initial wall-clock-based; replaced in L4.0c), client build-id injection, real network detection (HEAD probe, not `navigator.onLine`), sync-state taxonomy (green/yellow/red/update_required) chip in chrome, force-upgrade banner. **No outbox or IDB yet.** | in flight |
-| L4.0b | Generic versioned outbox — IDB migration framework, ULID-keyed `outbox` store, opaque drain runner with backoff + 426 handling, dead-letter pathway, hard outbox cap, `/outbox` UI screen with retry/discard/manual sync, sync chip wired to queued/dead-letter counts. **No live workflows enqueue yet.** | in flight |
-| L4.0c | Update discipline — deploy-grace fix (`MIN_SUPPORTED_BUILD` operator floor instead of wall-clock-today), `SERVER_BUILD_ID` stamped on every response, soft dismissible "Update available" banner when client observes a newer server build, plus a reference deploy script. **No service worker** for the data layer — the soft signal travels on response headers, which is enough for data-offline workflows. (D34 later landed a shell-only SW for the app shell; data layer remains unchanged.) | in flight |
-| L4.0d | Additive-only contract harness — `regression-corpus/` directory + a vitest harness that walks it and replays every payload against the live worker, asserting 2xx. Empty corpus today (first L4.1 endpoint adds payloads). Also Outbox UI dead-letter polish: expandable support-bundle JSON + clipboard copy for support tickets. | in flight |
+| L4.0a | Foundation primitives — `X-App-Build` header, server compat middleware (initial wall-clock-based; replaced in L4.0c), client build-id injection, real network detection (HEAD probe, not `navigator.onLine`), sync-state taxonomy (green/yellow/red/update_required) chip in chrome, force-upgrade banner. **No outbox or IDB yet.** | landed |
+| L4.0b | Generic versioned outbox — IDB migration framework, ULID-keyed `outbox` store, opaque drain runner with backoff + 426 handling, dead-letter pathway, hard outbox cap, `/outbox` UI screen with retry/discard/manual sync, sync chip wired to queued/dead-letter counts. **No live workflows enqueue yet.** | landed |
+| L4.0c | Update discipline — deploy-grace fix (`MIN_SUPPORTED_BUILD` operator floor instead of wall-clock-today), `SERVER_BUILD_ID` stamped on every response, soft dismissible "Update available" banner when client observes a newer server build, plus a reference deploy script. **No service worker** for the data layer — the soft signal travels on response headers, which is enough for data-offline workflows. (D34 later landed a shell-only SW for the app shell; data layer remains unchanged.) | landed |
+| L4.0d | Additive-only contract harness — `regression-corpus/` directory + a vitest harness that walks it and replays every payload against the live worker, asserting 2xx. Empty corpus today (first L4.1 endpoint adds payloads). Also Outbox UI dead-letter polish: expandable support-bundle JSON + clipboard copy for support tickets. | landed |
 | L4.0f | Shell service worker + Web App Manifest (D34). Caches the static app shell keyed by `APP_BUILD`; data endpoints (`/api`, `/auth`, `/health`) pass through unchanged. Plus the spec-implied offline empty-state on Home and Dashboard, the Achievements children fan-out fix, and a network-probe back-off for offline-latched sessions. **Triggered by iOS Safari Add-to-Home-Screen testing showing a blank shell offline** — overrules L4.0c's "no SW" stance for the *shell* only. | landed |
-| L4.0e | **Deferred** — replay tool + cache integrity check. Both have "wait until something else lands" dependencies (real field users / real cache stores). See decisions.md D33. Not blocking L4.1. | deferred |
-| L4.0 | Offline platform — versioned generic outbox, IDB migration framework, build-id discipline, sync-state taxonomy, additive-only contract harness. **No new offline workflows ship in this slice.** Functionally complete with L4.0a–d; L4.0e items deferred per D33. | in flight (L4.0a + L4.0b + L4.0c + L4.0d in review) |
+| L4.0e | **Deferred** — replay tool + cache integrity check. Both have "wait until something else lands" dependencies (real field users / real cache stores). See decisions.md D33. The cache-integrity half is now eligible to land (cache stores exist as of L4.1a–c) but hasn't shipped; replay tool still gated on real field data. | deferred |
+| L4.0 | Offline platform — versioned generic outbox, IDB migration framework, build-id discipline, sync-state taxonomy, additive-only contract harness, shell SW. **No new offline workflows ship in this slice.** Functionally complete with L4.0a–d + L4.0f; L4.0e items deferred per D33. | landed |
 | L4.1a | **Achievements vertical slice** — `GET /api/sync/manifest` (replace-snapshot per D32) + `cache_villages` / `cache_students` IDB stores + AchievementForm reads from cache + `POST /api/achievements` enqueues to the outbox + server-side `Idempotency-Key` dedupe + first regression-corpus entry. Demos: pick an existing student → add SoM offline → sync → server has the row. **Pickers stay empty for newly-created students until L4.1b lands** — D35's visibility-after-sync rule. | landed |
 | L4.1b | **Offline child creation** — `POST /api/children` joins the offline-eligible set per D35 with the visibility-after-sync rule. Same outbox plumbing; no new platform pieces. Server-side `Idempotency-Key` dedupe via the L4.1a helper, regression-corpus entry added. The visibility-after-sync rule lives client-side: `cache_students` only includes server-confirmed rows, so a child created offline is invisible until the next online drain + manifest pull (no UI change required to enforce it). | landed |
 | L4.1c | **Attendance vertical slice** — `cache_events` extension to the manifest (additive-only — D30), IDB v3 migration, AttendanceTab reads villages / students / events from cache and tolerates session-list fetch failure offline, `POST /api/attendance` enqueues to the outbox + idempotency-keyed (UPSERT semantics on `(village, date, event)` preserved — same-key replay is dedupe, fresh-key replay is the spec'd §3.3.3 update). Regression-corpus entry added. | landed |
-| L4.1d | **Media capture vertical slice** — the two-step (presign + commit) flow through outbox, `media_blobs` IDB store, drain runner orchestrates both steps. Largest L4.1 slice; lands last. | not started |
+| L4.1d | **Media capture vertical slice** — the two-step (presign + commit) flow through outbox, `media_blobs` IDB store, drain runner orchestrates both steps. Largest L4.1 slice; lands last. | deferred |
 | L4.2+ | Progressive opt-in per workflow as `requirements/offline-scope.md` grows. Each new offline-eligible workflow is its own small PR with a decision entry. | not started |
 
 ## Working principles
