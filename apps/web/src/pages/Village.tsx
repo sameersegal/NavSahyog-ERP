@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ulid } from '@navsahyog/shared';
 import {
   api,
   can,
@@ -25,6 +26,8 @@ import { absoluteTime, relativeTime } from '../lib/date';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
+import { drain } from '../lib/drain';
+import { enqueue } from '../lib/outbox';
 
 type Tab = 'children' | 'attendance' | 'media';
 
@@ -525,6 +528,16 @@ function ChildForm(props: ChildFormProps) {
     setBusy(true);
     try {
       if (mode === 'add') {
+        // L4.1b — D35 flips POST /api/children to `offline-eligible`
+        // under the visibility-after-sync rule. The form enqueues
+        // to the L4.0b outbox; the parent's `load()` re-fetches
+        // from the server, so:
+        //   * online: drain runs, server has the row, list shows
+        //     the new child immediately.
+        //   * offline: drain is a no-op, list shows the prior
+        //     state, the chip shows "1 queued". The child becomes
+        //     visible only after the next online drain + manifest
+        //     pull (D35) — by design.
         const body: ChildCoreCreate & ChildProfile = {
           village_id: villageId,
           school_id: schoolId,
@@ -536,7 +549,19 @@ function ChildForm(props: ChildFormProps) {
           ...(photoMediaId !== null ? { photo_media_id: photoMediaId } : {}),
           ...profileBody(),
         };
-        await api.addChild(body);
+        await enqueue({
+          method: 'POST',
+          path: '/api/children',
+          body,
+          schema_version: 1,
+          idempotency_key: ulid(),
+        });
+        try {
+          await drain();
+        } catch {
+          // Drain failures surface in the chip + outbox UI; the
+          // form keeps the queued row regardless.
+        }
       } else {
         // Include photo only if it changed; undefined preserves the
         // server-side value on PATCH per the key-present-vs-absent
