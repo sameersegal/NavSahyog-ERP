@@ -36,6 +36,7 @@ land via a decision entry (D-numbered) in `decisions.md`.
 |---|---|---|---|---|---|
 | §3.1 | Login / auth | `online-only` | `POST /api/auth/login`, `POST /api/auth/logout`, OTP family | Backend | Sessions revalidate online. Outbox drain re-prompts on session expiry (level-4.md watch-out). |
 | §3.1.5 | Profile (read-only) | `online-only` | `GET /api/me` | Backend | Cache hit on the `session` store covers offline display. |
+| §3.2.2 | Add child | `offline-eligible` | `POST /api/children` | Field workflows | D35: server-side create with a client ULID idempotency key. **Visibility-after-sync rule** — a child created offline appears in `cache_students` only after the drain succeeds and the next manifest pull lands; until then they do not appear in the achievement picker, the village children list, or any read screen. PATCH and `/graduate` remain `online-only`. |
 | §3.3 | Mark attendance | `offline-required` | `POST /api/attendance/submit` | Field workflows | One mutation per session per §6.1. Idempotent on `(village, date, event)`. |
 | §3.4 | Add achievement | `offline-required` | `POST /api/achievements` | Field workflows | SoM uniqueness enforced server-side; conflict surfaces in the dead-letter UI. |
 | §3.5 | Capture media | `offline-required` | `POST /api/media/presign`, `POST /api/media/commit` | Field workflows | Two-step (presign + commit) is one logical workflow; outbox stores the intent and the runner orchestrates both. |
@@ -84,8 +85,11 @@ need to scale with the master tables).
       The agreement file question is the pivot — if we're willing
       to queue PDF uploads through the same media path, the
       workflow becomes offline-eligible.
-- [ ] Decide the policy on offline student creation. §6.6 currently
-      assumes yes; the `offline-required` cache only holds active
-      students, so a child created offline shows up correctly only
-      once the placeholder UUID resolves on drain. Confirm this is
-      acceptable UX or downgrade to `online-only`.
+- [x] **Resolved (D35)** — offline student creation is `offline-eligible`
+      with a *visibility-after-sync* contract: a child created
+      offline does not appear in any read screen until the drain
+      succeeds and the next manifest pull lands. This eliminates
+      placeholder UUIDs and FK-rewrite-on-drain entirely; the cost
+      is that a VC who creates a new child cannot record an
+      achievement for them in the same offline session. See `§3.2.2`
+      row above and `decisions.md` D35.

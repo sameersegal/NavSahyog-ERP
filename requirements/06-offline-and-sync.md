@@ -194,10 +194,18 @@ Backoff schedule: 1s, 5s, 30s, 2m, 10m. Cap at 5 attempts, then
   **"discard local"**.
 - **Media** is never a conflict — each capture is a new object
   with a fresh UUID.
-- **Student creation offline** is allowed. If the server rejects
-  on validation (e.g. duplicate name + DOB + village + parent
-  phone), the item goes to `failed` and the user resolves in the
-  outbox screen.
+- **Student creation offline** is `offline-eligible` (decisions.md
+  D35) under the **visibility-after-sync** rule: the outbox row
+  carries the create payload + a client ULID idempotency key; the
+  server assigns the canonical `student.id` on drain. Until the
+  drain succeeds and the next manifest pull lands, the new child
+  does **not** appear in any read screen — not in `cache_students`,
+  not in the village children list, not in the achievement picker.
+  This is the working-principle-5 ("no optimistic UI") posture: it
+  eliminates placeholder UUIDs and the FK-rewrite-on-drain path
+  entirely. If the server rejects on validation (e.g. duplicate
+  name + DOB + village + parent phone), the item dead-letters and
+  the user resolves it from the outbox screen.
 
 ### 6.7 Clock skew
 

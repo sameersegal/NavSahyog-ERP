@@ -9,6 +9,60 @@ justification.
 
 ---
 
+## 2026-04-29 — Offline child creation under visibility-after-sync
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D35 | **`POST /api/children` is `offline-eligible` (additive-only contract surface), and offline-created children follow a *visibility-after-sync* rule: they do not appear in any read screen — not in `cache_students`, not in the village children list, not in the achievement picker — until the drain succeeds and the next manifest pull lands.** Allowing offline child creation matters because a VC's first interaction in a village is often "register a new child"; refusing offline would block that path on every connectivity gap. The simpler alternative (placeholder UUIDs that resolve on drain, with FK rewrites for any achievement / attendance row referencing them) was considered and rejected: it adds a stateful drain protocol, complicates conflict resolution, and creates a UX cliff if the placeholder fails validation post-hoc. The visibility-after-sync rule is the working-principle-5 ("no optimistic UI") posture applied consistently — server is the truth, the cache reflects the server, the outbox is just queued intent. The trade-off the field will see: a VC who creates a new child cannot record an achievement for them in the same offline session. They must wait until the next online window for the child to appear in pickers. The offset against this cost is the elimination of an entire class of merge / rewrite bugs. | The earlier `requirements/06-offline-and-sync.md` §6.6 wording that left the offline-create policy implicit ("Student creation offline is allowed. If the server rejects on validation … the user resolves in the outbox screen") and the open item in `requirements/offline-scope.md` ("Decide the policy on offline student creation"). Both were resolved by D35 and updated in the same commit. |
+
+### What lands with this decision
+
+- **`requirements/offline-scope.md`** — new row for §3.2.2 "Add child"
+  flipping `POST /api/children` from `online-only` (the default) to
+  `offline-eligible`, with the visibility-after-sync rule called out
+  in the Notes column. The pre-existing open item ("Decide the
+  policy on offline student creation") is marked resolved with a
+  back-pointer to D35.
+- **`requirements/06-offline-and-sync.md` §6.6** — the
+  one-paragraph "Student creation offline" bullet is replaced with
+  the explicit visibility-after-sync framing, and a back-pointer
+  to D35.
+- No other §3 / §5 / §11 changes ride with D35 — those changes
+  belong to the L4.1b implementation slice that wires the form +
+  outbox + manifest pieces together. Keeping the contract surface
+  (this PR) and the implementation (next PR) separate matches the
+  process rule in `requirements/offline-scope.md` for adding a
+  workflow as `offline-eligible`.
+
+### Knock-on effects
+
+- **L4.1 slicing**: D35's visibility-after-sync rule decouples the
+  achievements vertical slice (L4.1a — pick from already-synced
+  students, write achievement to outbox) from offline child creation
+  (L4.1b — create child to outbox, picker only sees them on next
+  manifest pull). Both can ship independently.
+- **L4.0d additive-only contract harness**: `POST /api/children`
+  joins the offline-eligible endpoint set, so its payload joins the
+  L4.0d regression corpus when L4.1b lands. The first corpus entry
+  has not yet shipped, so D35 doesn't change today's CI behaviour;
+  it sets the rule for next week's PR.
+
+### Open follow-ups
+
+- [ ] During L4.1b: confirm the existing `POST /api/children`
+      handler accepts an `Idempotency-Key` header and returns the
+      same response on a duplicate replay (the outbox runner relies
+      on this — §5.1). The server-side idempotency cache predates
+      the offline ladder, so a small audit will tell us whether any
+      shape changes are needed.
+- [ ] During L4.1b: pick the dead-letter UX for a duplicate
+      (name + DOB + village + parent_phone) collision. The current
+      §6.6 wording says "the user resolves it from the outbox
+      screen" — the L4.0d Outbox UI already supports re-edit /
+      discard, so this is likely a label question, not a code one.
+
+---
+
 ## 2026-04-29 — Shell service worker (overrules L4.0c "no SW")
 
 | # | Decision | Supersedes |
