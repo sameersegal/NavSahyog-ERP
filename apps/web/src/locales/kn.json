@@ -165,6 +165,9 @@
   "sync.update_available.action": "ರಿಫ್ರೆಶ್",
   "sync.update_available.dismiss": "ನಂತರ",
 
+  "offline.unavailable.title": "ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ",
+  "offline.unavailable.body": "ಈ ವೀಕ್ಷಣೆಗೆ ಲೈವ್ ಸಂಪರ್ಕ ಅಗತ್ಯ. ನೀವು ಆನ್‌ಲೈನ್‌ಗೆ ಮರಳಿದಾಗ ಡೇಟಾ ಲೋಡ್ ಆಗುತ್ತದೆ.",
+
   "outbox.title": "ಔಟ್‌ಬಾಕ್ಸ್",
   "outbox.subtitle": "ಈ ಸಾಧನದಲ್ಲಿ ಸರತಿಯಲ್ಲಿರುವ ಬದಲಾವಣೆಗಳು, ಸರ್ವರ್‌ಗೆ ತಲುಪಲು ಕಾಯುತ್ತಿವೆ.",
   "outbox.sync_now": "ಈಗ ಸಿಂಕ್ ಮಾಡಿ",

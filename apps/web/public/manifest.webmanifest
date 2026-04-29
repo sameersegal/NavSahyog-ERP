@@ -1,0 +1,26 @@
+{
+  "name": "NavSahyog ERP",
+  "short_name": "NavSahyog",
+  "description": "NavSahyog ERP — field operations.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1f7a56",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "281x321",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "281x321",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

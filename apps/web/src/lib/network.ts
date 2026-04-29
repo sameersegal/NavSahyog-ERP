@@ -8,7 +8,14 @@
 
 const PROBE_PATH = '/health';
 const PROBE_TIMEOUT_MS = 3_000;
-const CACHE_TTL_MS = 30_000;
+// TTL is asymmetric: a confirmed-online result is held for 30s so a
+// chatty UI doesn't refire probes constantly; a confirmed-offline
+// result is held for 2 minutes so an iOS PWA in airplane mode isn't
+// burning a 3s timeout every 30s on the bare chance the radio came
+// back. The `online` window event still force-probes immediately,
+// so the back-off only delays passive recovery, not active.
+const CACHE_TTL_ONLINE_MS = 30_000;
+const CACHE_TTL_OFFLINE_MS = 2 * 60_000;
 
 export type NetworkStatus = 'online' | 'offline' | 'unknown';
 
@@ -54,7 +61,9 @@ export async function detectNetwork(
   inFlight = (async () => {
     try {
       const status = await rawProbe();
-      cache = { status, expiresAt: Date.now() + CACHE_TTL_MS };
+      const ttl =
+        status === 'offline' ? CACHE_TTL_OFFLINE_MS : CACHE_TTL_ONLINE_MS;
+      cache = { status, expiresAt: Date.now() + ttl };
       return status;
     } finally {
       inFlight = null;

@@ -9,6 +9,55 @@ justification.
 
 ---
 
+## 2026-04-29 — Shell service worker (overrules L4.0c "no SW")
+
+| # | Decision | Supersedes |
+|---|---|---|
+| D34 | **Ship a minimal shell-only service worker + Web App Manifest so an Add-to-Home-Screen PWA loads when the device is offline. The SW caches the app shell (HTML, JS, CSS, images) keyed by APP_BUILD; old-build caches purge on activate. Every data endpoint (`/api/*`, `/auth/*`, `/health`) bypasses the cache so offline-eligible workflows still fail fast and surface the spec'd offline UX. Empirical trigger: an iOS Safari Add-to-Home-Screen install with airplane mode enabled lands on a blank shell because no SW is registered to satisfy the navigation request — the field-tested baseline that L4.0c assumed "data-offline workflows are enough" turns out not to cover.** Field reality on iOS Safari is that without a SW the launcher icon resolves to a network-load attempt that fails outright when offline, so the app shell never paints. Caching the shell costs nothing on the data contract surface: it's URL-keyed by build, so a deploy automatically invalidates, and the runtime never touches data routes. The N-7 compat window in D31 still applies — the SW's cache lifetime tracks the same `APP_BUILD` identifier, so an out-of-window build flushes its old shell and the upgrade banner still drives the user to refresh. iOS PWA is the immediate motivator (active testing on iOS even though Android is the bulk of users); Android Chrome benefits identically. | L4.0c's *"No service worker — the soft signal travels on response headers, which is enough for data-offline workflows."* L4.0c stays correct for the *data* layer; the shell-load gap on iOS Safari was simply not in scope when that decision was taken. |
+
+### What lands with this decision
+
+- **`apps/web/public/sw.js` (new):** the shell SW — install caches a
+  small bootstrap set, fetch handler is network-first for navigation
+  with cache fallback, cache-first for hashed assets, pass-through
+  for `/api`, `/auth`, `/health`. Cache key embeds `APP_BUILD` from
+  the registration query string.
+- **`apps/web/public/manifest.webmanifest` (new):** Web App Manifest
+  — name, short_name, start_url, display=standalone, theme_color,
+  icons. Wired in `index.html` alongside iOS-specific
+  `apple-touch-icon` + `apple-mobile-web-app-*` meta.
+- **`apps/web/src/lib/sw.ts` (new):** registration helper, called
+  from `main.tsx` only when `import.meta.env.PROD` (dev mode skips
+  registration so HMR is unaffected).
+- **Spec'd offline UX bug fixes:**
+  Home (§3.6.4) and Dashboard (§3.6) now render the
+  `OfflineUnavailable` card when fetch fails *and* the network is
+  detected as offline, instead of latching on the loading skeleton
+  or rendering a raw error. Matches the offline-scope.md row that
+  says these screens are `online-only` with a "data unavailable"
+  empty state.
+- **Sluggishness mitigations:**
+  Achievements page no longer fans out one `GET /api/children` per
+  visible village when no filter is set; the form fetches its own
+  picker source on demand. The network-detection cache stretches to
+  2 minutes when offline, and the chrome's poll interval matches —
+  an iOS PWA in airplane mode no longer spends a 3s timeout every
+  30s on the bare chance the radio came back. The `online` window
+  event still force-probes immediately, so recovery is event-driven.
+
+### Open follow-ups
+
+- [ ] Square PWA icon assets at 192×192 and 512×512. The current
+      `logo.png` (281×321, non-square) covers the manifest but iOS
+      will letterbox at install time. Low-effort follow-up; not a
+      blocker for the offline fix.
+- [ ] Audit other `online-only` read screens (Masters, Training
+      Manuals, Ponds list) for the same loading-skeleton-forever
+      bug Home and Dashboard had. Likely the same one-line fix per
+      page.
+
+---
+
 ## 2026-04-27 — L4.0e (replay tool + cache integrity) deferred
 
 | # | Decision | Supersedes |

@@ -36,10 +36,13 @@ import {
 } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
+import { useSyncState } from '../lib/sync-state';
+import { OfflineUnavailable } from '../components/OfflineUnavailable';
 
 export function Home() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { network } = useSyncState();
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<HomeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +73,17 @@ export function Home() {
   }
 
   if (!user) return null;
+  // §3.6.4 is `online-only` per requirements/offline-scope.md — when
+  // the dashboard fetch fails because the device is actually offline
+  // (HEAD probe says so, or the OS reports `!navigator.onLine`), show
+  // the spec'd "data unavailable" card instead of a raw error or a
+  // forever-loading skeleton.
+  const browserOffline =
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+  const isOffline = network === 'offline' || browserOffline;
+  if (error && isOffline) return <OfflineUnavailable />;
   if (error) return <p className="text-danger">{error}</p>;
+  if (!data && isOffline) return <OfflineUnavailable />;
   if (!data) return <HomeSkeleton />;
 
   const hasAnyWrite = user.capabilities.some((cap) => cap.endsWith('.write'));

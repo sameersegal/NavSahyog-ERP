@@ -15,6 +15,8 @@ import {
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { ScopePicker } from '../components/ScopePicker';
+import { OfflineUnavailable } from '../components/OfflineUnavailable';
+import { useSyncState } from '../lib/sync-state';
 
 // Where the user lands when they first open the dashboard (or when
 // they switch metrics). Super admins and anyone without a scope
@@ -115,6 +117,7 @@ function readStateFromUrl(
 export function Dashboard() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { network } = useSyncState();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const fallbackPos: Position = user
@@ -371,7 +374,20 @@ export function Dashboard() {
         </nav>
       )}
 
-      {err && <p className="text-sm text-danger">{err}</p>}
+      {/* §3.6 dashboards are `online-only` per offline-scope.md.
+          When the fetch fails because the device is actually offline,
+          surface the spec'd "data unavailable" card; reserve the raw
+          error message for genuine server-side failures. */}
+      {err && (() => {
+        const browserOffline =
+          typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = network === 'offline' || browserOffline;
+        return isOffline ? (
+          <OfflineUnavailable />
+        ) : (
+          <p className="text-sm text-danger">{err}</p>
+        );
+      })()}
       {loading && !data && <p className="text-muted-fg">{t('common.loading')}</p>}
 
       {data?.consolidated && data.child_level !== 'detail' && (

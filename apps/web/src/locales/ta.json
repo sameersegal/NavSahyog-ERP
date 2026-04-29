@@ -165,6 +165,9 @@
   "sync.update_available.action": "புதுப்பி",
   "sync.update_available.dismiss": "பின்னர்",
 
+  "offline.unavailable.title": "ஆஃப்லைனில் தரவு கிடைக்கவில்லை",
+  "offline.unavailable.body": "இந்த காட்சிக்கு நேரடி இணைப்பு தேவை. நீங்கள் ஆன்லைனுக்கு வரும்போது தரவு ஏற்றப்படும்.",
+
   "outbox.title": "வெளியனுப்பு பெட்டி",
   "outbox.subtitle": "இந்த சாதனத்தில் வரிசையில் உள்ள மாற்றங்கள், சேவையகத்தை அடைய காத்திருக்கின்றன.",
   "outbox.sync_now": "இப்போது ஒத்திசை",

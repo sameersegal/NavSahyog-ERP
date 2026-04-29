@@ -6,7 +6,10 @@ import { AuthProvider } from './auth';
 import { ThemeProvider } from './theme';
 import { LanguageProvider } from './i18n';
 import { SyncStateProvider } from './lib/sync-state';
+import { registerServiceWorker } from './lib/sw';
 import './index.css';
+
+if (import.meta.env.PROD) registerServiceWorker();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -167,6 +167,9 @@
   "sync.update_available.action": "Refresh",
   "sync.update_available.dismiss": "Later",
 
+  "offline.unavailable.title": "Data unavailable offline",
+  "offline.unavailable.body": "This view needs a live connection. Your data will load when you're back online.",
+
   "outbox.title": "Outbox",
   "outbox.subtitle": "Mutations queued on this device, waiting to reach the server.",
   "outbox.sync_now": "Sync now",
