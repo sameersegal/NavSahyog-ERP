@@ -64,6 +64,7 @@ export type {
   ManifestResponse,
   ManifestVillage,
   ManifestStudent,
+  ManifestEvent,
 } from './sync';
 export {
   BUILD_ID_HEADER,

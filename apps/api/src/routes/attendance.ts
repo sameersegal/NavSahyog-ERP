@@ -8,6 +8,7 @@ import { requireAuth } from '../auth';
 import { requireCap } from '../policy';
 import { assertVillageInScope } from '../scope';
 import { err } from '../lib/errors';
+import { withIdempotency } from '../lib/idempotency';
 import { isIsoDate, nowEpochSeconds, todayIstDate } from '../lib/time';
 import type { Bindings, Variables } from '../types';
 
@@ -110,6 +111,13 @@ attendance.get('/', requireCap('attendance.read'), async (c) => {
   return c.json({ date, sessions: payload });
 });
 
+// L4.1c — POST /api/attendance is `offline-required` per
+// offline-scope.md §3.3. The handler is already domain-idempotent
+// via the UPSERT on (village_id, date, event_id), but we still
+// wrap with withIdempotency for consistency with the rest of the
+// offline-eligible POSTs and so an outbox replay with the same
+// key returns a byte-identical response without re-running the
+// UPSERT + delete-and-reinsert marks dance.
 attendance.post('/', requireCap('attendance.write'), async (c) => {
   const user = c.get('user');
   const body = await c.req.json<PostBody>().catch(() => ({}) as PostBody);
@@ -193,46 +201,50 @@ attendance.post('/', requireCap('attendance.write'), async (c) => {
     voiceNoteMediaId = vnId;
   }
 
-  const now = nowEpochSeconds();
-  // UPSERT on (village_id, date, event_id). On first insert
-  // updated_at/by stay NULL so "never updated" is distinguishable
-  // from "just updated"; on conflict both columns are populated and
-  // start_time / end_time may be edited — spec §3.3.3.
-  const session = await c.env.DB.prepare(
-    `INSERT INTO attendance_session
-       (village_id, event_id, date, start_time, end_time, voice_note_media_id,
-        created_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(village_id, date, event_id) DO UPDATE SET
-       start_time = excluded.start_time,
-       end_time = excluded.end_time,
-       voice_note_media_id = excluded.voice_note_media_id,
-       updated_at = ?,
-       updated_by = ?
-     RETURNING id`,
-  )
-    .bind(
-      villageId, eventId, date, startTime, endTime, voiceNoteMediaId,
-      now, user.id,
-      now, user.id,
+  return withIdempotency(c, async () => {
+    const now = nowEpochSeconds();
+    // UPSERT on (village_id, date, event_id). On first insert
+    // updated_at/by stay NULL so "never updated" is distinguishable
+    // from "just updated"; on conflict both columns are populated and
+    // start_time / end_time may be edited — spec §3.3.3.
+    const session = await c.env.DB.prepare(
+      `INSERT INTO attendance_session
+         (village_id, event_id, date, start_time, end_time, voice_note_media_id,
+          created_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(village_id, date, event_id) DO UPDATE SET
+         start_time = excluded.start_time,
+         end_time = excluded.end_time,
+         voice_note_media_id = excluded.voice_note_media_id,
+         updated_at = ?,
+         updated_by = ?
+       RETURNING id`,
     )
-    .first<{ id: number }>();
-  if (!session) return err(c, 'internal_error', 500, 'session not created');
-  const sessionId = session.id;
-  const ops: D1PreparedStatement[] = [
-    c.env.DB.prepare('DELETE FROM attendance_mark WHERE session_id = ?').bind(
-      sessionId,
-    ),
-  ];
-  for (const m of marks) {
-    ops.push(
-      c.env.DB.prepare(
-        'INSERT INTO attendance_mark (session_id, student_id, present) VALUES (?, ?, ?)',
-      ).bind(sessionId, m.student_id, m.present ? 1 : 0),
-    );
-  }
-  await c.env.DB.batch(ops);
-  return c.json({ session_id: sessionId, count: marks.length });
+      .bind(
+        villageId, eventId, date, startTime, endTime, voiceNoteMediaId,
+        now, user.id,
+        now, user.id,
+      )
+      .first<{ id: number }>();
+    if (!session) {
+      return { status: 500, body: { error: { code: 'internal_error', message: 'session not created' } } };
+    }
+    const sessionId = session.id;
+    const ops: D1PreparedStatement[] = [
+      c.env.DB.prepare('DELETE FROM attendance_mark WHERE session_id = ?').bind(
+        sessionId,
+      ),
+    ];
+    for (const m of marks) {
+      ops.push(
+        c.env.DB.prepare(
+          'INSERT INTO attendance_mark (session_id, student_id, present) VALUES (?, ?, ?)',
+        ).bind(sessionId, m.student_id, m.present ? 1 : 0),
+      );
+    }
+    await c.env.DB.batch(ops);
+    return { status: 200, body: { session_id: sessionId, count: marks.length } };
+  });
 });
 
 export default attendance;

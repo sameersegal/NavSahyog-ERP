@@ -59,6 +59,7 @@ async function doPull(): Promise<ManifestResponse | null> {
   await replaceSnapshot({
     villages: body.villages,
     students: body.students,
+    events: body.events,
     generatedAt: body.generated_at,
   });
   return body;

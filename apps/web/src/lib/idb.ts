@@ -16,7 +16,7 @@ const DB_NAME = 'navsahyog';
 
 // Bump this with every new migration. Migrations array length must
 // equal LATEST_VERSION; the assertion at module load catches drift.
-const LATEST_VERSION = 2;
+const LATEST_VERSION = 3;
 
 type MigrationStep = (db: IDBDatabase, tx: IDBTransaction) => void;
 
@@ -52,6 +52,14 @@ const migrations: readonly MigrationStep[] = [
     // village_id". Without it we'd `getAll().filter()` per render.
     students.createIndex('by_village_id', 'village_id', { unique: false });
     db.createObjectStore('meta', { keyPath: 'key' });
+  },
+  // v3 — `cache_events` store for L4.1c. Events are a small global
+  // picklist (one row per event kind/name), so no scope index is
+  // needed. The manifest pull wipes-and-reseeds together with
+  // villages + students; adding a separate store keeps the schema
+  // consistent (every cache_* shares the same lifecycle).
+  (db) => {
+    db.createObjectStore('cache_events', { keyPath: 'id' });
   },
 ];
 
@@ -154,6 +162,7 @@ export type IdbStoreName =
   | 'outbox'
   | 'cache_villages'
   | 'cache_students'
+  | 'cache_events'
   | 'meta';
 
 export async function tx<T>(
