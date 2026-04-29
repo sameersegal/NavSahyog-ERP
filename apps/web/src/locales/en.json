@@ -10,13 +10,6 @@
   "nav.masters": "Masters",
   "nav.more": "More",
 
-  "auth.login.hint": "Lab build. Try {creds}.",
-  "auth.login.user_id": "User ID",
-  "auth.login.password": "Password",
-  "auth.login.show_password": "Show password",
-  "auth.login.hide_password": "Hide password",
-  "auth.login.submit": "Sign in",
-  "auth.login.submitting": "Signing in…",
   "auth.logout": "Sign out",
 
   "common.cancel": "Cancel",

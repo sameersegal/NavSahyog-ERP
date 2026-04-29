@@ -25,19 +25,19 @@ describe('i18n', () => {
   it('returns the English string by default', () => {
     render(
       <LanguageProvider>
-        <Probe keyName="auth.login.submit" />
+        <Probe keyName="auth.logout" />
       </LanguageProvider>,
     );
-    expect(screen.getByTestId('out')).toHaveTextContent('Sign in');
+    expect(screen.getByTestId('out')).toHaveTextContent('Sign out');
   });
 
   it('interpolates {param} placeholders', () => {
     render(
       <LanguageProvider>
-        <Probe keyName="auth.login.hint" params={{ creds: 'alice / pw' }} />
+        <Probe keyName="home.heading" params={{ scope: 'Anandpur' }} />
       </LanguageProvider>,
     );
-    expect(screen.getByTestId('out')).toHaveTextContent('Lab build. Try alice / pw.');
+    expect(screen.getByTestId('out')).toHaveTextContent('Anandpur overview');
   });
 
   it('selects the correct plural form', () => {
@@ -73,14 +73,14 @@ describe('i18n', () => {
     render(
       <LanguageProvider>
         <Switcher to="hi" />
-        <Probe keyName="auth.login.submit" />
+        <Probe keyName="auth.logout" />
       </LanguageProvider>,
     );
-    expect(screen.getByTestId('out')).toHaveTextContent('Sign in');
+    expect(screen.getByTestId('out')).toHaveTextContent('Sign out');
     act(() => {
       screen.getByTestId('switch').click();
     });
-    expect(screen.getByTestId('out')).toHaveTextContent('साइन इन करें');
+    expect(screen.getByTestId('out')).toHaveTextContent('साइन आउट');
     expect(window.localStorage.getItem('nsf.lang')).toBe('hi');
     expect(document.documentElement.lang).toBe('hi');
   });

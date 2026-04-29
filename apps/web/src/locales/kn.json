@@ -8,13 +8,6 @@
   "nav.ponds": "ಕೆರೆಗಳು",
   "nav.more": "ಇನ್ನಷ್ಟು",
 
-  "auth.login.hint": "ಲ್ಯಾಬ್ ಬಿಲ್ಡ್. {creds} ಪ್ರಯತ್ನಿಸಿ.",
-  "auth.login.user_id": "ಬಳಕೆದಾರ ಐಡಿ",
-  "auth.login.password": "ಪಾಸ್‌ವರ್ಡ್",
-  "auth.login.show_password": "ಪಾಸ್‌ವರ್ಡ್ ತೋರಿಸಿ",
-  "auth.login.hide_password": "ಪಾಸ್‌ವರ್ಡ್ ಮರೆಮಾಡಿ",
-  "auth.login.submit": "ಸೈನ್ ಇನ್",
-  "auth.login.submitting": "ಸೈನ್ ಇನ್ ಆಗುತ್ತಿದೆ…",
   "auth.logout": "ಸೈನ್ ಔಟ್",
 
   "common.cancel": "ರದ್ದು ಮಾಡಿ",
