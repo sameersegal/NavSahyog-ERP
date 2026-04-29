@@ -24,7 +24,7 @@ capabilities (`pond.read`, `pond.write`); decisions.md D25–D28.
 | Sub | Scope | Status |
 |---|---|---|
 | L3.0 | §3.6.4 Field-Dashboard Home — doer branch | landed (PR #40) |
-| L3.0b | §3.6.4 Field-Dashboard Home — observer branch | in flight |
+| L3.0b | §3.6.4 Field-Dashboard Home — observer branch | landed (PR #44) |
 | L3.1 | §3.8.7 Master Creations — villages, schools, events / activities, qualifications, users (D21–D24); list + create + edit, soft-delete deferred | landed |
 | L3.1.1 | §3.8.8 Training manuals — read-only `/training-manuals` for every role + Master Creations tab for Super Admin CRUD | landed |
 | L3.2 | §3.8.1 Profile — read-only page | carved out, not started |
