@@ -14,6 +14,7 @@ Refs: §3.1 · CRA: create-only · Offline: write=online-only, read=online-only
 | Method | Path | Capability | Roles | Idempotent |
 |---|---|---|---|---|
 | POST | `/login` | public | — | — |
+| POST | `/exchange` | public | — | — |
 | POST | `/logout` | public | — | — |
 | GET | `/me` | auth | any authenticated | — |
 
@@ -26,6 +27,14 @@ Refs: §3.8.7 · CRA: create-only · Offline: write=online-only, read=online-onl
 | GET | `/` | `user.write` | super_admin | — |
 | POST | `/` | `user.write` | super_admin | — |
 | PATCH | `/:id` | `user.write` | super_admin | — |
+
+### webhooks/clerk — `apps/api/src/routes/webhooks_clerk.ts`
+
+Refs: D36 · CRA: create-only · Offline: write=online-only
+
+| Method | Path | Capability | Roles | Idempotent |
+|---|---|---|---|---|
+| POST | `/clerk` | public | — | — |
 
 ## masters
 
