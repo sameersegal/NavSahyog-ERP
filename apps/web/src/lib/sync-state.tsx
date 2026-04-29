@@ -63,7 +63,14 @@ const ZERO_COUNTS: OutboxCounts = {
 
 const Ctx = createContext<SyncStateValue | null>(null);
 
-const PROBE_INTERVAL_MS = 30_000;
+// Interval at which the chrome re-checks network state. Asymmetric:
+// when we believe we're online we poll briskly so a connectivity
+// drop is reflected within ~30s; when we believe we're offline we
+// stretch the interval so an idle PWA on airplane mode isn't pinging
+// every 30s. The `online` window event still triggers an immediate
+// force-probe regardless, so recovery is event-driven, not poll-bound.
+const PROBE_INTERVAL_ONLINE_MS = 30_000;
+const PROBE_INTERVAL_OFFLINE_MS = 2 * 60_000;
 
 export function SyncStateProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<NetworkStatus>('unknown');
@@ -100,18 +107,29 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
   }, [network, refreshCounts]);
 
   // Initial network probe + interval. The cache inside detectNetwork
-  // keeps the actual network traffic light.
+  // keeps the actual network traffic light. Interval is rescheduled
+  // off the latest known network state via a recursive setTimeout,
+  // so an offline-latched session backs off without churning timers
+  // on every probe completion.
   useEffect(() => {
     let cancelled = false;
-    const tick = () => {
+    let timer: number | null = null;
+    const schedule = () => {
       if (cancelled) return;
-      void probe();
+      const delay =
+        network === 'offline'
+          ? PROBE_INTERVAL_OFFLINE_MS
+          : PROBE_INTERVAL_ONLINE_MS;
+      timer = window.setTimeout(async () => {
+        if (cancelled) return;
+        await probe();
+        schedule();
+      }, delay);
     };
-    tick();
-    const interval = window.setInterval(tick, PROBE_INTERVAL_MS);
+    void probe();
+    schedule();
     const handleOnline = () => {
       void probe(true);
-      // Coming back online — drain whatever's queued.
       void syncNow();
     };
     const handleOffline = () => setNetwork('offline');
@@ -119,15 +137,15 @@ export function SyncStateProvider({ children }: { children: ReactNode }) {
     window.addEventListener('offline', handleOffline);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      if (timer !== null) window.clearTimeout(timer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-    // syncNow depends on `network`; we deliberately don't refire the
-    // mount effect on every network change (the probe + listeners
-    // handle that). Captured `syncNow` reads `network` via closure.
+    // We depend on `network` so the next interval picks up the new
+    // back-off when state changes, but `syncNow` is read via closure
+    // to avoid double-firing the mount effect on every count update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [probe]);
+  }, [probe, network]);
 
   // Initial outbox count + subscribe to mutations from any tab/page.
   useEffect(() => {

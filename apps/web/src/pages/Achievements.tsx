@@ -38,7 +38,6 @@ export function Achievements() {
   const [to, setTo] = useState(todayIstDate());
   const [typeFilter, setTypeFilter] = useState<AchievementType | ''>('');
   const [rows, setRows] = useState<AchievementWithStudent[] | null>(null);
-  const [children, setChildren] = useState<Child[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>({ kind: 'none' });
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -66,25 +65,6 @@ export function Achievements() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // Children picker source. If the user has scoped into a village via
-  // the filter, only that village's children are selectable — matches
-  // how a VC experiences the page. With no filter, union across
-  // scope-visible villages.
-  useEffect(() => {
-    if (villageId) {
-      api
-        .children(villageId)
-        .then((r) => setChildren(r.children))
-        .catch(() => setChildren([]));
-    } else {
-      Promise.all(
-        villages.map((v) =>
-          api.children(v.id).then((r) => r.children).catch(() => []),
-        ),
-      ).then((lists) => setChildren(lists.flat()));
-    }
-  }, [villageId, villages]);
 
   const editing = useMemo(() => {
     if (panel.kind !== 'edit' || !rows) return null;
@@ -128,7 +108,6 @@ export function Achievements() {
         <AchievementForm
           mode="add"
           villages={villages}
-          children={children}
           defaultVillageId={villageId}
           onSaved={() => {
             setPanel({ kind: 'none' });
@@ -143,7 +122,6 @@ export function Achievements() {
           mode="edit"
           existing={editing}
           villages={villages}
-          children={children}
           onSaved={() => {
             setPanel({ kind: 'none' });
             load();
@@ -344,7 +322,6 @@ type FormProps =
       mode: 'add';
       defaultVillageId: number | null;
       villages: VillageT[];
-      children: Child[];
       onSaved: () => void;
       onCancel: () => void;
       existing?: undefined;
@@ -353,13 +330,12 @@ type FormProps =
       mode: 'edit';
       existing: AchievementWithStudent;
       villages: VillageT[];
-      children: Child[];
       onSaved: () => void;
       onCancel: () => void;
     };
 
 function AchievementForm(props: FormProps) {
-  const { mode, villages, children, onSaved, onCancel } = props;
+  const { mode, villages, onSaved, onCancel } = props;
   const { t } = useI18n();
 
   const isEdit = mode === 'edit';
@@ -380,10 +356,33 @@ function AchievementForm(props: FormProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const childrenInVillage = useMemo(() => {
-    if (!villageId) return children;
-    return children.filter((c) => c.village_id === villageId);
-  }, [children, villageId]);
+  // Children for the picker are fetched lazily for the current
+  // form's villageId — only when the form is open and a village is
+  // chosen. Replaces a former page-level fan-out across all villages
+  // (one fetch per village, in parallel), which produced N parallel
+  // failures offline and was wasteful even online.
+  const [childrenInVillage, setChildrenInVillage] = useState<Child[]>([]);
+  useEffect(() => {
+    // Edit mode disables the student dropdown entirely, so there's
+    // no need to fetch the picker source.
+    if (isEdit) return;
+    if (!villageId) {
+      setChildrenInVillage([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .children(villageId)
+      .then((r) => {
+        if (!cancelled) setChildrenInVillage(r.children);
+      })
+      .catch(() => {
+        if (!cancelled) setChildrenInVillage([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, villageId]);
 
   // When the village changes, reset the student if the currently
   // selected child isn't in it.

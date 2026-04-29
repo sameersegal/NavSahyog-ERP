@@ -161,6 +161,9 @@
   "sync.update_available.action": "ताज़ा करें",
   "sync.update_available.dismiss": "बाद में",
 
+  "offline.unavailable.title": "ऑफ़लाइन में डेटा उपलब्ध नहीं",
+  "offline.unavailable.body": "इस स्क्रीन के लिए लाइव कनेक्शन ज़रूरी है। ऑनलाइन होते ही आपका डेटा लोड हो जाएगा।",
+
   "outbox.title": "आउटबॉक्स",
   "outbox.subtitle": "इस डिवाइस पर कतारबद्ध परिवर्तन, सर्वर तक पहुँचने की प्रतीक्षा में।",
   "outbox.sync_now": "अभी सिंक करें",
