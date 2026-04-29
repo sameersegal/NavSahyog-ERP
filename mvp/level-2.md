@@ -1,82 +1,59 @@
 # Level 2 — Full write loop + full drill-down dashboards
 
-**Status:** landed. L1 merged (PRs #18–#21). L2.0 and L2.1 landed
-(PR #22). L2.2 landed (PR #23). L2.3 landed (PR #24). L2.4 landed
-(PR #25). Polish follow-on scoped as L2.5
-(see [`level-2.5.md`](./level-2.5.md)); L2.5.3 pulls §3.6.2
-forward from L3 into the drill-down dashboard (decisions.md D12).
+**Status: landed end-to-end.** PRs #22–#25 cover L2.0 through L2.4.
+L2.5 (mobile-first polish + §3.6.2 fold) shipped as PR #31 — see
+[`level-2.5.md`](./level-2.5.md). L2.4b (media-pipeline backlog)
+remains pending — see [`level-2.4b.md`](./level-2.4b.md).
 
-## Goal
+## What L2 proved
 
 Every daily-capture workflow a field user performs, and every
-drill-down view a manager uses. Auth stays trivial.
+drill-down view a manager uses. Auth stayed trivial.
 
-## L2 ordering (decisions.md, 2026-04-20)
+## What shipped (per sub-level)
 
-L2 is split into five sub-levels. Each sub-level is a self-contained
-PR; the whole thing rolls up to one "L2" status line when 2.4 lands.
-
-| Sub | Theme | Status |
+| Sub | Theme | PR |
 |---|---|---|
-| **L2.0** | Decisions landed + `app_settings` dropped + `wrangler d1 migrations` tool + District/Region/State/Zone admin roles end-to-end | ✅ |
-| **L2.1** | Children full form — parents, alt contact, edit, graduate. No photo (media is L2.4). | ✅ |
-| **L2.2** | Attendance full form — event picker, today/-1/-2 window, start/end time. No voice note (media is L2.4). | ✅ |
-| **L2.3** | Achievements + full drill-down dashboard across all geo levels + **CSV** export (decisions.md D2). | ✅ |
-| **L2.4** | Media pipeline end-to-end against wrangler `--local` R2: presign / commit, child photo, voice note, capture screen (photo + video + audio) with EXIF + geo, 50 MiB single-PUT cap across all kinds (decisions.md D3, D7–D11). Production R2 binding deferred to first real deploy. | ✅ |
+| L2.0 | Decisions landed + `app_settings` dropped + `wrangler d1 migrations` tool + District / Region / State / Zone admin roles end-to-end | #22 |
+| L2.1 | Children full form — parents, alt contact, edit, graduate. (Photo lands in L2.4.) | #22 |
+| L2.2 | Attendance full form — event picker, today/-1/-2 window, start/end time. (Voice note lands in L2.4.) | #23 |
+| L2.3 | Achievements + full drill-down dashboard across all geo levels + CSV export (D2) | #24 |
+| L2.4 | Media pipeline end-to-end against wrangler `--local` R2: presign / commit, child photo, voice note, capture screen (photo + video + audio) with EXIF + geo, 50 MiB single-PUT cap across all kinds (D3, D7–D11). Production R2 binding deferred to first real deploy. | #25 |
 
-## In scope (across the five sub-levels)
+## What was in scope
 
-- **All admin roles (§2.1, §2.3).** Add District / Region / State /
-  Zone Admin to the seed and to the scope-enforcement logic.
-- **Children full form (§3.2.2, §3.2.3, §3.2.4).**
-  - Parent fields: father / mother name + phone + smartphone flag;
-    alt contact required when neither parent has a smartphone.
-  - Child photo via R2 presigned PUT (§7) — L2.4.
-  - Edit child, graduate child (graduation date + reason).
-- **Attendance full form (§3.3).** Event picker from seeded events,
-  today / today-1 / today-2 window, start/end time, voice note
-  (audio blob to R2 — L2.4).
-- **Capture (§3.4) — L2.4.** Camera / video via browser APIs. Tag
-  event or activity. EXIF GPS extract; `navigator.geolocation`
-  fallback. R2 multipart for video. AF village-pick at upload.
+- **All admin roles (§2.1, §2.3).** District / Region / State / Zone
+  added to seed + scope-enforcement.
+- **Children full form (§3.2.2–§3.2.4).** Parent fields, alt-contact
+  rule when neither parent has a smartphone, child photo, edit,
+  graduate.
+- **Attendance full form (§3.3).** Event picker, today / -1 / -2
+  window, start/end time, voice note.
+- **Capture (§3.4).** Camera / video via browser APIs. Tag event or
+  activity. EXIF GPS extract; `navigator.geolocation` fallback. AF
+  village-pick at upload.
 - **Achievements (§3.5).** SoM / Gold / Silver. Per-month SoM
-  uniqueness enforced by the partial unique index (§4.3.6).
-- **Drill-down dashboard, all 5 tiles (§3.6.1).** VC / AF / Children
-  / Attendance / Achievements. Full India → Zone → State → Region →
-  District → Cluster → Village drill. **CSV** export at every level
-  (§3.6.3; decisions.md D2).
+  uniqueness via partial unique index (§4.3.6).
+- **Drill-down dashboard (§3.6.1).** All 5 tiles, full India → Zone
+  → State → Region → District → Cluster → Village drill. CSV export
+  at every level (§3.6.3, D2).
 
-## Explicitly deferred
+## What was deferred (still)
 
-- Consolidated dashboard (§3.6.2) — folded into §3.6.1 in L2.5.3 (D12).
-- Master Creations (§3.8.7) — L3.
-- Profile (§3.8.1) — L3.
-- *(§3.8.2–§3.8.6 cancelled in decisions.md D15.)*
+- Consolidated dashboard (§3.6.2) — folded into §3.6.1 in L2.5.3 per D12.
+- Media-pipeline follow-ups (transcode, multipart, derive queue,
+  thumbnails, AWS4) — see `level-2.4b.md` (D7–D11).
+- Master Creations (§3.8.7) — landed in L3.1.
+- Profile (§3.8.1) — L3.2.
+- §3.8.2–§3.8.6 cancelled (D15).
 - Offline (§3.7, §6) — L4.
-- Auth hardening (§3.1.2–§3.1.4) — L5.
-- Audit log, compliance (§9) — L5.
-- Retention cron — **cancelled** (decisions.md D4; out-of-system).
+- Auth hardening, audit log, compliance — L5.
+- Retention cron — cancelled (D4, out-of-system).
 
-## Acceptance
+## Notes for future work
 
-1. VC can submit a full attendance session (event + voice note,
-   voice note landing in L2.4) and the village chip turns green
-   for that date.
-2. AF uploading a photo (L2.4) is prompted to pick a village; the
-   photo appears on the attributed village's detail screen.
-3. Adding a second SoM for the same student in the same month
-   replaces the first (dashboard count stays at 1).
-4. Graduating a child removes them from attendance lists for
-   sessions after the graduation date.
-5. District+ admin dashboard shows data aggregated across all
-   clusters in their district; CSV export matches the on-screen
-   table column-for-column.
-6. A District admin request for a sibling district returns `403`.
-
-## Notes
-
-- R2 runs against wrangler `--local` throughout L2.4. Production
-  bucket binding is a deploy-time concern.
+- R2 ran against wrangler `--local` throughout L2.4. Production
+  bucket binding is a deploy-time concern (L5 / first real deploy).
 - R2 multipart failure handling (L2.4): retry from last good part;
   surface a clear error banner if all retries exhausted. No silent
   drop.
