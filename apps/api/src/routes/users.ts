@@ -13,6 +13,12 @@ import type { RouteMeta } from '../lib/route-meta';
 // derive scope_level — fewer ways to construct an invalid row, and
 // the create form doesn't need a 2-step level/role picker.
 const SCOPE_FOR_ROLE: Record<Role, ScopeLevel> = {
+  // `pending` only appears on rows the /webhooks/clerk handler
+  // inserted before an admin assigned a real role. The PATCH path
+  // rejects `pending` as an incoming role (parseRole guards on
+  // ROLES, which omits it), so this entry is only here for
+  // type-completeness — never actually consumed.
+  pending: 'pending',
   vc: 'village',
   af: 'cluster',
   cluster_admin: 'cluster',
@@ -23,9 +29,11 @@ const SCOPE_FOR_ROLE: Record<Role, ScopeLevel> = {
   super_admin: 'global',
 };
 
-// Maps each non-global scope_level to the table whose id it
-// references. Used to check the scope_id exists before insert.
-const SCOPE_TABLE: Record<Exclude<ScopeLevel, 'global'>, string> = {
+// Maps each geo scope_level to the table whose id it references.
+// Used to check the scope_id exists before insert. Excludes the
+// scope_levels that have no scope_id at all (`global` for super
+// admin, `pending` for unpromoted Clerk-provisioned rows).
+const SCOPE_TABLE: Record<Exclude<ScopeLevel, 'global' | 'pending'>, string> = {
   village: 'village',
   cluster: 'cluster',
   district: 'district',
@@ -129,6 +137,11 @@ async function validateScope(
   scopeLevel: ScopeLevel,
   scopeId: number | null,
 ): Promise<string | null> {
+  // `pending` is webhook-internal; the admin POST/PATCH paths never
+  // pass it (parseRole rejects it), so this is a defensive guard.
+  if (scopeLevel === 'pending') {
+    return 'pending scope cannot be assigned';
+  }
   if (scopeLevel === 'global') {
     if (scopeId !== null) return 'scope_id must be null for global scope';
     return null;

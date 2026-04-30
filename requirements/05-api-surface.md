@@ -50,11 +50,15 @@ that constrains every `/api/programs/*` route.
 - **Content type**: `application/json` only. Media uploads use
   presigned R2 URLs, not multipart through the Worker.
 
-### 5.2 Authentication — `/auth/*`
+### 5.2 Authentication — `/auth/*`, `/webhooks/clerk`
 
-See `apps/api/src/routes/auth.ts` for the wire shape and the
-`generated/endpoints.md` matrix for the per-route capability /
-offline mode. Section number retained for stable cross-references.
+See `apps/api/src/routes/auth.ts` (login / exchange / logout /
+me) and `apps/api/src/routes/webhooks_clerk.ts` (the Svix-signed
+provisioning endpoint that creates and updates local user rows in
+response to Clerk events). The `generated/endpoints.md` matrix
+carries the per-route capability / offline mode. Architecture
+overview lives in D36; per-context invariants and lifecycle
+gotchas live in [`contexts/identity/`](./contexts/identity/).
 
 ### 5.3 Geography — `/api/geo/*`
 

@@ -20,6 +20,10 @@ import {
 // so the form can pre-emptively show the right scope picker. The
 // server is authoritative; this is purely UI scaffolding.
 const SCOPE_FOR_ROLE_UI: Record<Role, keyof GeoLevels | null> = {
+  // `pending` is the post-webhook, pre-promotion placeholder; the
+  // role picker (driven by ROLES, which omits `pending`) never
+  // produces it, so this entry is only for type-completeness.
+  pending: null,
   vc: 'village',
   af: 'cluster',
   cluster_admin: 'cluster',

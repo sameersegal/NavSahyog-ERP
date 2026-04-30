@@ -77,6 +77,11 @@ const SUPER_ADMIN_ONLY: readonly Capability[] = [
 // one of the `.write` capabilities, so adding a geo-admin role
 // needs no route changes to stay read-only.
 export const CAPABILITIES_BY_ROLE = {
+  // `pending` is the post-webhook, pre-promotion state for a row
+  // that /webhooks/clerk inserted on user.created. Sign-in works
+  // but no capability is granted until an admin assigns a real
+  // role via /api/users PATCH.
+  pending: [],
   vc: WRITE,
   af: WRITE,
   cluster_admin: WRITE,

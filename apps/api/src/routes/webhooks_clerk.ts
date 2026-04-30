@@ -1,15 +1,24 @@
 // /webhooks/clerk — D36 step 3.
 //
-// Receives Svix-signed webhooks from Clerk. The handler never
-// creates or auto-links rows — `clerk_user_id` is provisioned
-// out-of-band (seed-clerk.mjs or admin tooling) so the auth flow
-// never has to trust Clerk-supplied email matching, and a Clerk
-// account on a privileged user's email can't silently take it over.
+// Receives Svix-signed webhooks from Clerk and is the single
+// provisioning path for new local user rows. The auth flow
+// (/auth/exchange) matches strictly by `clerk_user_id`, so
+// linking a Clerk account to a local row is exactly "the row
+// exists with that clerk_user_id". The webhook owns that.
 //
-//   user.created  → no-op (link comes from out-of-band provisioning).
-//                   Acknowledged so Clerk stops retrying.
-//   user.updated  → re-stamp clerk_synced_at on the already-linked
-//                   row, if any. Never establishes a new link.
+// Role/scope assignment is *not* the webhook's job — admin does
+// that via Masters → Users (PATCH /api/users/:id). New rows land
+// with role='pending' / scope_level='pending' / scope_id=NULL,
+// which capabilities.ts maps to the empty capability set, so a
+// pending user can sign in but cannot read or write anything
+// until promoted.
+//
+//   user.created  → INSERT a local row with clerk_user_id, email,
+//                   full_name from the Clerk payload and the
+//                   pending role/scope sentinel.
+//   user.updated  → refresh email + full_name + clerk_synced_at on
+//                   the already-linked row. Role/scope/scope_id are
+//                   never touched here — admin owns them.
 //   user.deleted  → invalidate sessions and unlink. The local row
 //                   stays so audit-trail FKs still resolve.
 //
@@ -36,8 +45,17 @@ export const meta: RouteMeta = {
   refs: ['D36'],
 };
 
+type ClerkEmailAddress = {
+  id: string;
+  email_address: string;
+};
+
 type ClerkUserPayload = {
   id: string;
+  email_addresses?: ClerkEmailAddress[];
+  primary_email_address_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 type ClerkEvent =
@@ -47,6 +65,27 @@ type ClerkEvent =
   | { type: string; data: unknown };
 
 const FIVE_MINUTES = 5 * 60;
+
+function primaryEmail(payload: ClerkUserPayload): string | null {
+  const emails = payload.email_addresses ?? [];
+  const primaryId = payload.primary_email_address_id;
+  const primary = primaryId
+    ? emails.find((e) => e.id === primaryId)
+    : emails[0];
+  return primary?.email_address.toLowerCase() ?? null;
+}
+
+// Best-effort display name. Falls back to email local-part, then to
+// the Clerk id — the row has to satisfy the NOT NULL constraint and
+// admin will edit it during promotion anyway.
+function displayName(payload: ClerkUserPayload, email: string | null): string {
+  const first = (payload.first_name ?? '').trim();
+  const last = (payload.last_name ?? '').trim();
+  const full = `${first} ${last}`.trim();
+  if (full) return full;
+  if (email) return email.split('@')[0]!;
+  return payload.id;
+}
 
 // Constant-time string compare so a timing attack on the signature
 // can't recover bytes. The Web Crypto subtle API doesn't expose a
@@ -132,20 +171,48 @@ webhooks.post('/clerk', async (c) => {
   }
 
   switch (event.type) {
-    case 'user.created':
-      // Provisioning is out-of-band; the webhook never creates a
-      // link. Acknowledge so Clerk stops retrying.
-      return c.json({ ok: true, linked: false });
+    case 'user.created': {
+      const data = event.data as ClerkUserPayload;
+      const email = primaryEmail(data);
+      const fullName = displayName(data, email);
+      // user_id is the legacy login handle from /auth/login. With
+      // Clerk owning sign-in, new rows don't need a separate
+      // human-typed handle — using the Clerk id keeps it unique
+      // and stable. Admin can rename via PATCH /api/users/:id at
+      // promotion time if a friendlier handle is wanted.
+      //
+      // password is NOT NULL on the schema (vestigial; see the
+      // 0011 migration comment). Empty string is the sentinel for
+      // "Clerk-managed, no local password" — /auth/login won't
+      // accept it because parseAdminBody requires a non-empty
+      // body.password and the seed default is 'password'.
+      //
+      // INSERT OR IGNORE on the (unique) clerk_user_id index makes
+      // duplicate webhook deliveries safe.
+      const inserted = await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO user (
+            user_id, full_name, password, role, scope_level,
+            scope_id, created_at, clerk_user_id, clerk_synced_at, email
+          )
+          VALUES (?, ?, '', 'pending', 'pending', NULL, unixepoch(), ?, unixepoch(), ?)`,
+      )
+        .bind(data.id, fullName, data.id, email)
+        .run();
+      return c.json({ ok: true, created: inserted.meta.changes > 0 });
+    }
     case 'user.updated': {
       const data = event.data as ClerkUserPayload;
-      // Re-stamp clerk_synced_at on the row that was provisioned
-      // out-of-band against this Clerk id. No-op if no such row.
+      const email = primaryEmail(data);
+      const fullName = displayName(data, email);
+      // Refresh email + full_name + clerk_synced_at on the linked
+      // row. Role / scope_level / scope_id are intentionally not
+      // touched — admin owns those via /api/users PATCH.
       const synced = await c.env.DB.prepare(
         `UPDATE user
-           SET clerk_synced_at = unixepoch()
+           SET email = ?, full_name = ?, clerk_synced_at = unixepoch()
          WHERE clerk_user_id = ?`,
       )
-        .bind(data.id)
+        .bind(email, fullName, data.id)
         .run();
       return c.json({ ok: true, synced: synced.meta.changes > 0 });
     }
