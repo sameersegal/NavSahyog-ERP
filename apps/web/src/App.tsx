@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Login } from './pages/Login';
+import { CliAuth } from './pages/CliAuth';
 import { Home } from './pages/Home';
 import { Village } from './pages/Village';
 import { Dashboard } from './pages/Dashboard';
@@ -38,6 +39,7 @@ export function App() {
         <UpdateAvailableBanner />
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/cli-auth" element={<CliAuth />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </>
@@ -58,6 +60,7 @@ export function App() {
       <UpdateAvailableBanner />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/cli-auth" element={<CliAuth />} />
         <Route path="/village/:id" element={<Village />} />
         <Route path="/capture" element={<Capture />} />
         <Route path="/achievements" element={<Achievements />} />
