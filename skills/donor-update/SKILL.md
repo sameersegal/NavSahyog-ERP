@@ -56,55 +56,61 @@ Map operator phrasing:
 
 ## Setup — pointing the skill at a backend
 
-Every API call below is a `curl` against `$NSF_API_BASE_URL`,
-which the operator exports before invoking the skill. Two
-deployments are supported today:
+Authentication is a one-time browser handshake driven by the
+`scripts/nsf-auth.mjs` helper (D36 layer-1 → layer-2 bridge over
+loopback). The helper opens a tab in the operator's default
+browser, runs Clerk's hosted sign-in widget, captures the
+resulting Clerk JWT on a localhost callback, swaps it for an
+`nsf_session` cookie via `/auth/exchange`, and persists the cookie
+to `~/.nsf/credentials` (mode 0600). The cookie is good for 30
+days sliding (D36); the helper only needs to run again when the
+operator signs out, the cookie expires, or Clerk's webhook
+revokes the local session row.
 
-| Backend | `NSF_API_BASE_URL` | Outer gate | App login |
-|---|---|---|---|
-| Local dev (`pnpm dev`) | `http://127.0.0.1:8787` | none | `super` / `password` (and other seeded VC/AF logins) |
-| Staging (Worker) | `https://navsahyog-api-staging.sameersegal.workers.dev` | HTTP basic auth via `STAGING_BASIC_AUTH_USER` + `STAGING_BASIC_AUTH_PASSWORD` (operator's responsibility) | same seeded users until L5 lands |
+| Backend | Helper invocation |
+|---|---|
+| Local dev (`pnpm dev`) | `node scripts/nsf-auth.mjs` |
+| Staging | `node scripts/nsf-auth.mjs --web=https://<web> --api=https://navsahyog-api-staging.sameersegal.workers.dev --basic-auth=<user>:<pass>` |
 
-The staging URL is host-allowlisted at the Worker edge — calls
-must originate from the operator's own machine, not the agent
-sandbox. If `curl` returns `403 host_not_allowed` from the
-agent, ask the operator to run the steps below in their terminal
-and paste the cookie value back.
+Defaults are `web=http://localhost:5173` and
+`api=http://127.0.0.1:8787`. The `--basic-auth` flag is only
+needed for staging (the Worker's `STAGING_BASIC_AUTH_*` outer
+gate is in front of `/auth/exchange`). Both flags also accept
+`NSF_WEB_BASE_URL` / `NSF_API_BASE_URL` / `NSF_BASIC` env vars.
 
-### One-time auth handshake
+### Per-session bootstrap
 
-Run once per session — the cookie is good for 12 h (§8.4).
+Every skill run starts with one line that loads the env vars from
+the persisted credentials:
 
 ```bash
-export NSF_API_BASE_URL="https://navsahyog-api-staging.sameersegal.workers.dev"
-export NSF_BASIC="<basic_user>:<basic_password>"   # staging only
-
-curl -sS -c /tmp/cookies.txt \
-  -u "$NSF_BASIC" \
-  -X POST -H 'Content-Type: application/json' \
-  -d '{"user_id":"super","password":"password"}' \
-  "$NSF_API_BASE_URL/auth/login"
+eval "$(node scripts/nsf-auth.mjs --env)"
 ```
 
-A successful response is `{"user":{...}}`; the `nsf_session`
-cookie is now in `/tmp/cookies.txt`. Drop the `-u "$NSF_BASIC"`
-flag for local dev (no outer gate).
+This sets `NSF_API_BASE_URL`, `NSF_COOKIE_JAR` (a Netscape-format
+file that curl reads with `-b`), and — when applicable —
+`NSF_BASIC`. If credentials are missing or expired the helper
+exits non-zero with a one-line hint pointing at the sign-in
+command above; surface that to the operator and stop.
 
-Every subsequent call reuses both auth layers:
+Every subsequent call follows this template:
 
 ```bash
-curl -sS -b /tmp/cookies.txt -u "$NSF_BASIC" \
+curl -sS -b "$NSF_COOKIE_JAR" ${NSF_BASIC:+-u "$NSF_BASIC"} \
   "$NSF_API_BASE_URL/api/<path>"
 ```
 
-If `NSF_BASIC` is unset (local), `-u ""` is a no-op — keep it in
-the template so the same command works in both environments.
+The `${NSF_BASIC:+...}` form expands to nothing when basic-auth
+is unset (local dev), so the same template works in both
+environments.
 
-A `401` mid-session means the cookie expired — re-run the
-handshake. A `403 host_not_allowed` means the outer Worker
-allowlist is rejecting the agent sandbox; switch to the operator's
-machine. A `403` on a specific resource means the village is
-outside the operator's scope — stop and tell the operator.
+A `401` mid-session means the cookie expired or was revoked —
+re-run `node scripts/nsf-auth.mjs` and tell the operator to
+re-authenticate. A `403 user_not_provisioned` from `/auth/exchange`
+means the operator has a Clerk account but no matching local
+`user` row; an admin must create the local user first. A `403`
+on a specific resource means the village is outside the
+operator's scope — stop and tell the operator.
 
 ## Inputs
 
@@ -126,8 +132,9 @@ something is missing, ask once — don't guess.
 ## Procedure
 
 Run these reads **in parallel where possible**. Every `curl`
-follows the auth template from "Setup" above (`-b /tmp/cookies.txt
--u "$NSF_BASIC"`). All paths are relative to `$NSF_API_BASE_URL`.
+follows the auth template from "Setup" above (`-b "$NSF_COOKIE_JAR"
+${NSF_BASIC:+-u "$NSF_BASIC"}`). All paths are relative to
+`$NSF_API_BASE_URL`.
 
 The schema speaks **integer ids** end-to-end (D1 / SQLite); the
 spec calls them "uuid" but the wire shape is `id: number`. Pass
@@ -279,12 +286,12 @@ don't assemble a `quarterly`-shaped JSON for a `milestone` render.
    | milestone | 1 (hero) | `hero.url` |
    | celebration | 4 | `mosaic[]` |
 
-   Download from the live API (uses the same `$NSF_API_BASE_URL`
-   + `$NSF_BASIC` + cookie jar from "Setup"):
+   Download from the live API (reuses the env vars loaded by
+   `eval "$(node scripts/nsf-auth.mjs --env)"`):
    ```
    mkdir -p "$SKILL_DIR/references/examples/<slug>/media"
    for u in <uuid1> <uuid2> <uuid3>; do
-     curl -sS -b /tmp/cookies.txt -u "$NSF_BASIC" \
+     curl -sS -b "$NSF_COOKIE_JAR" ${NSF_BASIC:+-u "$NSF_BASIC"} \
        "$NSF_API_BASE_URL/api/media/raw/$u" \
        -o "$SKILL_DIR/references/examples/<slug>/media/$u"
    done
