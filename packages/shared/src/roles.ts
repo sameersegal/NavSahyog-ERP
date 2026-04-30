@@ -8,6 +8,7 @@
 // `.write` anything.
 
 export type Role =
+  | 'pending'
   | 'vc'
   | 'af'
   | 'cluster_admin'
@@ -18,6 +19,7 @@ export type Role =
   | 'super_admin';
 
 export type ScopeLevel =
+  | 'pending'
   | 'village'
   | 'cluster'
   | 'district'
@@ -30,6 +32,11 @@ export type ScopeLevel =
 // Useful for any UI that needs a stable order, e.g. a role picker
 // in Master Creations (L3). Keep this aligned with the `Role` and
 // `ScopeLevel` unions above.
+//
+// `pending` is intentionally excluded from both arrays — it's an
+// internal state that the /webhooks/clerk user.created handler
+// writes when no admin has yet assigned a real role/scope. The
+// admin UI should never offer it as a selectable target.
 export const ROLES: readonly Role[] = [
   'vc',
   'af',

@@ -1,21 +1,26 @@
 // /webhooks/clerk — D36 step 3.
 //
-// Receives Svix-signed webhooks from Clerk. Three event types are
-// handled; everything else is acknowledged with 200 so Clerk
-// doesn't retry. The handler keeps the local `user` table in sync
-// with Clerk identity events, but never INSERTs a row — role and
-// scope live in layer 2 (per D36) and only an admin (via the
-// Masters surface or seed bridge) can create them.
+// Receives Svix-signed webhooks from Clerk and is the single
+// provisioning path for new local user rows. The auth flow
+// (/auth/exchange) matches strictly by `clerk_user_id`, so
+// linking a Clerk account to a local row is exactly "the row
+// exists with that clerk_user_id". The webhook owns that.
 //
-//   user.created  → link by email if a local row exists with the
-//                   matching email and no clerk_user_id yet (the
-//                   common path for admin-driven provisioning).
-//   user.updated  → re-stamp clerk_synced_at and refresh the link
-//                   if email changed (Clerk allows email edits).
+// Role/scope assignment is *not* the webhook's job — admin does
+// that via Masters → Users (PATCH /api/users/:id). New rows land
+// with role='pending' / scope_level='pending' / scope_id=NULL,
+// which capabilities.ts maps to the empty capability set, so a
+// pending user can sign in but cannot read or write anything
+// until promoted.
+//
+//   user.created  → INSERT a local row with clerk_user_id, email,
+//                   full_name from the Clerk payload and the
+//                   pending role/scope sentinel.
+//   user.updated  → refresh email + full_name + clerk_synced_at on
+//                   the already-linked row. Role/scope/scope_id are
+//                   never touched here — admin owns them.
 //   user.deleted  → invalidate sessions and unlink. The local row
-//                   stays so audit-trail FKs still resolve; if the
-//                   admin re-creates the Clerk account against the
-//                   same email it relinks via the email path.
+//                   stays so audit-trail FKs still resolve.
 //
 // Svix verification is inlined (HMAC-SHA256 over
 // `<svix-id>.<svix-timestamp>.<raw-body>`). The svix SDK would do
@@ -49,6 +54,8 @@ type ClerkUserPayload = {
   id: string;
   email_addresses?: ClerkEmailAddress[];
   primary_email_address_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 type ClerkEvent =
@@ -66,6 +73,18 @@ function primaryEmail(payload: ClerkUserPayload): string | null {
     ? emails.find((e) => e.id === primaryId)
     : emails[0];
   return primary?.email_address.toLowerCase() ?? null;
+}
+
+// Best-effort display name. Falls back to email local-part, then to
+// the Clerk id — the row has to satisfy the NOT NULL constraint and
+// admin will edit it during promotion anyway.
+function displayName(payload: ClerkUserPayload, email: string | null): string {
+  const first = (payload.first_name ?? '').trim();
+  const last = (payload.last_name ?? '').trim();
+  const full = `${first} ${last}`.trim();
+  if (full) return full;
+  if (email) return email.split('@')[0]!;
+  return payload.id;
 }
 
 // Constant-time string compare so a timing attack on the signature
@@ -152,27 +171,50 @@ webhooks.post('/clerk', async (c) => {
   }
 
   switch (event.type) {
-    case 'user.created':
+    case 'user.created': {
+      const data = event.data as ClerkUserPayload;
+      const email = primaryEmail(data);
+      const fullName = displayName(data, email);
+      // user_id is the legacy login handle from /auth/login. With
+      // Clerk owning sign-in, new rows don't need a separate
+      // human-typed handle — using the Clerk id keeps it unique
+      // and stable. Admin can rename via PATCH /api/users/:id at
+      // promotion time if a friendlier handle is wanted.
+      //
+      // password is NOT NULL on the schema (vestigial; see the
+      // 0011 migration comment). Empty string is the sentinel for
+      // "Clerk-managed, no local password" — /auth/login won't
+      // accept it because parseAdminBody requires a non-empty
+      // body.password and the seed default is 'password'.
+      //
+      // INSERT OR IGNORE on the (unique) clerk_user_id index makes
+      // duplicate webhook deliveries safe.
+      const inserted = await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO user (
+            user_id, full_name, password, role, scope_level,
+            scope_id, created_at, clerk_user_id, clerk_synced_at, email
+          )
+          VALUES (?, ?, '', 'pending', 'pending', NULL, unixepoch(), ?, unixepoch(), ?)`,
+      )
+        .bind(data.id, fullName, data.id, email)
+        .run();
+      return c.json({ ok: true, created: inserted.meta.changes > 0 });
+    }
     case 'user.updated': {
       const data = event.data as ClerkUserPayload;
       const email = primaryEmail(data);
-      if (!email) {
-        // Clerk users can momentarily exist without a primary email
-        // (creation in two steps via the dashboard). Acknowledge —
-        // the next user.updated will carry the email.
-        return c.json({ ok: true, linked: false, reason: 'no primary email' });
-      }
-      // Link an unlinked local row by email. Idempotent — running
-      // the same event twice is a no-op the second time.
-      const linked = await c.env.DB.prepare(
+      const fullName = displayName(data, email);
+      // Refresh email + full_name + clerk_synced_at on the linked
+      // row. Role / scope_level / scope_id are intentionally not
+      // touched — admin owns those via /api/users PATCH.
+      const synced = await c.env.DB.prepare(
         `UPDATE user
-           SET clerk_user_id = ?, clerk_synced_at = unixepoch()
-         WHERE email = ?
-           AND (clerk_user_id IS NULL OR clerk_user_id = ?)`,
+           SET email = ?, full_name = ?, clerk_synced_at = unixepoch()
+         WHERE clerk_user_id = ?`,
       )
-        .bind(data.id, email, data.id)
+        .bind(email, fullName, data.id)
         .run();
-      return c.json({ ok: true, linked: linked.meta.changes > 0 });
+      return c.json({ ok: true, synced: synced.meta.changes > 0 });
     }
     case 'user.deleted': {
       const data = event.data as { id: string };

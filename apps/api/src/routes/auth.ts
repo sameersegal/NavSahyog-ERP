@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
-import { createClerkClient, verifyToken } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
@@ -63,18 +63,14 @@ auth.post('/login', async (c) => {
 // cookie, the Worker never talks to Clerk again until the cookie
 // expires, and offline survives the full 30-day TTL.
 //
-// Lookup order:
-//   1. clerk_user_id → local user (the steady-state path; happy
-//      after a webhook has fired or the seed bridge has linked).
-//   2. self-heal by email — fetch the user record from Clerk's
-//      Backend API, look up the local user by `email`, link it
-//      (set clerk_user_id + clerk_synced_at) and proceed. Covers
-//      first-sign-in before the webhook arrives, and out-of-band
-//      Clerk account creation against a pre-existing local user.
-//   3. 403 user_not_provisioned — no local row matches. Admin must
-//      create the local user first; we never auto-provision because
-//      role/scope can't come from Clerk (that's the whole point of
-//      layer 2 owning authz).
+// Lookup is strictly by `clerk_user_id`. Linking happens out-of-band
+// (seed-clerk.mjs at provision time, or admin tooling that creates
+// the Clerk user and writes the id back). The exchange path never
+// matches by email — that would let anyone signing into Clerk with
+// a privileged user's email take over the local row.
+//
+// 403 user_not_provisioned → no local row carries this Clerk id.
+// Admin has to provision the mapping first.
 auth.post('/exchange', async (c) => {
   if (!c.env.CLERK_SECRET_KEY) {
     return err(c, 'internal_error', 500, 'CLERK_SECRET_KEY unset');
@@ -97,7 +93,7 @@ auth.post('/exchange', async (c) => {
     return err(c, 'unauthenticated', 401, 'invalid clerk token');
   }
 
-  let user = await c.env.DB.prepare(
+  const user = await c.env.DB.prepare(
     `SELECT id, user_id, full_name, role, scope_level, scope_id
      FROM user WHERE clerk_user_id = ?`,
   )
@@ -105,30 +101,7 @@ auth.post('/exchange', async (c) => {
     .first<SessionUser>();
 
   if (!user) {
-    // Self-heal — Clerk's default session JWT doesn't carry email, so
-    // fetch the user record from the Backend API to get it. One
-    // network call per first-sign-in, then never again for the
-    // 30-day cookie lifetime.
-    const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
-    const clerkUser = await clerk.users.getUser(clerkUserId).catch(() => null);
-    const email = clerkUser?.emailAddresses
-      .find((e) => e.id === clerkUser.primaryEmailAddressId)
-      ?.emailAddress.toLowerCase();
-    if (!email) {
-      return err(c, 'unauthenticated', 401, 'clerk user has no primary email');
-    }
-    const linked = await c.env.DB.prepare(
-      `UPDATE user
-         SET clerk_user_id = ?, clerk_synced_at = unixepoch()
-       WHERE email = ? AND clerk_user_id IS NULL
-       RETURNING id, user_id, full_name, role, scope_level, scope_id`,
-    )
-      .bind(clerkUserId, email)
-      .first<SessionUser>();
-    if (!linked) {
-      return err(c, 'forbidden', 403, 'user_not_provisioned');
-    }
-    user = linked;
+    return err(c, 'forbidden', 403, 'user_not_provisioned');
   }
 
   const { token } = await createSession(c.env.DB, user.id);
