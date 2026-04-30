@@ -1,21 +1,17 @@
 // /webhooks/clerk — D36 step 3.
 //
-// Receives Svix-signed webhooks from Clerk. Three event types are
-// handled; everything else is acknowledged with 200 so Clerk
-// doesn't retry. The handler keeps the local `user` table in sync
-// with Clerk identity events, but never INSERTs a row — role and
-// scope live in layer 2 (per D36) and only an admin (via the
-// Masters surface or seed bridge) can create them.
+// Receives Svix-signed webhooks from Clerk. The handler never
+// creates or auto-links rows — `clerk_user_id` is provisioned
+// out-of-band (seed-clerk.mjs or admin tooling) so the auth flow
+// never has to trust Clerk-supplied email matching, and a Clerk
+// account on a privileged user's email can't silently take it over.
 //
-//   user.created  → link by email if a local row exists with the
-//                   matching email and no clerk_user_id yet (the
-//                   common path for admin-driven provisioning).
-//   user.updated  → re-stamp clerk_synced_at and refresh the link
-//                   if email changed (Clerk allows email edits).
+//   user.created  → no-op (link comes from out-of-band provisioning).
+//                   Acknowledged so Clerk stops retrying.
+//   user.updated  → re-stamp clerk_synced_at on the already-linked
+//                   row, if any. Never establishes a new link.
 //   user.deleted  → invalidate sessions and unlink. The local row
-//                   stays so audit-trail FKs still resolve; if the
-//                   admin re-creates the Clerk account against the
-//                   same email it relinks via the email path.
+//                   stays so audit-trail FKs still resolve.
 //
 // Svix verification is inlined (HMAC-SHA256 over
 // `<svix-id>.<svix-timestamp>.<raw-body>`). The svix SDK would do
@@ -40,15 +36,8 @@ export const meta: RouteMeta = {
   refs: ['D36'],
 };
 
-type ClerkEmailAddress = {
-  id: string;
-  email_address: string;
-};
-
 type ClerkUserPayload = {
   id: string;
-  email_addresses?: ClerkEmailAddress[];
-  primary_email_address_id?: string | null;
 };
 
 type ClerkEvent =
@@ -58,15 +47,6 @@ type ClerkEvent =
   | { type: string; data: unknown };
 
 const FIVE_MINUTES = 5 * 60;
-
-function primaryEmail(payload: ClerkUserPayload): string | null {
-  const emails = payload.email_addresses ?? [];
-  const primaryId = payload.primary_email_address_id;
-  const primary = primaryId
-    ? emails.find((e) => e.id === primaryId)
-    : emails[0];
-  return primary?.email_address.toLowerCase() ?? null;
-}
 
 // Constant-time string compare so a timing attack on the signature
 // can't recover bytes. The Web Crypto subtle API doesn't expose a
@@ -153,26 +133,21 @@ webhooks.post('/clerk', async (c) => {
 
   switch (event.type) {
     case 'user.created':
+      // Provisioning is out-of-band; the webhook never creates a
+      // link. Acknowledge so Clerk stops retrying.
+      return c.json({ ok: true, linked: false });
     case 'user.updated': {
       const data = event.data as ClerkUserPayload;
-      const email = primaryEmail(data);
-      if (!email) {
-        // Clerk users can momentarily exist without a primary email
-        // (creation in two steps via the dashboard). Acknowledge —
-        // the next user.updated will carry the email.
-        return c.json({ ok: true, linked: false, reason: 'no primary email' });
-      }
-      // Link an unlinked local row by email. Idempotent — running
-      // the same event twice is a no-op the second time.
-      const linked = await c.env.DB.prepare(
+      // Re-stamp clerk_synced_at on the row that was provisioned
+      // out-of-band against this Clerk id. No-op if no such row.
+      const synced = await c.env.DB.prepare(
         `UPDATE user
-           SET clerk_user_id = ?, clerk_synced_at = unixepoch()
-         WHERE email = ?
-           AND (clerk_user_id IS NULL OR clerk_user_id = ?)`,
+           SET clerk_synced_at = unixepoch()
+         WHERE clerk_user_id = ?`,
       )
-        .bind(data.id, email, data.id)
+        .bind(data.id)
         .run();
-      return c.json({ ok: true, linked: linked.meta.changes > 0 });
+      return c.json({ ok: true, synced: synced.meta.changes > 0 });
     }
     case 'user.deleted': {
       const data = event.data as { id: string };
