@@ -123,6 +123,29 @@ dependent section in the same commit:
 | Retention / runtime config | Out-of-system (decisions.md D1/D4). No `app_settings` table, no retention cron. §7.7 + §9.3 document the boundary; runtime tunables are Worker env vars. |
 | Non-functional target | §8.13 SLOs · §11.11 cost envelope |
 
+### Local preview and sign-off
+
+After every iteration that touches running code (web or API),
+serve it locally and hand the user a URL **before** claiming the
+task is done. Sign-off happens in the user's browser, not by
+reading the diff.
+
+- Web only: `pnpm dev:web` → http://localhost:5173
+- API only: `pnpm dev:api` → http://localhost:8787
+- Both: `pnpm dev` (parallel)
+
+Workflow per iteration:
+
+1. Start the relevant dev server in the background.
+2. Tell the user the URL plus the specific routes/screens to
+   click through — golden path + whichever edges you changed.
+3. Wait for the user's sign-off before committing.
+4. Stop the dev server once they confirm; don't leave it
+   dangling between iterations.
+
+Skip this step only for docs-only changes or pure config edits
+that have no runtime surface.
+
 ### Git and PRs
 - **Branch naming:** `claude/<purpose>-veKWY`. Keep the `veKWY`
   suffix — it's the session marker from the harness.
@@ -140,11 +163,20 @@ dependent section in the same commit:
   run something. Comment sparingly.
 - **Embed UI screenshots inline in the PR body** for any change
   with a visible surface (new page, layout shift, dashboard view,
-  non-trivial CSS). Commit the PNGs under a sensible path (e.g.
-  `mvp/screenshots/<level>/`) and reference them with raw GitHub
+  non-trivial CSS). Capture them from the same local preview the
+  user just signed off on (see *Local preview and sign-off*),
+  commit the PNGs under a sensible path (e.g.
+  `mvp/screenshots/<level>/`), and reference them with raw GitHub
   URLs — `https://github.com/<owner>/<repo>/blob/<branch>/<path>?raw=true`
   — so they render in the PR description. Skip for API-only or
   docs-only changes.
+- **Keep the PR title and body in sync with the branch.** When
+  you push additional commits to a PR you already opened, refresh
+  the title and description so they describe the *current* state
+  of the branch — not just the original commit. Use
+  `mcp__github__update_pull_request` after each push that
+  meaningfully changes scope, summary bullets, screenshots, or the
+  test plan. A stale PR body is worse than no PR body.
 
 ### Bespoke-simplification principle
 Before adding any requirement or writing any code, ask: *would

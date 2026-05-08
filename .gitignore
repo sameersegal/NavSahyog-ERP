@@ -11,3 +11,7 @@ dist/
 coverage/
 mvp/recordings/
 db/seed-clerk-link.sql
+
+# Claude Code local session state — settings.local.json, agents/, todos/, etc.
+# (`.claude-plugin/` is tracked for the plugin manifest and is unaffected.)
+.claude/
